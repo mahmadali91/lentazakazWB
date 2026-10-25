@@ -29,7 +29,7 @@ final class Auth
             @mkdir($dir, 0700, true);
         }
         if (is_dir($dir) && is_writable($dir)) {
-            session_save_path($dir);
+            session_set_save_handler(new FileSessionHandler($dir), true);
         }
         session_start();
     }

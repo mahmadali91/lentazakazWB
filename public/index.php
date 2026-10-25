@@ -39,8 +39,13 @@ $isWebhook = str_starts_with($path, '/webhook/') || $path === '/cron-run';
 if (!$isWebhook) {
     Auth::startSession();
     if ($method === 'POST' && !Csrf::check()) {
-        http_response_code(419);
-        exit('Сессия устарела. Обновите страницу и повторите действие.');
+        http_response_code(403);
+        header('Content-Type: text/html; charset=utf-8');
+        $back = e((string) parse_url($_SERVER['HTTP_REFERER'] ?? $path, PHP_URL_PATH) ?: '/');
+        exit('<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width">'
+            . '<div style="font:16px system-ui;max-width:520px;margin:15vh auto;padding:0 16px">'
+            . '<h2>Сессия устарела</h2><p>Обновите страницу и повторите действие. Если ошибка повторяется — '
+            . 'разрешите cookies для этого сайта.</p><p><a href="' . $back . '">← Вернуться</a></p></div>');
     }
 }
 
