@@ -317,7 +317,7 @@ final class AdminController
         if (Telegram::enabled()) {
             $me = Telegram::api('getMe');
             $hook = Telegram::api('getWebhookInfo');
-            $bot = ['ok' => $me !== null, 'username' => $me['result']['username'] ?? null, 'name' => $me['result']['first_name'] ?? null,
+            $bot = ['ok' => $me !== null, 'error' => $me === null ? Telegram::$lastError : '', 'username' => $me['result']['username'] ?? null, 'name' => $me['result']['first_name'] ?? null,
                 'webhook' => $hook['result']['url'] ?? '', 'linked' => (int) DB::value('SELECT COUNT(*) FROM users WHERE tg_chat_id IS NOT NULL')];
         }
         return view('admin/settings', $this->base($admin) + [
@@ -357,7 +357,7 @@ final class AdminController
             Config::set('telegram.bot_token', $token);
             $me = Telegram::api('getMe');
             if ($me === null) {
-                flash('error', 'Telegram не принял токен (getMe). Проверьте токен в @BotFather.');
+                flash('error', 'Не удалось проверить токен в Telegram (getMe): ' . Telegram::$lastError . '. Проверьте токен в @BotFather.');
                 redirect('/admin/settings');
             }
             $username = (string) ($me['result']['username'] ?? $username);

@@ -10,7 +10,11 @@ $events = array_filter(explode(',', (string) $user['tg_events']));
   <div class="card">
     <div class="card-title"><?= icon('send', 18) ?> Уведомления в Telegram</div>
     <?php if (!$tgEnabled): ?>
-      <p class="muted">Администратор ещё не подключил Telegram-бота.</p>
+      <?php if (($user['role'] ?? '') === 'admin'): ?>
+        <p class="muted">Бот ещё не подключён. Вставьте токен бота в <a href="/admin/settings">Админ-панель → Настройки сервиса</a> — после этого здесь появится кнопка «Подключить Telegram».</p>
+      <?php else: ?>
+        <p class="muted">Уведомления в Telegram скоро заработают — администратор подключает бота.</p>
+      <?php endif; ?>
     <?php elseif (empty($plan['telegram'])): ?>
       <p class="muted">Уведомления доступны на платных тарифах.</p>
       <a class="btn" href="/app/billing">Выбрать тариф</a>

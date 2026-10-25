@@ -37,6 +37,7 @@ if (($user['role'] ?? '') === 'admin') {
           <a href="/app/billing">Улучшить тариф</a>
         <?php endif; ?>
       </div>
+      <div class="app-version" title="Версия сервиса">v<?= e(app_version()) ?></div>
       <div class="row" style="margin-top:10px;justify-content:space-between">
         <span class="muted small" title="<?= e($user['email'] ?? '') ?>" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:140px"><?= e($user['email'] ?? '') ?></span>
         <form method="post" action="/logout"><?= csrf_field() ?><button class="icon-btn" title="Выйти" style="width:32px;height:32px"><?= icon('logout', 16) ?></button></form>
@@ -74,5 +75,6 @@ $profileActive = in_array($nav, ['profile', 'settings', 'billing', 'admin'], tru
 </nav>
 <div class="toast" id="toast"></div>
 <script src="<?= asset('js/app.js') ?>"></script>
+<script src="<?= asset('js/forms.js') ?>"></script>
 </body>
 </html>

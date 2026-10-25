@@ -45,4 +45,5 @@ $initial = mb_strtoupper(mb_substr($display, 0, 1));
     <button type="button" id="themeBtn"><?= icon('moon') ?> Светлая / тёмная тема</button>
     <form method="post" action="/logout"><?= csrf_field() ?><button class="danger"><?= icon('logout') ?> Выйти из аккаунта</button></form>
   </div>
+  <div class="app-version" style="text-align:center">Лента заказов WB · версия <?= e(app_version()) ?></div>
 </div>

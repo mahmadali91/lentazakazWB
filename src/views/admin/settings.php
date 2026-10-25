@@ -19,7 +19,7 @@
         <div class="alert alert-success">Бот работает: <b><?= e($bot['name']) ?></b> — <a href="https://t.me/<?= e($bot['username']) ?>" target="_blank" rel="noopener">@<?= e($bot['username']) ?></a>. Подключили уведомления: <?= (int) $bot['linked'] ?>.
           <?php if ($bot['webhook']): ?><br>Внимание: у бота установлен вебхук — привязка аккаунтов не будет работать. Сохраните токен ещё раз, чтобы снять вебхук.<?php endif; ?></div>
       <?php else: ?>
-        <div class="alert alert-error">Telegram не отвечает на этот токен (getMe). Проверьте токен в @BotFather и сохраните заново.</div>
+        <div class="alert alert-error">Telegram не отвечает на этот токен (getMe): <?= e($bot['error']) ?>. Проверьте токен в @BotFather и сохраните заново.</div>
       <?php endif; ?>
     <?php else: ?>
       <div class="alert alert-warn">Бот не подключён — клиенты не смогут включить уведомления о заказах.</div>

@@ -198,6 +198,47 @@ function status_label(?string $status): string
     ][$status ?? ''] ?? (string) $status;
 }
 
+/**
+ * Версия для показа: номер из bootstrap.php + короткий хеш коммита и дата обновления (из .git на сервере).
+ * Пример: «1.6.0 · 49ff478 · 26.10.2026».
+ */
+function app_version(): string
+{
+    static $v = null;
+    if ($v !== null) {
+        return $v;
+    }
+    $v = APP_VERSION;
+    $git = BASE_PATH . '/.git';
+    $head = @file_get_contents($git . '/HEAD');
+    if ($head !== false) {
+        $hash = trim($head);
+        if (str_starts_with($hash, 'ref: ')) {
+            $ref = trim(substr($hash, 5));
+            $file = $git . '/' . $ref;
+            $hash = is_file($file) ? trim((string) @file_get_contents($file)) : '';
+            if ($hash === '' && is_file($git . '/packed-refs')) {
+                foreach (file($git . '/packed-refs', FILE_IGNORE_NEW_LINES) ?: [] as $line) {
+                    if (str_ends_with($line, ' ' . $ref)) {
+                        $hash = strtok($line, ' ');
+                    }
+                }
+            }
+            $time = is_file($file) ? filemtime($file) : false;
+        } else {
+            $time = filemtime($git . '/HEAD');
+        }
+        if (preg_match('/^[0-9a-f]{7,40}$/', (string) $hash)) {
+            $v .= ' · ' . substr($hash, 0, 7);
+        }
+        $fetch = @filemtime($git . '/FETCH_HEAD') ?: ($time ?? false);
+        if ($fetch) {
+            $v .= ' · ' . date('d.m.Y', $fetch);
+        }
+    }
+    return $v;
+}
+
 function log_message(string $channel, string $message): void
 {
     $file = BASE_PATH . '/storage/logs/' . preg_replace('/[^a-z0-9_-]/i', '', $channel) . '.log';

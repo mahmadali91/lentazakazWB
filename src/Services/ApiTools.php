@@ -78,6 +78,11 @@ final class ApiTools
                 'properties' => ['srid' => ['type' => 'string', 'description' => 'Srid заказа']],
                 'required' => ['srid'],
             ],
+            'orders_check' => [
+                'title' => 'Сверка заказов с WB',
+                'description' => 'Сверка по дням для сравнения с кабинетом WB: заказы (всего, из Ленты заказов, из Статистики, только из одного источника), суммы по цене продавца и по цене для покупателя (после СПП), выкупы/отмены/возвраты по дате события и по дате заказа, по схемам.',
+                'properties' => ['from' => self::DATE, 'to' => self::DATE, 'store_id' => self::STORE],
+            ],
             'sync_status' => [
                 'title' => 'Состояние синхронизации',
                 'description' => 'Проверка работы сервиса: последний запуск cron, по каждому магазину — когда обновлялся каждый источник WB, следующий запрос, ошибки и журнал последних запросов к WB.',
@@ -337,6 +342,53 @@ final class ApiTools
 
     // ------------------------------------------------------------------ проверка работы
 
+    private static function toolOrdersCheck(array $a, array $account, array $plan, array $storeIds): array
+    {
+        $from = preg_match('/^\d{4}-\d{2}-\d{2}$/', (string) ($a['from'] ?? '')) ? $a['from'] : date('Y-m-d', time() - 86400);
+        $to = preg_match('/^\d{4}-\d{2}-\d{2}$/', (string) ($a['to'] ?? '')) ? $a['to'] : date('Y-m-d');
+        if (!$storeIds) {
+            return ['days' => []];
+        }
+        $in = implode(',', $storeIds);
+        $range = [$from . ' 00:00:00', $to . ' 23:59:59'];
+        // Источник: Лента заказов заполняет регион склада/город/chrt, Статистика — категорию и цену для покупателя
+        $feed = '(o.warehouse_region IS NOT NULL OR o.dest_city IS NOT NULL OR o.chrt_id IS NOT NULL)';
+        $stats = '(o.category IS NOT NULL OR o.finished_price IS NOT NULL)';
+        $byOrder = DB::all("SELECT DATE(o.order_created_at) day, COUNT(*) orders, SUM($feed) in_feed, SUM($stats) in_stats,
+                SUM($stats AND NOT $feed) stats_only, SUM($feed AND NOT $stats) feed_only,
+                ROUND(SUM(o.seller_price), 2) sum_seller_price, ROUND(SUM(o.finished_price), 2) sum_buyer_price,
+                SUM(o.status = 'buyout') buyouts_of_these_orders, SUM(o.status = 'cancel') cancels_of_these_orders,
+                SUM(o.is_mp = 0) fbo, SUM(o.is_mp = 1) seller_warehouse
+            FROM orders o WHERE o.store_id IN ($in) AND o.order_created_at BETWEEN ? AND ? GROUP BY day ORDER BY day", $range);
+        $byStatus = DB::all("SELECT DATE(COALESCE(o.status_at, o.order_created_at)) day,
+                SUM(o.status = 'buyout') buyouts, ROUND(SUM(CASE WHEN o.status = 'buyout' THEN o.seller_price END), 2) buyouts_sum_seller,
+                ROUND(SUM(CASE WHEN o.status = 'buyout' THEN o.finished_price END), 2) buyouts_sum_buyer,
+                SUM(o.status = 'cancel') cancels, SUM(o.status IN ('return','returnDefective')) returns
+            FROM orders o WHERE o.store_id IN ($in) AND o.status <> 'created' AND COALESCE(o.status_at, o.order_created_at) BETWEEN ? AND ?
+            GROUP BY day ORDER BY day", $range);
+        $days = [];
+        foreach ($byOrder as $r) {
+            $days[$r['day']] = ['date' => $r['day']] + self::typed($r);
+            unset($days[$r['day']]['day']);
+        }
+        foreach ($byStatus as $r) {
+            $days[$r['day']] = ($days[$r['day']] ?? ['date' => $r['day']]) + self::typed($r);
+            unset($days[$r['day']]['day']);
+        }
+        ksort($days);
+        return [
+            'timezone' => date_default_timezone_get(),
+            'notes' => [
+                'orders' => 'Заказы по дате оформления (как «Заказали, шт» в WB), включая позже отменённые',
+                'buyouts' => 'Выкупы/отмены/возвраты — по дате события (как «Выкупили» в WB)',
+                'sum_seller_price' => 'Сумма по цене продавца со скидкой продавца (до СПП) — так считает лента',
+                'sum_buyer_price' => 'Сумма по цене для покупателя после СПП (из Статистики WB)',
+                'stats_only' => 'Заказы, которых нет в Ленте заказов (пришли только из Статистики)',
+            ],
+            'days' => array_values($days),
+        ];
+    }
+
     private static function toolSyncStatus(array $a, array $account, array $plan, array $storeIds): array
     {
         $limit = max(1, min(100, (int) ($a['log_limit'] ?? 15)));
@@ -390,8 +442,23 @@ final class ApiTools
         $errors = DB::all('SELECT s.id, s.user_id, u.email owner, s.name, s.last_error, s.last_error_at FROM stores s JOIN users u ON u.id = s.user_id
             WHERE s.last_error IS NOT NULL ORDER BY s.last_error_at DESC LIMIT 50');
         $cron = DB::setting('cron_last_run');
+        $tg = ['configured' => Telegram::enabled(), 'username' => (string) config('telegram.bot_username', '')];
+        if ($tg['configured']) {
+            $me = Telegram::api('getMe');
+            $tg['token_ok'] = $me !== null;
+            $tg['error'] = $me === null ? Telegram::$lastError : null;
+            $hook = Telegram::api('getWebhookInfo');
+            $tg['webhook_url'] = $hook['result']['url'] ?? null;
+            $tg['pending_updates'] = $hook['result']['pending_update_count'] ?? null;
+        }
+        $tg['linked_users'] = (int) DB::value('SELECT COUNT(*) FROM users WHERE tg_chat_id IS NOT NULL');
+        $tg['updates_offset'] = DB::setting('tg_offset');
+        $logFile = BASE_PATH . '/storage/logs/telegram.log';
+        $tg['recent_errors'] = is_file($logFile) ? array_slice(file($logFile, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES) ?: [], -5) : [];
         return [
+            'version' => app_version(),
             'cron_last_run' => $cron, 'cron_ok' => $cron !== null && strtotime($cron) > time() - 600,
+            'telegram' => $tg,
             'counts' => self::typed(DB::one('SELECT (SELECT COUNT(*) FROM users WHERE owner_id IS NULL) clients, (SELECT COUNT(*) FROM users WHERE owner_id IS NULL AND plan_code <> \'free\' AND plan_expires_at > NOW()) paid,
                 (SELECT COUNT(*) FROM stores) stores, (SELECT COUNT(*) FROM orders) orders, (SELECT COUNT(*) FROM wb_reports) finance_reports')),
             'payments_30d' => self::typed(DB::one("SELECT COUNT(*) count, COALESCE(SUM(amount), 0) amount FROM payments WHERE status = 'succeeded' AND created_at >= ?", [date('Y-m-d H:i:s', time() - 30 * 86400)])),

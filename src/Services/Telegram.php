@@ -13,10 +13,15 @@ final class Telegram
         return (string) config('telegram.bot_token', '') !== '' && (string) config('telegram.bot_username', '') !== '';
     }
 
+    /** Текст последней ошибки Telegram API (для админки и диагностики). */
+    public static string $lastError = '';
+
     public static function api(string $method, array $params = []): ?array
     {
         $token = (string) config('telegram.bot_token', '');
+        self::$lastError = '';
         if ($token === '') {
+            self::$lastError = 'токен бота не задан';
             return null;
         }
         $ch = curl_init("https://api.telegram.org/bot$token/$method");
@@ -29,10 +34,15 @@ final class Telegram
             CURLOPT_CONNECTTIMEOUT => 5,
         ]);
         $raw = curl_exec($ch);
+        $curlError = curl_error($ch);
+        $http = (int) curl_getinfo($ch, CURLINFO_RESPONSE_CODE);
         curl_close($ch);
         $data = is_string($raw) ? json_decode($raw, true) : null;
         if (!is_array($data) || empty($data['ok'])) {
-            log_message('telegram', "$method failed: " . (is_string($raw) ? mb_substr($raw, 0, 300) : 'no response'));
+            self::$lastError = $raw === false
+                ? 'нет связи с api.telegram.org: ' . $curlError
+                : 'HTTP ' . $http . ': ' . (is_array($data) ? (string) ($data['description'] ?? '') : mb_substr((string) $raw, 0, 200));
+            log_message('telegram', "$method failed: " . self::$lastError);
             return null;
         }
         return $data;

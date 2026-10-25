@@ -8,5 +8,6 @@
 <div class="auth-wrap">
   <?= $content ?>
 </div>
+<script src="<?= asset('js/forms.js') ?>"></script>
 </body>
 </html>
