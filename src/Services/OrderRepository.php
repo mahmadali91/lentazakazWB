@@ -16,8 +16,8 @@ final class OrderRepository
      * @return int 1 — новый заказ, 2 — обновлён, 0 — без изменений
      */
     /**
-     * Цену продавца из Ленты записываем, только если нет цены из Статистики WB (priceWithDisc):
-     * её WB использует в продажах и отчётах, а sellerPrice Ленты бывает выше на 5–10%.
+     * Цена продавца — из Ленты заказов: она в валюте кабинета WB (как кабинет и отчёты реализации).
+     * Статистика отдаёт цены в рублях — для продавцов из других стран они хранятся отдельно (stats_price).
      */
     public static function upsertFromFeed(int $storeId, array $o, bool $silent): int
     {
@@ -25,9 +25,9 @@ final class OrderRepository
         $status = in_array($o['status'] ?? '', self::STATUSES, true) ? $o['status'] : 'created';
         $sql = 'INSERT INTO orders
             (store_id, srid, scheme, status, cancel_type, nm_id, chrt_id, warehouse, warehouse_region, is_mp,
-             dest_city, dest_district, seller_price, is_b2b, in_feed, order_created_at, status_at, first_seen_at, notified_status)
+             dest_city, dest_district, seller_price, feed_price, is_b2b, in_feed, order_created_at, status_at, first_seen_at, notified_status)
             VALUES (:store, :srid, :scheme, :status, :cancel, :nm, :chrt, :wh, :whr, :ismp,
-             :city, :district, :price, :b2b, 1, :created, :status_at, :seen, :notified)
+             :city, :district, :price, :price2, :b2b, 1, :created, :status_at, :seen, :notified)
             ON DUPLICATE KEY UPDATE
               scheme = IF(VALUES(scheme) = \'MP\' AND scheme IS NOT NULL, scheme, VALUES(scheme)),
               status = VALUES(status),
@@ -39,7 +39,8 @@ final class OrderRepository
               is_mp = VALUES(is_mp),
               dest_city = VALUES(dest_city),
               dest_district = VALUES(dest_district),
-              seller_price = IF(finished_price IS NULL OR seller_price IS NULL, VALUES(seller_price), seller_price),
+              seller_price = COALESCE(VALUES(seller_price), seller_price),
+              feed_price = COALESCE(VALUES(feed_price), feed_price),
               is_b2b = VALUES(is_b2b),
               in_feed = 1,
               order_created_at = VALUES(order_created_at),
@@ -59,6 +60,7 @@ final class OrderRepository
             'city'      => $o['destinationCity'] ?? null,
             'district'  => $o['destinationDistrict'] ?? null,
             'price'     => isset($o['sellerPrice']) ? (float) $o['sellerPrice'] : null,
+            'price2'    => isset($o['sellerPrice']) ? (float) $o['sellerPrice'] : null,
             'b2b'       => !empty($o['isB2b']) ? 1 : 0,
             'created'   => $created,
             'status_at' => wb_time($o['updatedAt'] ?? null) ?? $created,
@@ -77,10 +79,10 @@ final class OrderRepository
         $status = !empty($o['isCancel']) ? 'cancel' : 'created';
         $sql = 'INSERT INTO orders
             (store_id, srid, scheme, status, nm_id, article, barcode, brand, subject, category, tech_size,
-             warehouse, is_mp, region, dest_district, finished_price, total_price, spp, seller_price,
+             warehouse, is_mp, region, dest_district, finished_price, total_price, spp, seller_price, stats_price,
              order_created_at, status_at, first_seen_at, notified_status)
             VALUES (:store, :srid, :scheme, :status, :nm, :article, :barcode, :brand, :subject, :category, :size,
-             :wh, :ismp, :region, :district, :finished, :total, :spp, :price,
+             :wh, :ismp, :region, :district, :finished, :total, :spp, :price, :sprice,
              :created, :status_at, :seen, :notified)
             ON DUPLICATE KEY UPDATE
               status = IF(VALUES(status) = \'cancel\' AND status = \'created\', \'cancel\', status),
@@ -95,7 +97,8 @@ final class OrderRepository
               finished_price = VALUES(finished_price),
               total_price = VALUES(total_price),
               spp = VALUES(spp),
-              seller_price = COALESCE(VALUES(seller_price), seller_price)';
+              stats_price = VALUES(stats_price),
+              seller_price = COALESCE(seller_price, VALUES(seller_price))';
         $created = wb_time($o['date'] ?? null) ?? now();
         $total = isset($o['totalPrice']) ? (float) $o['totalPrice'] : null;
         // Цена продавца со скидкой продавца — как в отчётах WB о продажах
@@ -121,7 +124,9 @@ final class OrderRepository
             'finished'  => isset($o['finishedPrice']) ? (float) $o['finishedPrice'] : null,
             'total'     => $total,
             'spp'       => isset($o['spp']) ? (float) $o['spp'] : null,
-            'price'     => $sellerPrice,
+            // Пока нет цены из Ленты — цена из Статистики, пересчитанная в валюту кабинета по курсу магазина
+            'price'     => $sellerPrice !== null ? round($sellerPrice * self::statsRate($storeId), 2) : null,
+            'sprice'    => $sellerPrice,
             'created'   => $created,
             'status_at' => wb_time($o['cancelDate'] ?? null) ?? $created,
             'seen'      => now(),
@@ -129,10 +134,41 @@ final class OrderRepository
         ]);
     }
 
+    /** Курс «валюта кабинета / рубли» для цен из Статистики (1 — магазин в рублях или курс ещё не известен). */
+    public static function statsRate(int $storeId): float
+    {
+        static $cache = [];
+        if (!isset($cache[$storeId])) {
+            $s = DB::one('SELECT currency, stats_rate FROM stores WHERE id = ?', [$storeId]);
+            $cache[$storeId] = $s && strtoupper((string) $s['currency']) !== 'RUB' && (float) $s['stats_rate'] > 0 ? (float) $s['stats_rate'] : 1.0;
+        }
+        return $cache[$storeId];
+    }
+
+    /**
+     * Курс между ценой Ленты (валюта кабинета) и priceWithDisc Статистики (рубли) по одним и тем же заказам:
+     * самое частое отношение за 14 дней. Для магазинов в рублях не нужен.
+     */
+    public static function updateStatsRate(int $storeId): void
+    {
+        $cur = strtoupper((string) DB::value('SELECT currency FROM stores WHERE id = ?', [$storeId]));
+        if ($cur === '' || $cur === 'RUB') {
+            DB::exec('UPDATE stores SET stats_rate = NULL WHERE id = ?', [$storeId]);
+            return;
+        }
+        $rate = DB::value('SELECT ROUND(feed_price / stats_price, 4) r FROM orders
+            WHERE store_id = ? AND feed_price > 0 AND stats_price > 0 AND order_created_at >= ?
+            GROUP BY r ORDER BY COUNT(*) DESC LIMIT 1', [$storeId, date('Y-m-d H:i:s', time() - 14 * 86400)]);
+        if ($rate !== null && (float) $rate > 0.001) {
+            DB::exec('UPDATE stores SET stats_rate = ? WHERE id = ?', [$rate, $storeId]);
+        }
+    }
+
     /** Новое сборочное задание из API Маркетплейса — точно определяет схему (FBS/DBS/DBW/CC). */
     public static function upsertFromAssembly(int $storeId, string $scheme, array $o, bool $silent): int
     {
-        $price = $o['salePrice'] ?? $o['price'] ?? null;
+        // convertedPrice — в валюте продавца (для продавцов не из РФ), price/salePrice — в валюте покупателя
+        $price = $o['convertedPrice'] ?? $o['salePrice'] ?? $o['price'] ?? null;
         $sql = 'INSERT INTO orders
             (store_id, srid, scheme, status, nm_id, chrt_id, mp_order_id, article, barcode, is_mp, seller_price,
              is_b2b, order_created_at, status_at, first_seen_at, notified_status)
@@ -378,10 +414,14 @@ final class OrderRepository
         $mp = ($f['scheme'] ?? '') === 'FBO' ? ' AND s.is_mp = 0' : (($f['scheme'] ?? '') === 'SELLER' ? ' AND s.is_mp = 1' : '');
         $mpO = ($f['scheme'] ?? '') === 'FBO' ? ' AND o.is_mp = 0' : (($f['scheme'] ?? '') === 'SELLER' ? ' AND o.is_mp = 1' : '');
         $range = [$f['from'], $f['to']];
-        $s = DB::one("SELECT SUM(is_return = 0) buy, SUM(is_return = 1) ret,
-                COALESCE(SUM(CASE WHEN is_return = 0 THEN price_with_disc END), 0) buy_sum,
-                COALESCE(SUM(CASE WHEN is_return = 1 THEN price_with_disc END), 0) ret_sum
-            FROM wb_sales s WHERE s.store_id IN ($in) AND s.sale_dt BETWEEN ? AND ?$mp", $range);
+        // Суммы — в валюте кабинета: цена заказа из Ленты, иначе цена Статистики (рубли) × курс магазина
+        $price = "COALESCE(o.seller_price, s.price_with_disc * CASE WHEN st.currency IS NOT NULL AND st.currency <> 'RUB' AND st.stats_rate > 0 THEN st.stats_rate ELSE 1 END)";
+        $s = DB::one("SELECT SUM(s.is_return = 0) buy, SUM(s.is_return = 1) ret,
+                COALESCE(SUM(CASE WHEN s.is_return = 0 THEN $price END), 0) buy_sum,
+                COALESCE(SUM(CASE WHEN s.is_return = 1 THEN $price END), 0) ret_sum
+            FROM wb_sales s JOIN stores st ON st.id = s.store_id
+            LEFT JOIN orders o ON o.store_id = s.store_id AND o.srid = s.srid
+            WHERE s.store_id IN ($in) AND s.sale_dt BETWEEN ? AND ?$mp", $range);
         // Свежее, чем последний отчёт продаж: события из Ленты заказов
         $fresh = DB::one("SELECT SUM(o.status = 'buyout') buy, SUM(o.status IN ('return','returnDefective')) ret,
                 COALESCE(SUM(CASE WHEN o.status = 'buyout' THEN o.seller_price END), 0) buy_sum,
@@ -512,7 +552,7 @@ final class OrderRepository
             'city'        => $r['dest_city'] ?: $r['region'],
             'district'    => $r['dest_district'],
             'price'       => $r['seller_price'] !== null ? (float) $r['seller_price'] : null,
-            'finished_price' => $r['finished_price'] !== null ? (float) $r['finished_price'] : null,
+            'finished_price' => $r['finished_price'] !== null ? round((float) $r['finished_price'] * self::statsRate((int) $r['store_id']), 2) : null,
             'spp'         => $r['spp'] !== null ? (float) $r['spp'] : null,
             'is_b2b'      => (bool) $r['is_b2b'],
             'created_at'  => $r['order_created_at'],

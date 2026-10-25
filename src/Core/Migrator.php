@@ -9,7 +9,7 @@ namespace App\Core;
  */
 final class Migrator
 {
-    public const VERSION = 10;
+    public const VERSION = 11;
 
     public static function ensure(): void
     {
@@ -37,6 +37,16 @@ final class Migrator
             }
             if ($version < 6) {
                 self::v6();
+            }
+            if ($version < 11) {
+                // Валюты источников WB различаются: Лента заказов — в валюте кабинета (как отчёты и кабинет),
+                // Статистика (заказы, продажи) — в рублях. Храним обе цены и курс между ними для магазина.
+                self::addColumn('orders', 'feed_price', 'DECIMAL(12,2) NULL AFTER seller_price');
+                self::addColumn('orders', 'stats_price', 'DECIMAL(12,2) NULL AFTER feed_price');
+                self::addColumn('stores', 'stats_rate', 'DECIMAL(10,4) NULL AFTER currency');
+                DB::exec('UPDATE orders SET stats_price = seller_price WHERE finished_price IS NOT NULL AND stats_price IS NULL');
+                // Перезагрузить Ленту за 30 дней, чтобы вернуть цены в валюте кабинета (уведомления не отправляются — статусы не меняются)
+                DB::exec('UPDATE stores SET feed_state = NULL, feed_next_at = NULL');
             }
             if ($version < 10) {
                 // Продажи и возвраты из Статистики WB (supplier/sales): выкуп и возврат — отдельные события со своей датой, как в кабинете

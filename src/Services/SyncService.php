@@ -352,6 +352,7 @@ final class SyncService
             throw $e;
         }
         DB::exec('UPDATE stores SET stats_cursor = ?, stats_ok_at = ? WHERE id = ?', [$last, now(), $this->store['id']]);
+        OrderRepository::updateStatsRate((int) $this->store['id']);
         $this->store['stats_cursor'] = $last;
         // Данные Статистики обновляются раз в 30 минут; большая выгрузка — догружаем через минуту
         $this->setNext('stats_next_at', $count >= 80000 ? 61 : (empty($this->scopes['analytics']) ? 600 : 1800));

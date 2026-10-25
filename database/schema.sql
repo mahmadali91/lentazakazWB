@@ -39,6 +39,7 @@ CREATE TABLE IF NOT EXISTS stores (
   seller_tin      VARCHAR(20) NOT NULL DEFAULT '',
   seller_country  VARCHAR(8) NOT NULL DEFAULT '',
   currency        VARCHAR(8) NULL,                -- валюта кабинета WB: RUB, KGS, KZT…
+  stats_rate      DECIMAL(10,4) NULL,             -- курс: цена Ленты (валюта кабинета) / цена Статистики (рубли)
   token_enc       TEXT NOT NULL,
   token_hint      VARCHAR(16) NOT NULL DEFAULT '',
   token_expires_at DATETIME NULL,
@@ -102,6 +103,8 @@ CREATE TABLE IF NOT EXISTS orders (
   dest_district    VARCHAR(120) NULL,
   region           VARCHAR(160) NULL,
   seller_price     DECIMAL(12,2) NULL,
+  feed_price       DECIMAL(12,2) NULL,              -- цена продавца из Ленты заказов (валюта кабинета)
+  stats_price      DECIMAL(12,2) NULL,              -- priceWithDisc из Статистики (рубли)
   finished_price   DECIMAL(12,2) NULL,
   total_price      DECIMAL(12,2) NULL,
   spp              DECIMAL(5,2) NULL,
