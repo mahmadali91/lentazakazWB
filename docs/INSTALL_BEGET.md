@@ -13,8 +13,10 @@ cd ~/wb.linkoz.ru
 mv public_html public_html.bak            # убираем заглушку Beget
 git clone -b beget-ready https://github.com/mahmadali91/lentazakazWB.git public_html
 ```
-2) Откройте https://wb.linkoz.ru/install, укажите базу MySQL и администратора.
-3) Добавьте задание CRON на каждую минуту: команда появится в конце установки.
+2) Откройте https://wb.linkoz.ru/install. Имя базы и пользователя `mahmadgv_wblenta` уже подставлены, введите пароль БД, email и пароль администратора.
+3) Добавьте задание CRON на каждую минуту:
+   `/usr/local/bin/php8.2 /home/m/mahmadgv/wb.linkoz.ru/public_html/cron/sync.php`
+   (точный путь и версию PHP установщик покажет в конце — сверьтесь с ними).
 
 Подробно — ниже.
 
@@ -26,7 +28,7 @@ git clone -b beget-ready https://github.com/mahmadali91/lentazakazWB.git public_
 
 ## 2. База данных
 
-Панель → **«MySQL»** → создайте базу, например `login_lenta`. На Beget имя пользователя совпадает с именем базы. Пароль запишите.
+Панель → **«MySQL»**: база **`mahmadgv_wblenta`** (уже создана). На Beget имя пользователя совпадает с именем базы. Пароль запишите.
 
 ## 3. Загрузка кода
 
@@ -66,7 +68,7 @@ git clone -b beget-ready https://github.com/mahmadali91/lentazakazWB.git public_
 - Периодичность: **каждую минуту** (`* * * * *`)
 - Команда:
   ```
-  /usr/local/bin/php8.2 /home/X/ЛОГИН/wb.linkoz.ru/public_html/cron/sync.php
+  /usr/local/bin/php8.2 /home/m/mahmadgv/wb.linkoz.ru/public_html/cron/sync.php
   ```
   Точную команду с правильным путём показывает установщик в конце и админ-панель (`/admin`). Номер версии PHP в команде должен совпадать с выбранной для сайта.
 

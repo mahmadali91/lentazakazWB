@@ -31,8 +31,8 @@
         <div class="field grow"><label>Хост БД</label><input type="text" name="db_host" value="<?= e($_POST['db_host'] ?? 'localhost') ?>" required></div>
         <div class="field" style="width:110px"><label>Порт</label><input type="number" name="db_port" value="<?= e($_POST['db_port'] ?? '3306') ?>"></div>
       </div>
-      <div class="field"><label>Имя базы данных</label><input type="text" name="db_name" value="<?= e($_POST['db_name'] ?? '') ?>" required><div class="hint">На Beget имя базы и пользователя совпадают, например <code>login_lenta</code></div></div>
-      <div class="field"><label>Пользователь БД</label><input type="text" name="db_user" value="<?= e($_POST['db_user'] ?? '') ?>" required></div>
+      <div class="field"><label>Имя базы данных</label><input type="text" name="db_name" value="<?= e($_POST['db_name'] ?? 'mahmadgv_wblenta') ?>" required><div class="hint">На Beget имя базы и пользователя совпадают, например <code>login_lenta</code></div></div>
+      <div class="field"><label>Пользователь БД</label><input type="text" name="db_user" value="<?= e($_POST['db_user'] ?? 'mahmadgv_wblenta') ?>" required></div>
       <div class="field"><label>Пароль БД</label><input type="password" name="db_pass"></div>
       <hr style="border:0;border-top:1px solid var(--border);margin:22px 0">
       <div class="field"><label>Email администратора</label><input type="email" name="admin_email" value="<?= e($_POST['admin_email'] ?? '') ?>" required></div>
