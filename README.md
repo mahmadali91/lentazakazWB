@@ -2,7 +2,7 @@
 
 SaaS-сервис для продавцов Wildberries: все заказы магазина в одной живой ленте. Поддерживаются все схемы работы (FBO, FBS, DBS, DBW, самовывоз, B2B), тарифы с оплатой через ЮKassa, уведомления в Telegram и выгрузка в Excel.
 
-Работает на обычном виртуальном хостинге (**Beget**): PHP 8.1+, MySQL и cron. Composer, Node.js и сборка не нужны.
+Боевой адрес: **https://wb.linkoz.ru**. Работает на обычном виртуальном хостинге (**Beget**): PHP 8.1+, MySQL и cron. Composer, Node.js и сборка не нужны.
 
 👉 **Установка на Beget — [docs/INSTALL_BEGET.md](docs/INSTALL_BEGET.md)**
 📚 **Как устроены API WB, которые мы используем — [docs/WB_API.md](docs/WB_API.md)**

@@ -10,7 +10,7 @@ final class SystemController
 {
     /**
      * Уведомления ЮKassa (HTTP-уведомления). В личном кабинете ЮKassa укажите URL:
-     *   https://ваш-домен/webhook/yookassa  — события payment.succeeded и payment.canceled
+     *   https://wb.linkoz.ru/webhook/yookassa  — события payment.succeeded и payment.canceled
      * Данные не принимаются на веру: статус платежа перепроверяется запросом к API ЮKassa.
      */
     public function yookassa(): never

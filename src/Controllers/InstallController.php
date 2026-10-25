@@ -86,7 +86,9 @@ final class InstallController
                 $config['app']['support_email'] = $email;
                 $config['app']['name'] = $in('app_name', 'Лента заказов WB') ?: 'Лента заказов WB';
                 $config['db'] = $db;
-                $config['mail']['from'] = 'noreply@' . preg_replace('/^www\./', '', $host);
+                // Письма шлём с основного домена (wb.linkoz.ru → noreply@linkoz.ru) — там обычно настроена почта и SPF
+                $mailDomain = implode('.', array_slice(explode('.', (string) $host), -2));
+                $config['mail']['from'] = 'noreply@' . $mailDomain;
                 $config['mail']['from_name'] = $config['app']['name'];
                 $config['cron']['secret'] = bin2hex(random_bytes(16));
 

@@ -6,11 +6,11 @@
 return [
     'app' => [
         'name'          => 'Лента заказов WB',
-        'url'           => 'https://your-domain.ru',     // без слеша на конце
+        'url'           => 'https://wb.linkoz.ru',     // без слеша на конце
         'key'           => '',                            // base64 от 32 случайных байт; шифрует токены WB — не меняйте после запуска!
         'debug'         => false,
         'timezone'      => 'Europe/Moscow',
-        'support_email' => 'support@your-domain.ru',
+        'support_email' => 'support@linkoz.ru',
         'trial_plan'    => 'pro',                         // какой тариф выдаётся на пробный период
         'trial_days'    => 7,
     ],
@@ -25,7 +25,7 @@ return [
     ],
 
     'mail' => [
-        'from'      => 'noreply@your-domain.ru',
+        'from'      => 'noreply@linkoz.ru',
         'from_name' => 'Лента заказов WB',
     ],
 

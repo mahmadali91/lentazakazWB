@@ -1,10 +1,26 @@
-# Установка на хостинг Beget
+# Установка на хостинг Beget (wb.linkoz.ru)
 
-Займёт примерно 15 минут. Понадобятся аккаунт Beget (подойдёт любой тариф виртуального хостинга) и домен.
+Займёт примерно 15 минут. Сервис будет работать на домене **https://wb.linkoz.ru**.
+
+> На 25.10.2026 сайт `wb.linkoz.ru` на Beget уже создан, HTTPS работает, в `public_html` лежит заглушка Beget.
+> Шаг 1 можно пропустить, если для сайта уже выбран PHP 8.1+.
+
+## Быстрая установка (кратко)
+
+```bash
+# 1) по SSH на Beget
+cd ~/wb.linkoz.ru
+mv public_html public_html.bak            # убираем заглушку Beget
+git clone -b beget-ready https://github.com/mahmadali91/lentazakazWB.git public_html
+```
+2) Откройте https://wb.linkoz.ru/install, укажите базу MySQL и администратора.
+3) Добавьте задание CRON на каждую минуту: команда появится в конце установки.
+
+Подробно — ниже.
 
 ## 1. Сайт и PHP
 
-1. Панель Beget → **«Сайты»** → создайте сайт и привяжите к нему домен. Появится папка `~/ваш-домен/public_html`.
+1. Панель Beget → **«Сайты»**: сайт `wb.linkoz.ru` с папкой `~/wb.linkoz.ru/public_html` (уже создан). Если папка у сайта называется иначе, подставляйте её путь в командах ниже.
 2. В настройках сайта выберите **PHP 8.2** или 8.3 (нужен как минимум 8.1).
 3. Раздел **«SSL-сертификаты»** → выпустите бесплатный сертификат Let's Encrypt для домена.
 
@@ -19,15 +35,15 @@
 Включите SSH: панель → **«SSH»**. Затем подключитесь и выполните:
 
 ```bash
-cd ~/ваш-домен
-rm -rf public_html            # в папке только заглушка Beget
+cd ~/wb.linkoz.ru
+mv public_html public_html.bak   # в папке только заглушка Beget, её можно удалить позже
 git clone -b beget-ready https://github.com/mahmadali91/lentazakazWB.git public_html
 ```
 
 Весь репозиторий окажется в `public_html`. Корневой `.htaccess` сам направляет запросы в `public/` и закрывает доступ к `src/`, `config/`, `storage/`, `cron/`, `database/`, `tools/` и `.git/`.
 
 > Альтернатива для опытных: клонируйте в `~/lentazakaz` и сделайте симлинк
-> `ln -s ~/lentazakaz/public ~/ваш-домен/public_html`.
+> `ln -s ~/lentazakaz/public ~/wb.linkoz.ru/public_html`.
 
 ### Вариант Б: через файловый менеджер
 
@@ -35,7 +51,7 @@ git clone -b beget-ready https://github.com/mahmadali91/lentazakazWB.git public_
 
 ## 4. Веб-установщик
 
-Откройте `https://ваш-домен/`. Сайт сам перенаправит на `/install`:
+Откройте `https://wb.linkoz.ru/`. Сайт сам перенаправит на `/install`:
 
 - проверит версию PHP и расширения (на Beget всё есть по умолчанию);
 - попросит данные MySQL (хост `localhost`), email и пароль администратора;
@@ -50,7 +66,7 @@ git clone -b beget-ready https://github.com/mahmadali91/lentazakazWB.git public_
 - Периодичность: **каждую минуту** (`* * * * *`)
 - Команда:
   ```
-  /usr/local/bin/php8.2 /home/X/ЛОГИН/ваш-домен/public_html/cron/sync.php
+  /usr/local/bin/php8.2 /home/X/ЛОГИН/wb.linkoz.ru/public_html/cron/sync.php
   ```
   Точную команду с правильным путём показывает установщик в конце и админ-панель (`/admin`). Номер версии PHP в команде должен совпадать с выбранной для сайта.
 
@@ -73,7 +89,7 @@ git clone -b beget-ready https://github.com/mahmadali91/lentazakazWB.git public_
    'yookassa' => ['shop_id' => '123456', 'secret_key' => 'live_…', 'send_receipt' => false, 'vat_code' => 1],
    ```
    `send_receipt => true` включайте, если подключены чеки ЮKassa (54-ФЗ).
-3. Кабинет ЮKassa → Интеграция → **HTTP-уведомления**: URL `https://ваш-домен/webhook/yookassa`, события `payment.succeeded` и `payment.canceled`.
+3. Кабинет ЮKassa → Интеграция → **HTTP-уведомления**: URL `https://wb.linkoz.ru/webhook/yookassa`, события `payment.succeeded` и `payment.canceled`.
 
 Пока ЮKassa не настроена, тарифы можно выдавать вручную: админ-панель → «Пользователи».
 
@@ -86,7 +102,7 @@ git clone -b beget-ready https://github.com/mahmadali91/lentazakazWB.git public_
 ## Обновление
 
 ```bash
-cd ~/ваш-домен/public_html && git pull
+cd ~/wb.linkoz.ru/public_html && git pull
 ```
 
 `config/config.php` и `storage/` git не затрагивает. Если в новой версии меняется схема БД, это будет указано в описании изменений.
