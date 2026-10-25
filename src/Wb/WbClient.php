@@ -155,6 +155,12 @@ final class WbClient
         return $this->request('statistics', 'GET', '/api/v1/supplier/orders', ['dateFrom' => $dateFrom, 'flag' => 0]);
     }
 
+    /** Продажи и возвраты (Статистика) начиная с dateFrom по lastChangeDate; до 80 000 строк, 1 запрос в минуту. */
+    public function supplierSales(string $dateFrom): array
+    {
+        return $this->request('statistics', 'GET', '/api/v1/supplier/sales', ['dateFrom' => $dateFrom, 'flag' => 0]);
+    }
+
     /** Заказы за один день (flag=1 — все заказы с датой dateFrom), для сверки с кабинетом WB. */
     public function supplierOrdersDay(string $date): array
     {

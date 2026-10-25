@@ -351,11 +351,53 @@ final class OrderRepository
             'returns'     => (int) ($r['return_count'] ?? 0),
             'avg'         => $count ? round((float) $r['orders_sum'] / $count) : 0,
         ];
+        if ($sales = self::salesKpi($storeIds, $f2)) {
+            $out = array_merge($out, $sales);
+        }
         if ($profit !== null) {
             $out['profit'] = self::profitTotals($storeIds, $f2, $profit);
             $out['profit']['buyout'] = self::profitTotals($storeIds, $f2 + ['date_by' => 'status', 'status' => 'buyout'], $profit)['buyout'];
         }
         return $out;
+    }
+
+    /**
+     * Выкупы и возвраты по отчёту продаж WB (wb_sales) — так считает кабинет: выкуп в день выкупа, возврат в день возврата,
+     * «Выкупы» = выкупы − возвраты. Свежие выкупы из Ленты, которых ещё нет в отчёте (он обновляется раз в 30 минут), досчитываем.
+     * null — отчёта продаж нет или выбран фильтр, который по нему не посчитать (схема FBS/DBS…, поиск).
+     */
+    private static function salesKpi(array $storeIds, array $f): ?array
+    {
+        if (!$storeIds || !empty($f['q']) || !in_array($f['scheme'] ?? '', ['', 'FBO', 'SELLER'], true)) {
+            return null;
+        }
+        $in = implode(',', array_map('intval', $storeIds));
+        if (!DB::value("SELECT 1 FROM wb_sales WHERE store_id IN ($in) LIMIT 1")) {
+            return null;
+        }
+        $mp = ($f['scheme'] ?? '') === 'FBO' ? ' AND s.is_mp = 0' : (($f['scheme'] ?? '') === 'SELLER' ? ' AND s.is_mp = 1' : '');
+        $mpO = ($f['scheme'] ?? '') === 'FBO' ? ' AND o.is_mp = 0' : (($f['scheme'] ?? '') === 'SELLER' ? ' AND o.is_mp = 1' : '');
+        $range = [$f['from'], $f['to']];
+        $s = DB::one("SELECT SUM(is_return = 0) buy, SUM(is_return = 1) ret,
+                COALESCE(SUM(CASE WHEN is_return = 0 THEN price_with_disc END), 0) buy_sum,
+                COALESCE(SUM(CASE WHEN is_return = 1 THEN price_with_disc END), 0) ret_sum
+            FROM wb_sales s WHERE s.store_id IN ($in) AND s.sale_dt BETWEEN ? AND ?$mp", $range);
+        // Свежее, чем последний отчёт продаж: события из Ленты заказов
+        $fresh = DB::one("SELECT SUM(o.status = 'buyout') buy, SUM(o.status IN ('return','returnDefective')) ret,
+                COALESCE(SUM(CASE WHEN o.status = 'buyout' THEN o.seller_price END), 0) buy_sum,
+                COALESCE(SUM(CASE WHEN o.status IN ('return','returnDefective') THEN o.seller_price END), 0) ret_sum
+            FROM orders o WHERE o.store_id IN ($in) AND o.status IN ('buyout','return','returnDefective')
+              AND o.status_at BETWEEN ? AND ?$mpO
+              AND o.status_at > COALESCE((SELECT MAX(x.sale_dt) FROM wb_sales x WHERE x.store_id = o.store_id), '1970-01-01')", $range);
+        $buy = (int) $s['buy'] + (int) $fresh['buy'];
+        $ret = (int) $s['ret'] + (int) $fresh['ret'];
+        return [
+            'buyout'       => $buy - $ret,
+            'buyout_sum'   => round((float) $s['buy_sum'] + (float) $fresh['buy_sum'] - (float) $s['ret_sum'] - (float) $fresh['ret_sum'], 2),
+            'buyout_gross' => $buy,
+            'returns'      => $ret,
+            'buyout_src'   => 'wb_sales',
+        ];
     }
 
     /** Суммарная прибыль за период: считается по каждому заказу той же формулой, что и в карточке заказа. */

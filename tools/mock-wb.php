@@ -263,6 +263,30 @@ switch ($path) {
             'sticker' => '', 'gNumber' => 'g' . $o['i'], 'srid' => sprintf('%d.0.0', 7500000000 + $o['i']),
         ], $rows)));
 
+    case '/api/v1/supplier/sales':
+        // Выкупы (S…) и возвраты (R…) — у возврата своя дата; возвращённый заказ раньше был выкуплен
+        $flagDay = (int) ($_GET['flag'] ?? 0) === 1;
+        $from = strtotime((string) ($_GET['dateFrom'] ?? '-1 day'));
+        $list = [];
+        foreach (orders(72) as $o) {
+            $events = [];
+            if ($o['status'] === 'buyout' || $o['status'] === 'return') {
+                $events[] = ['S', $o['t'] + 3 * 3600];
+            }
+            if ($o['status'] === 'return') {
+                $events[] = ['R', $o['updated']];
+            }
+            foreach ($events as [$type, $ts]) {
+                if ($ts > time() - 1800 || ($flagDay ? date('Y-m-d', $ts) !== date('Y-m-d', $from) : $ts + 1800 <= $from)) {
+                    continue;
+                }
+                $list[] = ['date' => date('Y-m-d\TH:i:s', $ts), 'lastChangeDate' => date('Y-m-d\TH:i:s', $ts + 1800), 'saleID' => $type . (900000 + $o['i']),
+                    'srid' => sprintf('%d.0.0', 7500000000 + $o['i']), 'nmId' => $o['product'][0], 'priceWithDisc' => $type === 'R' ? -$o['price'] : $o['price'],
+                    'finishedPrice' => round($o['price'] * 0.82), 'forPay' => round($o['price'] * 0.7), 'warehouseType' => $o['isMp'] ? 'Склад продавца' : 'Склад WB'];
+            }
+        }
+        out($list);
+
     case '/api/v3/orders/new':
     case '/api/v3/dbs/orders/new':
         $scheme = $path === '/api/v3/orders/new' ? 'FBS' : 'DBS';

@@ -54,6 +54,9 @@ final class SyncService
         }
         if (!empty($this->scopes['statistics']) && $this->due('stats_next_at', $now)) {
             $done['stats'] = $this->safe('stats', fn() => $this->syncStats());
+        } elseif (!empty($this->scopes['statistics']) && $this->due('sales_next_at', $now)) {
+            // Продажи — другим запуском, чтобы не упереться в лимит Статистики (1 запрос в минуту)
+            $done['sales'] = $this->safe('sales', fn() => $this->syncSales());
         }
         if (!empty($this->scopes['content']) && $this->due('cards_next_at', $now)) {
             $done['cards'] = $this->safe('cards', fn() => $this->syncCards());
@@ -101,12 +104,12 @@ final class SyncService
     private function safe(string $source, callable $fn): string
     {
         $column = [
-            'feed' => 'feed_next_at', 'mp' => 'mp_next_at', 'stats' => 'stats_next_at', 'cards' => 'cards_next_at',
+            'feed' => 'feed_next_at', 'mp' => 'mp_next_at', 'stats' => 'stats_next_at', 'sales' => 'sales_next_at', 'cards' => 'cards_next_at',
             'tariffs' => 'tariffs_next_at', 'remains' => 'remains_next_at',
             'fin' => 'fin_next_at', 'storage' => 'storage_next_at', 'ads' => 'ads_next_at',
         ][$source];
         // Справочные и финансовые источники не должны отключать ленту и пугать ошибками
-        $auxiliary = in_array($source, ['tariffs', 'remains', 'fin', 'storage', 'ads'], true);
+        $auxiliary = in_array($source, ['tariffs', 'remains', 'fin', 'storage', 'ads', 'sales'], true);
         // Флаг в scopes для финансовых источников: false — WB не дал доступ, раздел «Финансы» покажет подсказку
         $flag = ['fin' => 'finance', 'storage' => 'storage', 'ads' => 'advert'][$source] ?? null;
         try {
@@ -181,7 +184,7 @@ final class SyncService
 
     private function scopeOf(string $source): string
     {
-        return ['feed' => 'analytics', 'mp' => 'marketplace', 'stats' => 'statistics', 'cards' => 'content', 'remains' => 'analytics', 'tariffs' => 'common',
+        return ['feed' => 'analytics', 'mp' => 'marketplace', 'stats' => 'statistics', 'cards' => 'content', 'remains' => 'analytics', 'tariffs' => 'common', 'sales' => 'statistics',
             'fin' => 'finance', 'storage' => 'storage', 'ads' => 'advert'][$source];
     }
 
@@ -352,6 +355,52 @@ final class SyncService
         $this->store['stats_cursor'] = $last;
         // Данные Статистики обновляются раз в 30 минут; большая выгрузка — догружаем через минуту
         $this->setNext('stats_next_at', $count >= 80000 ? 61 : (empty($this->scopes['analytics']) ? 600 : 1800));
+        return $count;
+    }
+
+    // ------------------------------------------------------------------ 3б. Продажи и возвраты
+
+    /**
+     * Статистика → продажи: saleID «S…» — выкуп, «R…» — возврат, у каждого своя дата. Так кабинет WB считает «Выкупы»
+     * (выкупы за день минус возвраты за день), даже если заказ позже вернули.
+     */
+    private function syncSales(): int
+    {
+        $cursor = $this->store['sales_cursor'] ?: date('Y-m-d\TH:i:s', $this->historyStart());
+        $rows = $this->wb->supplierSales($cursor);
+        $last = $cursor;
+        $count = 0;
+        $pdo = DB::pdo();
+        $stmt = $pdo->prepare('INSERT INTO wb_sales (store_id, sale_id, srid, nm_id, is_return, sale_dt, last_change, price_with_disc, finished_price, for_pay, is_mp)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?) ON DUPLICATE KEY UPDATE srid = VALUES(srid), sale_dt = VALUES(sale_dt), last_change = VALUES(last_change),
+            price_with_disc = VALUES(price_with_disc), finished_price = VALUES(finished_price), for_pay = VALUES(for_pay)');
+        $pdo->beginTransaction();
+        try {
+            foreach ($rows as $s) {
+                $id = (string) ($s['saleID'] ?? '');
+                if ($id === '' || empty($s['date'])) {
+                    continue;
+                }
+                $num = static fn($k) => isset($s[$k]) && is_numeric($s[$k]) ? round(abs((float) $s[$k]), 2) : null;
+                $stmt->execute([
+                    $this->store['id'], mb_substr($id, 0, 40), isset($s['srid']) ? mb_substr((string) $s['srid'], 0, 80) : null,
+                    !empty($s['nmId']) ? (int) $s['nmId'] : null, str_starts_with($id, 'R') ? 1 : 0, wb_time((string) $s['date']) ?? now(),
+                    wb_time((string) ($s['lastChangeDate'] ?? '')), $num('priceWithDisc'), $num('finishedPrice'), $num('forPay'),
+                    ($s['warehouseType'] ?? '') === 'Склад продавца' ? 1 : 0,
+                ]);
+                if (!empty($s['lastChangeDate'])) {
+                    $last = $s['lastChangeDate'];
+                }
+                $count++;
+            }
+            $pdo->commit();
+        } catch (\Throwable $e) {
+            $pdo->rollBack();
+            throw $e;
+        }
+        DB::exec('UPDATE stores SET sales_cursor = ?, sales_ok_at = ? WHERE id = ?', [$last, now(), $this->store['id']]);
+        $this->store['sales_cursor'] = $last;
+        $this->setNext('sales_next_at', $count >= 80000 ? 61 : 1800);
         return $count;
     }
 

@@ -99,7 +99,7 @@ final class StoreController
         Auth::requireOwner();
         $store = $this->own($id);
         DB::exec('UPDATE stores SET feed_state = NULL, feed_next_at = NULL, mp_next_at = NULL, stats_cursor = NULL,
-            stats_next_at = NULL, cards_next_at = NULL, last_error = NULL WHERE id = ?', [$store['id']]);
+            stats_next_at = NULL, sales_cursor = NULL, sales_next_at = NULL, cards_next_at = NULL, last_error = NULL WHERE id = ?', [$store['id']]);
         flash('success', 'Полная перезагрузка заказов запущена. Это займёт несколько минут.');
         redirect('/app/stores');
     }

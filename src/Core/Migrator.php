@@ -9,7 +9,7 @@ namespace App\Core;
  */
 final class Migrator
 {
-    public const VERSION = 9;
+    public const VERSION = 10;
 
     public static function ensure(): void
     {
@@ -37,6 +37,13 @@ final class Migrator
             }
             if ($version < 6) {
                 self::v6();
+            }
+            if ($version < 10) {
+                // Продажи и возвраты из Статистики WB (supplier/sales): выкуп и возврат — отдельные события со своей датой, как в кабинете
+                self::addColumn('stores', 'sales_cursor', 'VARCHAR(40) NULL AFTER stats_ok_at');
+                self::addColumn('stores', 'sales_next_at', 'DATETIME NULL AFTER sales_cursor');
+                self::addColumn('stores', 'sales_ok_at', 'DATETIME NULL AFTER sales_next_at');
+                self::run(self::SALES_DDL);
             }
             if ($version < 9) {
                 // Признак «заказ есть в Ленте заказов WB»: кабинет WB не считает заказы, которые есть только в Статистике (неоплаченные)
@@ -283,6 +290,24 @@ final class Migrator
         UNIQUE KEY uq_api_token (token_hash),
         KEY idx_api_user (user_id),
         CONSTRAINT fk_api_user FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci';
+
+    public const SALES_DDL = 'CREATE TABLE IF NOT EXISTS wb_sales (
+        store_id       INT UNSIGNED NOT NULL,
+        sale_id        VARCHAR(40) NOT NULL,
+        srid           VARCHAR(80) NULL,
+        nm_id          BIGINT NULL,
+        is_return      TINYINT(1) NOT NULL DEFAULT 0,
+        sale_dt        DATETIME NOT NULL,
+        last_change    DATETIME NULL,
+        price_with_disc DECIMAL(12,2) NULL,
+        finished_price DECIMAL(12,2) NULL,
+        for_pay        DECIMAL(12,2) NULL,
+        is_mp          TINYINT(1) NOT NULL DEFAULT 0,
+        PRIMARY KEY (store_id, sale_id),
+        KEY idx_sales_dt (store_id, sale_dt),
+        KEY idx_sales_srid (store_id, srid),
+        CONSTRAINT fk_sales_store FOREIGN KEY (store_id) REFERENCES stores (id) ON DELETE CASCADE
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci';
 
     public const COMMISSIONS_DDL = 'CREATE TABLE IF NOT EXISTS wb_commissions (

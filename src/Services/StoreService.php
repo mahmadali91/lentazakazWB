@@ -95,6 +95,7 @@ final class StoreService
             'cards_next_at'    => null,
             'tariffs_next_at'  => null,
             'remains_next_at'  => null,
+            'sales_next_at'    => null,
             'remains_state'    => null,
             'fin_next_at'      => null,
             'storage_next_at'  => null,
