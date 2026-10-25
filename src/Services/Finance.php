@@ -44,7 +44,7 @@ final class Finance
     /** Показатели (порядок — как в ОПИУ). */
     public const METRICS = ['sales', 'returns', 'revenue', 'sales_qty', 'deliveries', 'back_deliveries', 'returns_qty', 'defect_qty', 'lost_qty',
         'defect_comp', 'lost_comp', 'commission', 'acquiring', 'logistics', 'loyalty', 'turnover', 'storage', 'acceptance', 'penalty', 'deduction',
-        'additional', 'wb_other', 'cost', 'tax_base', 'tax', 'vat', 'ads', 'exp_sku', 'exp_period', 'selfbuy_qty', 'selfbuy_cost', 'pay_calc', 'profit'];
+        'additional', 'wb_other', 'cost', 'tax_base', 'tax', 'vat', 'ads', 'exp_sku', 'exp_period', 'pay_calc', 'profit'];
 
     public const LABELS = [
         'sales'           => 'Продажи',
@@ -76,8 +76,6 @@ final class Finance
         'ads'             => 'Реклама',
         'exp_sku'         => 'Доп. затраты на товары',
         'exp_period'      => 'Прочие расходы за период',
-        'selfbuy_qty'     => 'Кол-во самовыкупов',
-        'selfbuy_cost'    => 'Затраты на самовыкупы',
         'pay_calc'        => 'Итого к оплате (расчёт по отчёту)',
         'profit'          => 'Чистая прибыль',
     ];
@@ -174,29 +172,6 @@ final class Finance
         return $m;
     }
 
-    /**
-     * Затраты на самовыкуп по строке (заказ из списка самовыкупов): что заплатили покупателю минус что вернул WB,
-     * плюс логистика и налог. Сам товар вернулся к продавцу — себестоимость не списывается.
-     */
-    private static function selfbuyRow(array $r, float $taxRate, float $vatRate): array
-    {
-        $doc = self::norm($r['doc_type']);
-        $op = self::norm($r['oper']);
-        $sign = 0;
-        if ($doc === 'продажа' && in_array($op, ['продажа', 'корректная продажа'], true)) {
-            $sign = 1;
-        } elseif ($doc === 'возврат' && in_array($op, self::SALE_QTY_MINUS, true)) {
-            $sign = -1;
-        }
-        $base = $sign * (float) $r['retail_amount'];
-        $vat = $vatRate > 0 ? $base / (1 + $vatRate / 100) * ($vatRate / 100) : 0.0;
-        $tax = ($base - $vat) * $taxRate / 100;
-        return [
-            'qty'  => $sign,
-            'cost' => $sign * ((float) $r['retail_amount'] - (float) $r['for_pay']) + $tax + $vat + (float) $r['delivery_service'],
-        ];
-    }
-
     // ------------------------------------------------------------------ сводный расчёт
 
     /**
@@ -241,14 +216,10 @@ final class Finance
             $params += ['q1' => $opt['q'], 'q2' => '%' . $opt['q'] . '%', 'q3' => ctype_digit((string) $opt['q']) ? (int) $opt['q'] : -1];
         }
 
-        // Справочники: себестоимость, самовыкупы, дубли ШК в компенсациях брака
+        // Справочники: себестоимость, дубли ШК в компенсациях брака
         $costs = [];
         foreach (DB::all("SELECT store_id, nm_id, cost_price FROM products WHERE store_id IN ($in) AND cost_price IS NOT NULL") as $p) {
             $costs[$p['store_id'] . ':' . $p['nm_id']] = (float) $p['cost_price'];
-        }
-        $selfbuys = [];
-        foreach (DB::all('SELECT srid, extra_cost FROM fin_selfbuys WHERE user_id = ?', [(int) $account['id']]) as $s) {
-            $selfbuys[$s['srid']] = (float) $s['extra_cost'];
         }
         $dups = [];
         $defect = "'" . implode("','", self::DEFECT) . "'";
@@ -258,32 +229,15 @@ final class Finance
 
         $stmt = DB::pdo()->prepare("SELECT r.* FROM wb_report_rows r WHERE $where ORDER BY r.date_from, r.rrd_id");
         $stmt->execute($params);
-        $extraUsed = [];
         while ($r = $stmt->fetch(\PDO::FETCH_ASSOC)) {
             $res['info']['rows']++;
             $pk = self::periodKey((string) $r['date_from'], $group);
             $nm = (int) $r['nm_id'];
             $srid = (string) $r['srid'];
-            if ($srid !== '' && isset($selfbuys[$srid])) {
-                $sb = self::selfbuyRow($r, $taxRate, $vatRate);
-                if ($sb['qty'] > 0 && !isset($extraUsed[$srid])) {
-                    $sb['cost'] += $selfbuys[$srid];
-                    $extraUsed[$srid] = true;
-                }
-                $m = self::empty();
-                $m['selfbuy_qty'] = $sb['qty'];
-                $m['selfbuy_cost'] = $sb['cost'];
-                foreach (['storage' => 'paid_storage', 'acceptance' => 'paid_acceptance', 'penalty' => 'penalty', 'deduction' => 'deduction', 'additional' => 'additional'] as $k => $col) {
-                    $m[$k] = (float) $r[$col];
-                }
-                $m['pay_calc'] = ((self::norm($r['doc_type']) === 'возврат') ? -1 : (self::norm($r['doc_type']) === 'продажа' ? 1 : 0)) * (float) $r['for_pay']
-                    - (float) $r['delivery_service'] - $m['storage'] - $m['acceptance'] - $m['penalty'] - $m['deduction'] - $m['additional'];
-            } else {
-                $cost = $nm ? ($costs[$r['store_id'] . ':' . $nm] ?? 0.0) : 0.0;
-                $m = self::row($r, $cost, $dups[$r['shk_id'] . '|' . $r['doc_type']] ?? 1, $taxRate, $vatRate);
-                if ($nm && $cost == 0.0 && ($m['sales'] > 0 || $m['returns'] > 0)) {
-                    $res['info']['no_cost'][$nm] = true;
-                }
+            $cost = $nm ? ($costs[$r['store_id'] . ':' . $nm] ?? 0.0) : 0.0;
+            $m = self::row($r, $cost, $dups[$r['shk_id'] . '|' . $r['doc_type']] ?? 1, $taxRate, $vatRate);
+            if ($nm && $cost == 0.0 && ($m['sales'] > 0 || $m['returns'] > 0)) {
+                $res['info']['no_cost'][$nm] = true;
             }
             self::add($res['total'], $m);
             $res['periods'][$pk] ??= self::empty();
@@ -299,7 +253,7 @@ final class Finance
                 unset($sku);
             }
             if ($withSrid && $srid !== '') {
-                $res['bySrid'][$srid] ??= self::empty() + ['srid' => $srid, 'nm_id' => $nm, 'vendor_code' => '', 'subject' => '', 'date' => null, 'rows' => 0, 'selfbuy' => isset($selfbuys[$srid])];
+                $res['bySrid'][$srid] ??= self::empty() + ['srid' => $srid, 'nm_id' => $nm, 'vendor_code' => '', 'subject' => '', 'date' => null, 'rows' => 0];
                 $o = &$res['bySrid'][$srid];
                 self::add($o, $m);
                 $o['rows']++;
@@ -403,7 +357,7 @@ final class Finance
             $m['storage'] = $m['storage_sku'] ?? $m['storage'];
         }
         $m['wb_other'] = $m['storage'] + $m['acceptance'] + $m['penalty'] + $m['deduction'] + $m['additional'];
-        $m['profit'] = $m['turnover'] - $m['wb_other'] - $m['cost'] - $m['tax'] - $m['vat'] - $m['ads'] - $m['exp_sku'] - $m['exp_period'] - $m['selfbuy_cost'];
+        $m['profit'] = $m['turnover'] - $m['wb_other'] - $m['cost'] - $m['tax'] - $m['vat'] - $m['ads'] - $m['exp_sku'] - $m['exp_period'];
         $m['margin'] = $m['revenue'] > 0 ? $m['profit'] / $m['revenue'] * 100 : null;
         $m['roi'] = $m['cost'] > 0 ? $m['profit'] / $m['cost'] * 100 : null;
     }

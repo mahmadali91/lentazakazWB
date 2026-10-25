@@ -65,7 +65,6 @@ $cls = static fn(float $v) => $v < 0 ? 'neg' : 'pos';
           'Налог' . ($t['vat'] ? ' и НДС' : '') => $t['tax'] + $t['vat'],
           'Реклама' => $t['ads'],
           'Прочие расходы' => $t['exp_sku'] + $t['exp_period'],
-          'Самовыкупы' => $t['selfbuy_cost'],
           'Чистая прибыль' => $t['profit'],
       ];
       ?>

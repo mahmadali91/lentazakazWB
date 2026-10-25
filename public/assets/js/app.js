@@ -130,7 +130,7 @@
     });
   }
 
-  // ---------- Финансы: выбор периода и калькулятор акций ----------
+  // ---------- Финансы: выбор периода ----------
   document.querySelectorAll('form[data-auto] select').forEach(function (sel) {
     sel.addEventListener('change', function () {
       var custom = sel.form.querySelector('.custom-dates');
@@ -145,38 +145,6 @@
     });
   });
 
-  var promo = document.getElementById('promoTable');
-  if (promo) {
-    var tax = parseFloat(promo.getAttribute('data-tax')) || 0;
-    var vat = parseFloat(promo.getAttribute('data-vat')) || 0;
-    var num = function (v) { v = parseFloat(String(v).replace(/\s/g, '').replace(',', '.')); return isNaN(v) ? 0 : v; };
-    var fmt = function (v) { return Math.round(v).toLocaleString('ru-RU') + ' ' + CUR; };
-    // Прибыль на 1 шт: цена − комиссия − логистика − налог и НДС (от цены покупателя после СПП) − реклама − себестоимость
-    var profit = function (price, k) {
-      var buyer = price * (1 - k.spp / 100);
-      var vatSum = vat > 0 ? buyer / (1 + vat / 100) * (vat / 100) : 0;
-      var taxSum = (buyer - vatSum) * tax / 100;
-      return price - price * k.comm / 100 - k.log - taxSum - vatSum - price * k.drr / 100 - k.cost;
-    };
-    var calc = function (tr) {
-      var k = {};
-      tr.querySelectorAll('[data-k]').forEach(function (i) { k[i.getAttribute('data-k')] = num(i.value); });
-      var pNow = profit(k.now, k), pPromo = profit(k.promo, k);
-      var set = function (name, text, neg) {
-        var el = tr.querySelector('[data-out="' + name + '"]');
-        el.textContent = text;
-        el.classList.toggle('neg', !!neg);
-        el.classList.toggle('pos', !neg && name !== 'margin');
-      };
-      set('now', fmt(pNow), pNow < 0);
-      set('promo', fmt(pPromo), pPromo < 0);
-      set('margin', k.promo > 0 ? (pPromo / k.promo * 100).toFixed(1).replace('.', ',') + '%' : '—', pPromo < 0);
-    };
-    promo.querySelectorAll('tr[data-row]').forEach(function (tr) {
-      calc(tr);
-      tr.addEventListener('input', function () { calc(tr); });
-    });
-  }
 
   var cfg = window.LZ_FEED;
   if (!cfg || !cfg.enabled) return;
@@ -193,6 +161,19 @@
 
   var $ = function (id) { return document.getElementById(id); };
   var listEl = $('orderList');
+
+  // Вид ленты: «Лента» (строки) или «Плитка» (карточки с крупным фото), запоминаем выбор
+  var ordersCard = listEl ? listEl.closest('.orders') : null;
+  function setView(v) {
+    if (!ordersCard) return;
+    ordersCard.classList.toggle('tiles', v === 'tiles');
+    document.querySelectorAll('.view-toggle [data-view]').forEach(function (b) { b.classList.toggle('on', b.getAttribute('data-view') === v); });
+    store.set('lz-view', v);
+  }
+  setView(store.get('lz-view', 'list'));
+  document.querySelectorAll('.view-toggle [data-view]').forEach(function (b) {
+    b.addEventListener('click', function () { setView(b.getAttribute('data-view')); });
+  });
   var multiStore = !!$('storeSel');
 
   function esc(s) {
@@ -422,12 +403,12 @@
     if (k.profit) {
       var p = k.profit, el = document.querySelector('[data-k="profit"]');
       if (el) {
-        el.textContent = (p.orders < 0 ? '−' : '') + money(Math.abs(p.orders));
-        el.style.color = p.orders < 0 ? 'var(--bad)' : '';
+        el.textContent = (p.buyout < 0 ? '−' : '') + money(Math.abs(p.buyout));
+        el.style.color = p.buyout < 0 ? 'var(--bad)' : '';
       }
       set('profit_sub', p.no_cost_items
         ? 'нет себестоимости у ' + p.no_cost_items + ' тов. →'
-        : 'по выкупам ' + money(p.buyout));
+        : 'по всем заказам ≈ ' + (p.orders < 0 ? '−' : '') + money(Math.abs(p.orders)));
     }
   }
 

@@ -27,7 +27,7 @@ $thumb = static function ($nm) use ($photos) {
         <th class="num">Реклама</th><th class="num">Прочее</th>
       </tr></thead>
       <tbody>
-      <?php foreach ($skus as $nm => $s): $other = $s['acceptance'] + $s['penalty'] + $s['deduction'] + $s['additional'] + $s['exp_sku'] + $s['selfbuy_cost'] + $s['loyalty'] + $s['vat']; ?>
+      <?php foreach ($skus as $nm => $s): $other = $s['acceptance'] + $s['penalty'] + $s['deduction'] + $s['additional'] + $s['exp_sku'] + $s['loyalty'] + $s['vat']; ?>
         <tr id="nm<?= (int) $nm ?>">
           <td class="sticky"><div class="sku-cell"><?= $thumb($nm) ?><div style="min-width:0"><b><?= e($s['vendor_code'] ?: '—') ?></b><div class="muted small"><?= (int) $nm ?> · <?= e($s['subject']) ?></div></div></div></td>
           <td class="num b <?= $cls($s['profit']) ?>"><?= num_ru($s['profit']) ?></td>
@@ -58,7 +58,7 @@ $thumb = static function ($nm) use ($photos) {
         <td class="num"><?= num_ru($res['total']['logistics']) ?></td><td class="num"><?= num_ru($res['total']['turnover']) ?></td>
         <td class="num"><?= num_ru($res['total']['cost']) ?></td><td class="num"><?= num_ru($res['total']['storage']) ?></td>
         <td class="num"><?= num_ru($res['total']['tax']) ?></td><td class="num"><?= num_ru($res['total']['ads']) ?></td>
-        <td class="num"><?= num_ru($res['total']['wb_other'] - $res['total']['storage'] + $res['total']['exp_sku'] + $res['total']['exp_period'] + $res['total']['selfbuy_cost'] + $res['total']['loyalty'] + $res['total']['vat']) ?></td></tr>
+        <td class="num"><?= num_ru($res['total']['wb_other'] - $res['total']['storage'] + $res['total']['exp_sku'] + $res['total']['exp_period'] + $res['total']['loyalty'] + $res['total']['vat']) ?></td></tr>
       </tbody>
     </table>
   </div>
@@ -79,7 +79,7 @@ $thumb = static function ($nm) use ($photos) {
       <div class="kv-list">
         <?php foreach (['revenue' => 'Выручка', 'commission' => '− Комиссия WB', 'acquiring' => '− Эквайринг', 'logistics' => '− Логистика', 'turnover' => '= Придёт от WB',
                        'cost' => '− Себестоимость', 'storage' => '− Хранение', 'tax' => '− Налог', 'vat' => '− НДС', 'ads' => '− Реклама', 'acceptance' => '− Приёмка',
-                       'penalty' => '− Штрафы', 'exp_sku' => '− Доп. затраты', 'selfbuy_cost' => '− Самовыкупы', 'profit' => '= Чистая прибыль'] as $k => $label):
+                       'penalty' => '− Штрафы', 'exp_sku' => '− Доп. затраты', 'profit' => '= Чистая прибыль'] as $k => $label):
             if (abs($s[$k]) < 0.5 && !in_array($k, ['revenue', 'turnover', 'profit', 'cost'], true)) continue; ?>
           <div class="kv <?= in_array($k, ['turnover', 'profit'], true) ? 'total' : '' ?>"><span><?= e($label) ?></span><b class="<?= $k === 'profit' ? $cls($s[$k]) : '' ?>"><?= money($s[$k]) ?></b></div>
         <?php endforeach; ?>

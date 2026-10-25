@@ -143,10 +143,6 @@ $r->get('/app/finance/ads', [FinanceController::class, 'ads']);
 $r->get('/app/finance/expenses', [FinanceController::class, 'expenses']);
 $r->post('/app/finance/expenses', [FinanceController::class, 'addExpense']);
 $r->post('/app/finance/expenses/{id}/delete', [FinanceController::class, 'deleteExpense']);
-$r->get('/app/finance/selfbuys', [FinanceController::class, 'selfbuys']);
-$r->post('/app/finance/selfbuys', [FinanceController::class, 'addSelfbuys']);
-$r->post('/app/finance/selfbuys/delete', [FinanceController::class, 'deleteSelfbuy']);
-$r->get('/app/finance/promo', [FinanceController::class, 'promo']);
 $r->post('/app/finance/settings', [FinanceController::class, 'settings']);
 
 // JSON для живой ленты

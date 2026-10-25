@@ -30,7 +30,6 @@ $lines = [
     ['ads', 'Реклама', 'sub'],
     ['exp_sku', 'Доп. затраты на товары', 'sub'],
     ['exp_period', 'Прочие расходы за период', 'sub'],
-    ['selfbuy_cost', 'Затраты на самовыкупы', 'sub'],
     ['profit', 'Чистая прибыль', 'profit'],
     ['margin', 'Маржинальность, % от выручки', 'pct'],
     ['roi', 'ROI, % от себестоимости', 'pct'],
@@ -68,7 +67,7 @@ $fmt = static function ($v, string $type): string {
       </thead>
       <tbody>
         <?php foreach ($lines as [$k, $label, $type]):
-            if (in_array($k, ['defect_comp', 'lost_comp', 'loyalty', 'deduction', 'additional', 'vat', 'exp_sku', 'exp_period', 'selfbuy_cost', 'acceptance', 'penalty'], true) && abs((float) $t[$k]) < 0.005 && !($k === 'exp_period' && $expenses)) {
+            if (in_array($k, ['defect_comp', 'lost_comp', 'loyalty', 'deduction', 'additional', 'vat', 'exp_sku', 'exp_period', 'acceptance', 'penalty'], true) && abs((float) $t[$k]) < 0.005 && !($k === 'exp_period' && $expenses)) {
                 continue;
             } ?>
           <tr class="l-<?= $type ?>">

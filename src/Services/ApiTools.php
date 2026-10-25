@@ -348,7 +348,7 @@ final class ApiTools
         $rows = DB::all('SELECT * FROM wb_report_rows WHERE store_id IN (' . implode(',', $storeIds) . ') AND srid = ? ORDER BY rrd_id', [$srid]);
         $res = Finance::compute($account, $storeIds, FinanceSync::WB_DATA_START, date('Y-m-d'), ['group' => 'none', 'srid' => true, 'srids' => [$srid]]);
         $o = $res['bySrid'][$srid] ?? null;
-        return ['srid' => $srid, 'found' => (bool) $rows, 'self_buyout' => (bool) ($o['selfbuy'] ?? false),
+        return ['srid' => $srid, 'found' => (bool) $rows,
             'calc' => $o ? self::metrics($o) : null, 'rows' => array_map([self::class, 'typed'], $rows)];
     }
 

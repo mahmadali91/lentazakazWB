@@ -59,8 +59,8 @@ $cronStale = !$cronLast || strtotime($cronLast) < time() - 600;
     <div class="card kpi"><div class="k-label">Возвраты</div><div class="k-value" data-k="returns">—</div><div class="k-sub">&nbsp;</div></div>
     <div class="card kpi"><div class="k-label">Средний чек</div><div class="k-value" data-k="avg">—</div><div class="k-sub">цена продавца</div></div>
     <?php if (!empty($plan['profit'])): ?>
-      <a class="card kpi" href="/app/products" style="text-decoration:none;color:inherit" title="Оценка: цена − комиссия − логистика − налог − прочие − себестоимость">
-        <div class="k-label">Прибыль ≈</div><div class="k-value" data-k="profit">—</div><div class="k-sub" data-k="profit_sub">&nbsp;</div>
+      <a class="card kpi" href="/app/products" style="text-decoration:none;color:inherit" title="Оценка прибыли по выкупам за период: цена − комиссия − логистика − налог − прочие − себестоимость. Точная прибыль — в разделе «Финансы» по отчётам WB">
+        <div class="k-label">Прибыль по выкупам ≈</div><div class="k-value" data-k="profit">—</div><div class="k-sub" data-k="profit_sub">&nbsp;</div>
       </a>
     <?php endif; ?>
   </div>
@@ -70,6 +70,10 @@ $cronStale = !$cronLast || strtotime($cronLast) < time() - 600;
       <div class="orders-head">
         <div class="seg" data-filter="status">
           <?php foreach ($statuses as $k => $v): ?><button type="button" data-value="<?= $k ?>" class="<?= $filters['status'] === $k ? 'on' : '' ?>"><?= $v ?></button><?php endforeach; ?>
+        </div>
+        <div class="seg view-toggle" role="group" aria-label="Вид ленты">
+          <button type="button" data-view="list" title="Лента" aria-label="Лента"><?= icon('list', 16) ?></button>
+          <button type="button" data-view="tiles" title="Плитка" aria-label="Плитка"><?= icon('grid', 16) ?></button>
         </div>
       </div>
       <div id="orderList">

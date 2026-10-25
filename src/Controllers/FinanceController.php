@@ -15,7 +15,7 @@ use App\Services\StoreService;
 /**
  * Раздел «Финансы»: расчёт чистой прибыли по еженедельным отчётам реализации WB.
  * Вкладки повторяют листы таблицы «9.5»: Дашборд, ОПИУ, Отчёт по SKU, ABC-анализ, Детализация,
- * Исходник (отчёты WB), Себестоимость, Хранение на SKU, Реклама на SKU, Прочие расходы, Учёт самовыкупов, Участие в акции.
+ * Исходник (отчёты WB), Себестоимость, Хранение на SKU, Реклама на SKU, Прочие расходы.
  */
 final class FinanceController
 {
@@ -30,8 +30,6 @@ final class FinanceController
         'storage'  => 'Хранение',
         'ads'      => 'Реклама',
         'expenses' => 'Прочие расходы',
-        'selfbuys' => 'Самовыкупы',
-        'promo'    => 'Акции',
     ];
 
     /** Общий контекст: кабинет, тариф, магазины, период. */
@@ -212,7 +210,7 @@ final class FinanceController
     private function exportSku(array $skus, array $ctx): never
     {
         $cols = ['sales_qty', 'deliveries', 'back_deliveries', 'returns_qty', 'defect_qty', 'lost_qty', 'revenue', 'commission', 'acquiring', 'logistics',
-            'loyalty', 'turnover', 'cost', 'storage', 'acceptance', 'penalty', 'tax', 'vat', 'ads', 'exp_sku', 'selfbuy_qty', 'selfbuy_cost', 'profit'];
+            'loyalty', 'turnover', 'cost', 'storage', 'acceptance', 'penalty', 'tax', 'vat', 'ads', 'exp_sku', 'profit'];
         $this->csvStart('pribyl_po_tovaram_' . $ctx['from'] . '_' . $ctx['to']);
         $out = fopen('php://output', 'w');
         fputcsv($out, array_merge(['Артикул WB', 'Артикул продавца', 'Предмет', 'Бренд'], array_map(static fn($c) => Finance::LABELS[$c], $cols), ['Маржа, %', 'ABC выручка', 'ABC прибыль']), ';');
@@ -543,96 +541,6 @@ final class FinanceController
         DB::exec('DELETE FROM fin_expenses WHERE id = ? AND user_id = ?', [(int) $id, (int) $ctx['account']['id']]);
         flash('success', 'Расход удалён.');
         $this->back('expenses');
-    }
-
-    // ------------------------------------------------------------------ Учёт самовыкупов
-
-    public function selfbuys(): string
-    {
-        $ctx = $this->ctx();
-        if ($html = $this->locked($ctx, 'selfbuys')) {
-            return $html;
-        }
-        $items = DB::all('SELECT * FROM fin_selfbuys WHERE user_id = ? ORDER BY created_at DESC LIMIT 1000', [(int) $ctx['account']['id']]);
-        $found = [];
-        if ($items && $ctx['activeIds']) {
-            $res = Finance::compute($ctx['account'], $ctx['activeIds'], FinanceSync::WB_DATA_START, date('Y-m-d'), ['group' => 'none', 'srid' => true,
-                'srids' => array_column($items, 'srid')]);
-            $found = array_intersect_key($res['bySrid'], array_flip(array_column($items, 'srid')));
-        }
-        return $this->render('selfbuys', $ctx, ['items' => $items, 'found' => $found]);
-    }
-
-    public function addSelfbuys(): never
-    {
-        $ctx = $this->requireEdit();
-        $extra = round((float) str_replace([' ', ','], ['', '.'], (string) input('extra_cost', '0')), 2);
-        $note = mb_substr(trim((string) input('note', '')), 0, 255) ?: null;
-        $n = 0;
-        foreach (preg_split('/[\s,;]+/', (string) input('srids', '')) as $srid) {
-            $srid = trim($srid);
-            if ($srid === '' || mb_strlen($srid) > 80) {
-                continue;
-            }
-            DB::exec('INSERT INTO fin_selfbuys (user_id, srid, extra_cost, note, created_at) VALUES (?,?,?,?,NOW())
-                ON DUPLICATE KEY UPDATE extra_cost = VALUES(extra_cost), note = VALUES(note)', [(int) $ctx['account']['id'], $srid, $extra, $note]);
-            $n++;
-        }
-        flash($n ? 'success' : 'error', $n ? 'Добавлено заказов-самовыкупов: ' . $n . '.' : 'Вставьте Srid заказов (из отчёта WB), по одному в строке.');
-        $this->back('selfbuys');
-    }
-
-    public function deleteSelfbuy(): never
-    {
-        $ctx = $this->requireEdit();
-        DB::exec('DELETE FROM fin_selfbuys WHERE user_id = ? AND srid = ?', [(int) $ctx['account']['id'], (string) input('srid', '')]);
-        flash('success', 'Заказ убран из самовыкупов.');
-        $this->back('selfbuys');
-    }
-
-    // ------------------------------------------------------------------ Участие в акции
-
-    public function promo(): string
-    {
-        $ctx = $this->ctx();
-        if ($html = $this->locked($ctx, 'promo')) {
-            return $html;
-        }
-        $items = [];
-        if ($ctx['storeIds']) {
-            $in = implode(',', $ctx['storeIds']);
-            // По товарам за период: средняя цена продавца, средняя СПП, логистика на продажу, реклама на продажу (ДРР)
-            $res = Finance::compute($ctx['account'], $ctx['storeIds'], $ctx['from'], $ctx['to'], ['group' => 'none', 'sku' => true]);
-            $stats = DB::all("SELECT nm_id, AVG(NULLIF(retail_price, 0)) price, AVG(NULLIF(retail_price_disc, 0)) price_disc, AVG(spp) spp, AVG(commission_pct) comm
-                FROM wb_report_rows WHERE store_id IN ($in) AND date_from BETWEEN ? AND ? AND doc_type = 'Продажа' AND oper = 'Продажа' GROUP BY nm_id", [$ctx['from'], $ctx['to']]);
-            $comm = [];
-            foreach (DB::all("SELECT p.nm_id, c.fbo FROM products p JOIN wb_commissions c ON c.store_id = p.store_id AND c.subject_id = p.subject_id WHERE p.store_id IN ($in)") as $c) {
-                $comm[(int) $c['nm_id']] = (float) $c['fbo'];
-            }
-            foreach ($stats as $s) {
-                $nm = (int) $s['nm_id'];
-                $sku = $res['bySku'][$nm] ?? null;
-                if (!$sku) {
-                    continue;
-                }
-                $qty = max(1, $sku['sales_qty']);
-                $items[] = [
-                    'nm_id' => $nm, 'vendor_code' => $sku['vendor_code'], 'subject' => $sku['subject'], 'title' => $sku['title'],
-                    'price' => round((float) $s['price']), 'discount' => $s['price'] > 0 ? round(100 - (float) $s['price_disc'] / (float) $s['price'] * 100) : 0,
-                    'spp' => round((float) $s['spp'], 1), 'comm' => $comm[$nm] ?? round((float) $s['comm'], 1),
-                    'logistics' => round(($sku['logistics']) / $qty, 2), 'drr' => $sku['revenue'] > 0 ? round($sku['ads'] / $sku['revenue'] * 100, 1) : 0,
-                    'cost' => null, 'qty' => $sku['sales_qty'],
-                ];
-            }
-            $photos = $this->photos($ctx['storeIds'], array_column($items, 'nm_id'));
-            foreach ($items as &$it) {
-                $it['cost'] = isset($photos[$it['nm_id']]['cost_price']) ? (float) $photos[$it['nm_id']]['cost_price'] : null;
-                $it['photo'] = $photos[$it['nm_id']]['photo'] ?? null;
-            }
-            unset($it);
-            usort($items, static fn($a, $b) => $b['qty'] <=> $a['qty']);
-        }
-        return $this->render('promo', $ctx, ['items' => $items]);
     }
 
     // ------------------------------------------------------------------ настройки

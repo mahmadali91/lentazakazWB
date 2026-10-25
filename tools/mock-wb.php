@@ -23,6 +23,17 @@ function out(mixed $data, int $code = 200): never
 }
 
 // --- Эмуляция ЮKassa (для тестов оплаты): config yookassa.api = 'http://127.0.0.1:8090/v3'
+// Обложки тестовых товаров (для скриншотов): /img/<nmId>.svg
+if (preg_match('#^/img/(\d+)\.svg$#', $path, $m)) {
+    $pal = [['#7c3aed', '#ec4899'], ['#0ea5e9', '#6366f1'], ['#f59e0b', '#ef4444'], ['#10b981', '#0ea5e9'], ['#8b5cf6', '#06b6d4'], ['#f43f5e', '#f97316']];
+    [$a, $b] = $pal[(int) $m[1] % count($pal)];
+    header('Content-Type: image/svg+xml');
+    echo '<svg xmlns="http://www.w3.org/2000/svg" width="300" height="400" viewBox="0 0 300 400"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1">'
+        . '<stop offset="0" stop-color="' . $a . '"/><stop offset="1" stop-color="' . $b . '"/></linearGradient></defs><rect width="300" height="400" fill="url(#g)"/>'
+        . '<circle cx="150" cy="150" r="70" fill="#fff" opacity=".18"/><rect x="70" y="250" width="160" height="16" rx="8" fill="#fff" opacity=".35"/>'
+        . '<rect x="100" y="280" width="100" height="12" rx="6" fill="#fff" opacity=".25"/></svg>';
+    exit;
+}
 if ($path === '/v3/me') {
     out(['account_id' => '123456', 'test' => true, 'status' => 'enabled']);
 }

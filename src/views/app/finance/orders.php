@@ -38,7 +38,6 @@ $cls = static fn($v) => $v < 0 ? 'neg' : '';
         <tr class="row-link" onclick="location.href='/app/finance/orders<?= e($qs(['srid' => $o['srid'], 'q' => $q ?: null])) ?>'">
           <td class="nowrap"><?= date_ru($o['date'], false) ?></td>
           <td><a href="/app/finance/orders<?= $qs(['srid' => $o['srid'], 'q' => $q ?: null]) ?>"><b><?= e($o['vendor_code'] ?: '—') ?></b></a> <span class="muted small"><?= e($o['subject']) ?></span>
-            <?php if ($o['selfbuy']): ?><span class="badge badge-return">самовыкуп</span><?php endif; ?>
             <div class="muted small mono"><?= e($o['srid']) ?></div></td>
           <td class="num"><?= num_ru($o['revenue']) ?></td>
           <td class="num"><?= num_ru($o['commission'] + $o['acquiring']) ?></td>
