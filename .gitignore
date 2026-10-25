@@ -1,0 +1,10 @@
+/config/config.php
+/storage/logs/*
+!/storage/logs/.gitkeep
+/storage/cache/*
+!/storage/cache/.gitkeep
+/storage/sessions/
+/storage/*.lock
+.DS_Store
+.idea/
+.vscode/
