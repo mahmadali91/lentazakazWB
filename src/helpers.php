@@ -210,3 +210,13 @@ function icon(string $name, int $size = 20): string
     $p = $paths[$name] ?? $paths['box'];
     return '<svg width="' . $size . '" height="' . $size . '" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' . $p . '</svg>';
 }
+
+/** Логин для входа: email или имя из латиницы/цифр/._- (3–64 символа). Возвращает нормализованный логин или null. */
+function normalize_login(string $login): ?string
+{
+    $login = mb_strtolower(trim($login));
+    if (filter_var($login, FILTER_VALIDATE_EMAIL)) {
+        return $login;
+    }
+    return preg_match('/^[a-z0-9._-]{3,64}$/', $login) ? $login : null;
+}

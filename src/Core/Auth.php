@@ -7,6 +7,7 @@ final class Auth
 {
     private static ?array $user = null;
     private static bool $loaded = false;
+    private static ?array $account = null;
 
     public static function startSession(): void
     {
@@ -49,6 +50,54 @@ final class Auth
         return self::$user;
     }
 
+    /**
+     * Кабинет, с которым работает пользователь: для сотрудника — кабинет владельца, иначе — сам пользователь.
+     * Тариф, магазины и себестоимость принадлежат кабинету.
+     */
+    public static function account(): ?array
+    {
+        $user = self::user();
+        if (!$user || empty($user['owner_id'])) {
+            return $user;
+        }
+        if (self::$account === null || (int) self::$account['id'] !== (int) $user['owner_id']) {
+            self::$account = DB::one('SELECT * FROM users WHERE id = ? AND is_blocked = 0', [$user['owner_id']]);
+            if (!self::$account) {
+                // Владелец удалён или заблокирован — сотрудник тоже теряет доступ
+                self::logout();
+                return null;
+            }
+        }
+        return self::$account;
+    }
+
+    public static function accountId(): int
+    {
+        return (int) (self::account()['id'] ?? 0);
+    }
+
+    public static function isMember(): bool
+    {
+        return !empty(self::user()['owner_id']);
+    }
+
+    /** Действие доступно только владельцу кабинета (не сотруднику). */
+    public static function requireOwner(): array
+    {
+        $user = self::require();
+        if (!empty($user['owner_id'])) {
+            flash('error', 'Этот раздел доступен только владельцу кабинета.');
+            redirect('/app');
+        }
+        return $user;
+    }
+
+    /** Администратор вошёл в кабинет клиента («Войти как»). */
+    public static function impersonator(): ?int
+    {
+        return isset($_SESSION['impersonator']) ? (int) $_SESSION['impersonator'] : null;
+    }
+
     public static function id(): int
     {
         return (int) (self::user()['id'] ?? 0);
@@ -73,11 +122,15 @@ final class Auth
         $_SESSION = [];
         session_regenerate_id(true);
         self::$user = null;
+        self::$account = null;
     }
 
     public static function require(): array
     {
         $user = self::user();
+        if ($user && !empty($user['owner_id']) && !self::account()) {
+            $user = null;
+        }
         if (!$user) {
             if (self::wantsJson()) {
                 json_response(['error' => 'unauthorized'], 401);
@@ -101,6 +154,7 @@ final class Auth
     {
         self::$loaded = false;
         self::$user = null;
+        self::$account = null;
     }
 
     private static function wantsJson(): bool

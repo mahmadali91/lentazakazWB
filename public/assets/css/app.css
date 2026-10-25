@@ -263,6 +263,8 @@ table.table { width: 100%; border-collapse: collapse; font-size: 14px; }
 .o-badges { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
 .o-right { text-align: right; }
 .o-price { font-weight: 800; font-size: 17px; white-space: nowrap; }
+.o-profit { font-size: 13px; font-weight: 700; color: var(--ok); white-space: nowrap; }
+.o-profit.neg { color: var(--bad); }
 .o-time { font-size: 13px; color: var(--muted); white-space: nowrap; }
 @media (max-width: 600px) {
   .kpis { grid-template-columns: 1fr 1fr; gap: 10px; }

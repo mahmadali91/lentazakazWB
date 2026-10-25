@@ -12,7 +12,7 @@ final class BillingController
 {
     public function index(): string
     {
-        $user = Auth::require();
+        $user = Auth::requireOwner();
         return view('app/billing', [
             'title'    => 'Тариф и оплата',
             'user'     => $user,
@@ -26,7 +26,7 @@ final class BillingController
 
     public function pay(): never
     {
-        $user = Auth::require();
+        $user = Auth::requireOwner();
         $code = (string) input('plan', '');
         $months = (int) input('months', 1);
         if (!isset(Plans::paid()[$code]) || !isset(Plans::PERIODS[$months])) {
@@ -47,7 +47,7 @@ final class BillingController
 
     public function return(): never
     {
-        $user = Auth::require();
+        $user = Auth::requireOwner();
         $payment = DB::one('SELECT * FROM payments WHERE id = ? AND user_id = ?', [(int) input('payment', 0), $user['id']]);
         if ($payment && $payment['provider_id']) {
             try {

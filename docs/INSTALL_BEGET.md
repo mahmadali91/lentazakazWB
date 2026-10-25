@@ -107,7 +107,7 @@ git clone -b beget-ready https://github.com/mahmadali91/lentazakazWB.git public_
 cd ~/wb.linkoz.ru/public_html && git pull
 ```
 
-`config/config.php` и `storage/` git не затрагивает. Если в новой версии меняется схема БД, это будет указано в описании изменений.
+`config/config.php` и `storage/` git не затрагивает. Таблицы базы данных обновляются автоматически при первом открытии сайта после обновления.
 
 ## Если что-то не работает
 

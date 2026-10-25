@@ -253,12 +253,14 @@ final class OrderRepository
     }
 
     private const SELECT = 'SELECT o.*, s.name AS store_name, p.title AS p_title, p.photo AS p_photo,
-            p.brand AS p_brand, p.subject AS p_subject, p.vendor_code AS p_vendor
+            p.brand AS p_brand, p.subject AS p_subject, p.vendor_code AS p_vendor,
+            p.cost_price AS p_cost, p.commission_pct AS p_commission
         FROM orders o
         JOIN stores s ON s.id = o.store_id
         LEFT JOIN products p ON p.store_id = o.store_id AND p.nm_id = o.nm_id';
 
-    public static function list(array $storeIds, array $f, int $limit = 50, ?int $beforeId = null, ?string $beforeDate = null): array
+    /** @param array|null $profit настройки прибыли кабинета (Profit::settings) или null, если расчёт недоступен по тарифу */
+    public static function list(array $storeIds, array $f, int $limit = 50, ?int $beforeId = null, ?string $beforeDate = null, ?array $profit = null): array
     {
         [$where, $params] = self::buildWhere($storeIds, $f);
         if ($beforeId !== null && $beforeDate !== null) {
@@ -266,33 +268,44 @@ final class OrderRepository
             $params += ['bd' => $beforeDate, 'bd2' => $beforeDate, 'bid' => $beforeId];
         }
         $rows = DB::all(self::SELECT . " WHERE $where ORDER BY o.order_created_at DESC, o.id DESC LIMIT " . (int) $limit, $params);
-        return array_map([self::class, 'present'], $rows);
+        return array_map(static fn($r) => self::present($r, $profit), $rows);
     }
 
     /** Заказы, изменившиеся после отметки времени (для живого обновления ленты). */
-    public static function changedSince(array $storeIds, array $f, string $since): array
+    public static function changedSince(array $storeIds, array $f, string $since, ?array $profit = null): array
     {
         [$where, $params] = self::buildWhere($storeIds, $f);
         $where .= ' AND o.row_updated_at > :since';
         $params['since'] = $since;
         $rows = DB::all(self::SELECT . " WHERE $where ORDER BY o.order_created_at DESC LIMIT 200", $params);
-        return array_map([self::class, 'present'], $rows);
+        return array_map(static fn($r) => self::present($r, $profit), $rows);
     }
 
-    public static function all(array $storeIds, array $f, int $max = 50000): \Generator
+    public static function all(array $storeIds, array $f, int $max = 50000, ?array $profit = null): \Generator
     {
         [$where, $params] = self::buildWhere($storeIds, $f);
         $stmt = DB::query(self::SELECT . " WHERE $where ORDER BY o.order_created_at DESC LIMIT " . (int) $max, $params);
         while ($row = $stmt->fetch()) {
-            yield self::present($row);
+            yield self::present($row, $profit);
         }
     }
 
-    public static function kpi(array $storeIds, array $f): array
+    public static function kpi(array $storeIds, array $f, ?array $profit = null): array
     {
         $f2 = $f;
         unset($f2['status']);
         [$where, $params] = self::buildWhere($storeIds, $f2);
+        $profitSql = '';
+        if ($profit !== null) {
+            $unit = Profit::unitExpr($profit);
+            $loss = Profit::lossExpr($profit);
+            $profitSql = ",
+                SUM(CASE WHEN o.status = 'buyout' THEN $unit END) AS profit_buyout,
+                SUM(CASE WHEN o.status IN ('created','buyout') THEN $unit END) AS profit_orders,
+                SUM(CASE WHEN p.cost_price IS NOT NULL THEN $loss ELSE 0 END) AS profit_loss,
+                SUM(o.status IN ('created','buyout') AND p.cost_price IS NULL) AS no_cost,
+                COUNT(DISTINCT CASE WHEN o.status IN ('created','buyout') AND p.cost_price IS NULL THEN o.nm_id END) AS no_cost_items";
+        }
         $r = DB::one("SELECT
                 COUNT(*) AS orders_count,
                 COALESCE(SUM(o.seller_price),0) AS orders_sum,
@@ -300,10 +313,11 @@ final class OrderRepository
                 COALESCE(SUM(CASE WHEN o.status = 'buyout' THEN o.seller_price END),0) AS buyout_sum,
                 SUM(o.status = 'cancel') AS cancel_count,
                 SUM(o.status IN ('return','returnDefective')) AS return_count
+                $profitSql
             FROM orders o LEFT JOIN products p ON p.store_id = o.store_id AND p.nm_id = o.nm_id
             WHERE $where", $params) ?? [];
         $count = (int) ($r['orders_count'] ?? 0);
-        return [
+        $out = [
             'orders'      => $count,
             'orders_sum'  => (float) ($r['orders_sum'] ?? 0),
             'buyout'      => (int) ($r['buyout_count'] ?? 0),
@@ -312,6 +326,17 @@ final class OrderRepository
             'returns'     => (int) ($r['return_count'] ?? 0),
             'avg'         => $count ? round((float) $r['orders_sum'] / $count) : 0,
         ];
+        if ($profit !== null) {
+            $loss = (float) ($r['profit_loss'] ?? 0);
+            $out['profit'] = [
+                'orders'        => round((float) ($r['profit_orders'] ?? 0) - $loss),
+                'buyout'        => round((float) ($r['profit_buyout'] ?? 0)),
+                'loss'          => round($loss),
+                'no_cost'       => (int) ($r['no_cost'] ?? 0),
+                'no_cost_items' => (int) ($r['no_cost_items'] ?? 0),
+            ];
+        }
+        return $out;
     }
 
     /** Данные для графика: по часам (если период ≤ 2 суток) или по дням. */
@@ -359,7 +384,7 @@ final class OrderRepository
     }
 
     /** Приводит строку БД к виду для фронтенда. */
-    public static function present(array $r): array
+    public static function present(array $r, ?array $profit = null): array
     {
         $title = $r['p_title'] ?: trim(($r['subject'] ?: $r['p_subject'] ?: '') . ' ' . ($r['brand'] ?: $r['p_brand'] ?: ''));
         return [
@@ -392,6 +417,8 @@ final class OrderRepository
             'status_at'   => $r['status_at'],
             'status_iso'  => $r['status_at'] ? date('c', strtotime($r['status_at'])) : null,
             'updated'     => $r['row_updated_at'],
+            'cost'        => $profit !== null && $r['p_cost'] !== null ? (float) $r['p_cost'] : null,
+            'profit'      => $profit !== null ? Profit::forOrder($r, $profit) : null,
         ];
     }
 }

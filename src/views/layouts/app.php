@@ -1,11 +1,12 @@
 <?php
 $nav = $nav ?? '';
-$items = [
-    ['feed', '/app', 'Лента заказов', 'Лента', 'feed'],
-    ['stores', '/app/stores', 'Магазины', 'Магазины', 'store'],
-    ['billing', '/app/billing', 'Тариф и оплата', 'Тариф', 'card'],
-    ['settings', '/app/settings', 'Настройки', 'Настройки', 'settings'],
-];
+$isMember = !empty($user['owner_id']);
+$items = [['feed', '/app', 'Лента заказов', 'Лента', 'feed'], ['products', '/app/products', 'Товары и прибыль', 'Товары', 'box']];
+if (!$isMember) {
+    $items[] = ['stores', '/app/stores', 'Магазины', 'Магазины', 'store'];
+    $items[] = ['billing', '/app/billing', 'Тариф и оплата', 'Тариф', 'card'];
+}
+$items[] = ['settings', '/app/settings', 'Настройки', 'Настройки', 'settings'];
 if (($user['role'] ?? '') === 'admin') {
     $items[] = ['admin', '/admin', 'Админ-панель', 'Админ', 'shield'];
 }
@@ -28,7 +29,9 @@ if (($user['role'] ?? '') === 'admin') {
     <div class="side-foot">
       <div class="plan-line">Тариф «<?= e($plan['name'] ?? '') ?>»</div>
       <div class="muted">
-        <?php if (!empty($plan['expires_at'])): ?>
+        <?php if ($isMember): ?>
+          доступ сотрудника
+        <?php elseif (!empty($plan['expires_at'])): ?>
           до <?= date_ru($plan['expires_at'], false) ?>
         <?php else: ?>
           <a href="/app/billing">Улучшить тариф</a>
@@ -41,8 +44,15 @@ if (($user['role'] ?? '') === 'admin') {
     </div>
   </aside>
   <main class="main">
+    <?php if (App\Core\Auth::impersonator()): ?>
+      <form method="post" action="/admin/impersonate/stop" class="alert alert-warn row" style="justify-content:space-between">
+        <?= csrf_field() ?>
+        <span>Вы в кабинете клиента <b><?= e($user['email'] ?? '') ?></b> (режим администратора).</span>
+        <button class="btn btn-sm">Вернуться в админку</button>
+      </form>
+    <?php endif; ?>
     <?= App\Core\View::partial('partials/flash') ?>
-    <?php if (!empty($plan['expired_code'])): ?>
+    <?php if (!empty($plan['expired_code']) && !$isMember): ?>
       <div class="alert alert-warn">Срок тарифа «<?= e(App\Services\Plans::get($plan['expired_code'])['name']) ?>» закончился — действуют ограничения бесплатного тарифа. <a href="/app/billing">Продлить</a></div>
     <?php endif; ?>
     <?= $content ?>

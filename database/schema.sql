@@ -16,11 +16,17 @@ CREATE TABLE IF NOT EXISTS users (
   tg_chat_id      BIGINT NULL,
   tg_link_code    VARCHAR(32) NULL,
   tg_events       VARCHAR(64) NOT NULL DEFAULT 'created',
+  owner_id        INT UNSIGNED NULL,          -- сотрудник: id владельца кабинета
+  note            VARCHAR(500) NULL,          -- заметка администратора о клиенте
+  profit_settings TEXT NULL,                  -- JSON: комиссия, логистика, налог, прочие расходы
+  remind_sent_for DATETIME NULL,              -- для какого срока тарифа уже отправлено напоминание
   created_at      DATETIME NOT NULL,
   last_login_at   DATETIME NULL,
   PRIMARY KEY (id),
   UNIQUE KEY uq_users_email (email),
-  KEY idx_users_tg_code (tg_link_code)
+  KEY idx_users_tg_code (tg_link_code),
+  KEY idx_users_owner (owner_id),
+  CONSTRAINT fk_users_owner FOREIGN KEY (owner_id) REFERENCES users (id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS stores (
@@ -101,6 +107,8 @@ CREATE TABLE IF NOT EXISTS products (
   brand       VARCHAR(120) NULL,
   subject     VARCHAR(120) NULL,
   photo       VARCHAR(500) NULL,
+  cost_price  DECIMAL(12,2) NULL,             -- себестоимость единицы, ₽
+  commission_pct DECIMAL(5,2) NULL,           -- комиссия WB для товара, % (пусто — из общих настроек)
   updated_at  DATETIME NOT NULL,
   PRIMARY KEY (store_id, nm_id),
   CONSTRAINT fk_products_store FOREIGN KEY (store_id) REFERENCES stores (id) ON DELETE CASCADE

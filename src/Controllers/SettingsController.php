@@ -25,13 +25,85 @@ final class SettingsController
             DB::exec('UPDATE users SET tg_link_code = ? WHERE id = ?', [$code, $user['id']]);
             $user['tg_link_code'] = $code;
         }
+        $account = Auth::account();
         return view('app/settings', [
             'title'    => 'Настройки',
             'user'     => $user,
-            'plan'     => Plans::forUser($user),
+            'account'  => $account,
+            'plan'     => Plans::forUser($account),
+            'members'  => Auth::isMember() ? [] : DB::all('SELECT id, email, name, last_login_at, created_at FROM users WHERE owner_id = ? ORDER BY id', [$user['id']]),
             'tgEnabled'=> Telegram::enabled(),
             'nav'      => 'settings',
         ], 'app');
+    }
+
+    // ---------------------------------------------------------------- сотрудники
+
+    public function teamAdd(): never
+    {
+        $owner = Auth::requireOwner();
+        $plan = Plans::forUser($owner);
+        $count = (int) DB::value('SELECT COUNT(*) FROM users WHERE owner_id = ?', [$owner['id']]);
+        if ($count >= (int) ($plan['team'] ?? 0)) {
+            flash('error', 'На тарифе «' . $plan['name'] . '» можно добавить сотрудников: ' . (int) ($plan['team'] ?? 0) . '. Перейдите на тариф выше.');
+            redirect('/app/settings#team');
+        }
+        $login = normalize_login((string) input('login', ''));
+        $password = (string) ($_POST['password'] ?? '');
+        if ($login === null) {
+            flash('error', 'Логин — это email или латиница/цифры/точка/дефис (от 3 символов).');
+            redirect('/app/settings#team');
+        }
+        if (mb_strlen($password) < 8) {
+            flash('error', 'Пароль сотрудника должен быть не короче 8 символов.');
+            redirect('/app/settings#team');
+        }
+        if (DB::value('SELECT id FROM users WHERE email = ?', [$login])) {
+            flash('error', 'Логин «' . $login . '» уже занят.');
+            redirect('/app/settings#team');
+        }
+        DB::insert('users', [
+            'email'         => $login,
+            'password_hash' => password_hash($password, PASSWORD_DEFAULT),
+            'name'          => mb_substr((string) input('name', ''), 0, 120),
+            'owner_id'      => $owner['id'],
+            'plan_code'     => 'free',
+            'created_at'    => now(),
+        ]);
+        flash('success', 'Сотрудник добавлен. Передайте ему адрес сайта, логин «' . $login . '» и пароль.');
+        redirect('/app/settings#team');
+    }
+
+    private function member(string $id): array
+    {
+        $owner = Auth::requireOwner();
+        $m = DB::one('SELECT * FROM users WHERE id = ? AND owner_id = ?', [(int) $id, $owner['id']]);
+        if (!$m) {
+            flash('error', 'Сотрудник не найден.');
+            redirect('/app/settings#team');
+        }
+        return $m;
+    }
+
+    public function teamPassword(string $id): never
+    {
+        $m = $this->member($id);
+        $password = (string) ($_POST['password'] ?? '');
+        if (mb_strlen($password) < 8) {
+            flash('error', 'Пароль должен быть не короче 8 символов.');
+        } else {
+            DB::exec('UPDATE users SET password_hash = ? WHERE id = ?', [password_hash($password, PASSWORD_DEFAULT), $m['id']]);
+            flash('success', 'Пароль сотрудника ' . $m['email'] . ' изменён.');
+        }
+        redirect('/app/settings#team');
+    }
+
+    public function teamDelete(string $id): never
+    {
+        $m = $this->member($id);
+        DB::exec('DELETE FROM users WHERE id = ?', [$m['id']]);
+        flash('success', 'Доступ сотрудника ' . $m['email'] . ' удалён.');
+        redirect('/app/settings#team');
     }
 
     public function profile(): never

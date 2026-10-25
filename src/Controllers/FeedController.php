@@ -7,6 +7,7 @@ use App\Core\Auth;
 use App\Core\DB;
 use App\Services\OrderRepository;
 use App\Services\Plans;
+use App\Services\Profit;
 use App\Services\StoreService;
 
 final class FeedController
@@ -15,9 +16,9 @@ final class FeedController
      * Разбирает фильтры ленты из запроса с учётом ограничений тарифа.
      * @return array{0: int[], 1: array}
      */
-    public static function filters(array $user, array $plan): array
+    public static function filters(array $account, array $plan): array
     {
-        $activeIds = StoreService::activeIds((int) $user['id'], $plan);
+        $activeIds = StoreService::activeIds((int) $account['id'], $plan);
         $storeId = (int) input('store', 0);
         $storeIds = $storeId && in_array($storeId, $activeIds, true) ? [$storeId] : $activeIds;
 
@@ -58,18 +59,25 @@ final class FeedController
         return [$storeIds, $f];
     }
 
+    /** Настройки прибыли кабинета или null, если расчёт прибыли не входит в тариф. */
+    public static function profitSettings(array $account, array $plan): ?array
+    {
+        return !empty($plan['profit']) ? Profit::settings($account) : null;
+    }
+
     public function index(): string
     {
         $user = Auth::require();
-        $plan = Plans::forUser($user);
-        $stores = StoreService::forUser((int) $user['id']);
-        [$storeIds, $f] = self::filters($user, $plan);
+        $account = Auth::account();
+        $plan = Plans::forUser($account);
+        $stores = StoreService::forUser((int) $account['id']);
+        [$storeIds, $f] = self::filters($account, $plan);
         return view('app/feed', [
             'title'    => 'Лента заказов',
             'user'     => $user,
             'plan'     => $plan,
             'stores'   => $stores,
-            'activeIds'=> StoreService::activeIds((int) $user['id'], $plan),
+            'activeIds'=> StoreService::activeIds((int) $account['id'], $plan),
             'filters'  => $f,
             'cronLast' => DB::setting('cron_last_run'),
             'nav'      => 'feed',
@@ -79,21 +87,23 @@ final class FeedController
     /** Выгрузка в CSV (открывается в Excel). */
     public function export(): never
     {
-        $user = Auth::require();
-        $plan = Plans::forUser($user);
+        Auth::require();
+        $account = Auth::account();
+        $plan = Plans::forUser($account);
         if (empty($plan['export'])) {
             flash('error', 'Выгрузка в Excel доступна на тарифах «Про» и «Бизнес».');
             redirect('/app/billing');
         }
-        [$storeIds, $f] = self::filters($user, $plan);
+        [$storeIds, $f] = self::filters($account, $plan);
+        $profit = self::profitSettings($account, $plan);
         $name = 'orders_' . date('Y-m-d_H-i') . '.csv';
         header('Content-Type: text/csv; charset=utf-8');
         header('Content-Disposition: attachment; filename="' . $name . '"');
         header('Cache-Control: no-store');
         $out = fopen('php://output', 'w');
         fwrite($out, "\xEF\xBB\xBF");
-        fputcsv($out, ['Дата заказа', 'Статус', 'Дата статуса', 'Магазин', 'Схема', 'Артикул продавца', 'Артикул WB', 'Товар', 'Бренд', 'Предмет', 'Размер', 'Цена продавца, ₽', 'Цена для покупателя, ₽', 'СПП, %', 'Склад', 'Город доставки', 'Округ', 'ID заказа (srid)', 'Сборочное задание', 'B2B'], ';');
-        foreach (OrderRepository::all($storeIds, $f) as $o) {
+        fputcsv($out, ['Дата заказа', 'Статус', 'Дата статуса', 'Магазин', 'Схема', 'Артикул продавца', 'Артикул WB', 'Товар', 'Бренд', 'Предмет', 'Размер', 'Цена продавца, ₽', 'Цена для покупателя, ₽', 'СПП, %', 'Склад', 'Город доставки', 'Округ', 'ID заказа (srid)', 'Сборочное задание', 'B2B', 'Себестоимость, ₽', 'Прибыль (оценка), ₽'], ';');
+        foreach (OrderRepository::all($storeIds, $f, 50000, $profit) as $o) {
             fputcsv($out, [
                 date_ru($o['created_at']),
                 $o['status_label'] . ($o['cancel_type'] ? " ({$o['cancel_type']})" : ''),
@@ -115,6 +125,8 @@ final class FeedController
                 $o['srid'],
                 $o['mp_order_id'],
                 $o['is_b2b'] ? 'да' : '',
+                $o['cost'] !== null ? str_replace('.', ',', (string) $o['cost']) : '',
+                $o['profit'] !== null ? str_replace('.', ',', (string) $o['profit']) : '',
             ], ';');
         }
         fclose($out);

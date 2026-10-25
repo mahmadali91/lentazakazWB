@@ -57,6 +57,11 @@ $cronStale = !$cronLast || strtotime($cronLast) < time() - 600;
     <div class="card kpi"><div class="k-label">Отмены</div><div class="k-value" data-k="cancel">—</div><div class="k-sub" data-k="cancel_pct">&nbsp;</div></div>
     <div class="card kpi"><div class="k-label">Возвраты</div><div class="k-value" data-k="returns">—</div><div class="k-sub">&nbsp;</div></div>
     <div class="card kpi"><div class="k-label">Средний чек</div><div class="k-value" data-k="avg">—</div><div class="k-sub">цена продавца</div></div>
+    <?php if (!empty($plan['profit'])): ?>
+      <a class="card kpi" href="/app/products" style="text-decoration:none;color:inherit" title="Оценка: цена − комиссия − логистика − налог − прочие − себестоимость">
+        <div class="k-label">Прибыль ≈</div><div class="k-value" data-k="profit">—</div><div class="k-sub" data-k="profit_sub">&nbsp;</div>
+      </a>
+    <?php endif; ?>
   </div>
 
   <div class="feed-grid">

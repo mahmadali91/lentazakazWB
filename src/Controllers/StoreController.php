@@ -12,7 +12,7 @@ final class StoreController
 {
     public function index(): string
     {
-        $user = Auth::require();
+        $user = Auth::requireOwner();
         $plan = Plans::forUser($user);
         $stores = StoreService::forUser((int) $user['id']);
         $counts = [];
@@ -32,7 +32,7 @@ final class StoreController
 
     public function create(): never
     {
-        $user = Auth::require();
+        $user = Auth::requireOwner();
         $plan = Plans::forUser($user);
         $count = (int) DB::value('SELECT COUNT(*) FROM stores WHERE user_id = ?', [$user['id']]);
         if ($count >= (int) $plan['stores']) {
@@ -62,7 +62,7 @@ final class StoreController
 
     public function updateToken(string $id): never
     {
-        Auth::require();
+        Auth::requireOwner();
         $store = $this->own($id);
         try {
             StoreService::updateToken($store, (string) ($_POST['token'] ?? ''));
@@ -75,7 +75,7 @@ final class StoreController
 
     public function rename(string $id): never
     {
-        Auth::require();
+        Auth::requireOwner();
         $store = $this->own($id);
         $name = mb_substr((string) input('name', ''), 0, 120);
         if ($name !== '') {
@@ -87,7 +87,7 @@ final class StoreController
 
     public function toggle(string $id): never
     {
-        Auth::require();
+        Auth::requireOwner();
         $store = $this->own($id);
         DB::exec('UPDATE stores SET is_active = 1 - is_active WHERE id = ?', [$store['id']]);
         flash('success', (int) $store['is_active'] ? 'Синхронизация магазина приостановлена.' : 'Синхронизация магазина возобновлена.');
@@ -96,7 +96,7 @@ final class StoreController
 
     public function resync(string $id): never
     {
-        Auth::require();
+        Auth::requireOwner();
         $store = $this->own($id);
         DB::exec('UPDATE stores SET feed_state = NULL, feed_next_at = NULL, mp_next_at = NULL, stats_cursor = NULL,
             stats_next_at = NULL, cards_next_at = NULL, last_error = NULL WHERE id = ?', [$store['id']]);
@@ -106,7 +106,7 @@ final class StoreController
 
     public function delete(string $id): never
     {
-        Auth::require();
+        Auth::requireOwner();
         $store = $this->own($id);
         DB::exec('DELETE FROM stores WHERE id = ?', [$store['id']]);
         flash('success', 'Магазин и его заказы удалены. Токен стёрт из базы.');
