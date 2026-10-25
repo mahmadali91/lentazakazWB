@@ -29,7 +29,7 @@
       <form method="post" action="/app/finance/selfbuys" class="stack">
         <?= csrf_field() ?><?= $hidden ?>
         <label>Srid заказов <span class="muted small">(по одному в строке)</span><textarea name="srids" rows="6" required placeholder="Скопируйте из столбца «Srid» отчёта или из «Детализации»"></textarea></label>
-        <label>Доп. затраты на каждый, ₽ <span class="muted small">(оплата исполнителю, отзыв)</span><input type="text" inputmode="decimal" name="extra_cost" placeholder="0"></label>
+        <label>Доп. затраты на каждый, <?= currency_sign() ?> <span class="muted small">(оплата исполнителю, отзыв)</span><input type="text" inputmode="decimal" name="extra_cost" placeholder="0"></label>
         <label>Комментарий <input type="text" name="note" maxlength="255"></label>
         <button class="btn btn-sm">Добавить</button>
       </form>

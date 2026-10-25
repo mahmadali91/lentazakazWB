@@ -152,7 +152,7 @@ final class ProductsController
         header('Content-Disposition: attachment; filename="sebestoimost_' . date('Y-m-d') . '.csv"');
         $out = fopen('php://output', 'w');
         fwrite($out, "\xEF\xBB\xBF");
-        fputcsv($out, ['Артикул WB', 'Артикул продавца', 'Товар', 'Магазин', 'Себестоимость, ₽', 'Комиссия WB, %'], ';');
+        fputcsv($out, ['Артикул WB', 'Артикул продавца', 'Товар', 'Магазин', 'Себестоимость, ' . currency_sign(), 'Комиссия WB, %'], ';');
         $rows = DB::all('SELECT p.*, s.name AS store_name FROM products p JOIN stores s ON s.id = p.store_id WHERE ' . $this->storeIn($storeIds) . ' ORDER BY p.vendor_code');
         foreach ($rows as $p) {
             fputcsv($out, [

@@ -85,7 +85,7 @@ $names = ['pending' => 'Ожидает', 'succeeded' => 'Оплачен (ЮKassa
         <thead><tr><th>Дата</th><th>Тариф</th><th>Срок</th><th>Сумма</th><th>Статус</th></tr></thead>
         <tbody>
         <?php foreach ($payments as $p): ?>
-          <tr><td class="small nowrap"><?= date_ru($p['created_at']) ?></td><td><?= e(Plans::get($p['plan_code'])['name']) ?></td><td><?= (int) $p['months'] ? (int) $p['months'] . ' мес' : '—' ?></td><td><?= money($p['amount']) ?></td>
+          <tr><td class="small nowrap"><?= date_ru($p['created_at']) ?></td><td><?= e(Plans::get($p['plan_code'])['name']) ?></td><td><?= (int) $p['months'] ? (int) $p['months'] . ' мес' : '—' ?></td><td><?= rub($p['amount']) ?></td>
             <td><span class="badge <?= in_array($p['status'], ['succeeded', 'manual'], true) ? 'badge-buyout' : ($p['status'] === 'canceled' ? 'badge-cancel' : 'badge-created') ?>"><?= e($names[$p['status']] ?? $p['status']) ?></span></td></tr>
         <?php endforeach; ?>
         <?php if (!$payments): ?><tr><td colspan="5" class="muted">Пока нет</td></tr><?php endif; ?>

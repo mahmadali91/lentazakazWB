@@ -8,7 +8,7 @@
       <thead><tr>
         <th>Товар</th><th class="num">Цена до скидки</th><th class="num">Цена сейчас</th><th class="num">Прибыль сейчас</th><th class="num">Цена в акции</th>
         <th class="num">Прибыль в акции</th><th class="num">Маржа в акции</th>
-        <th class="num">СПП, %</th><th class="num">Комиссия, %</th><th class="num">Логистика, ₽</th><th class="num">ДРР, %</th><th class="num">Себест., ₽</th>
+        <th class="num">СПП, %</th><th class="num">Комиссия, %</th><th class="num">Логистика, <?= currency_sign() ?></th><th class="num">ДРР, %</th><th class="num">Себест., <?= currency_sign() ?></th>
       </tr></thead>
       <tbody>
       <?php foreach ($items as $i): $now = round($i['price'] * (1 - $i['discount'] / 100)); ?>

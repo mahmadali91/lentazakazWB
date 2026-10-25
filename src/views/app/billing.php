@@ -71,7 +71,7 @@ $statusNames = ['pending' => 'Ожидает оплаты', 'succeeded' => 'Оп
               <td><?= date_ru($pay['created_at']) ?></td>
               <td><?= e(Plans::get($pay['plan_code'])['name']) ?></td>
               <td><?= (int) $pay['months'] ? (int) $pay['months'] . ' мес' : '—' ?></td>
-              <td><?= money($pay['amount']) ?></td>
+              <td><?= rub($pay['amount']) ?></td>
               <td><span class="badge <?= $pay['status'] === 'succeeded' || $pay['status'] === 'manual' ? 'badge-buyout' : ($pay['status'] === 'canceled' ? 'badge-cancel' : 'badge-created') ?>"><?= e($statusNames[$pay['status']] ?? $pay['status']) ?></span></td>
             </tr>
           <?php endforeach; ?>

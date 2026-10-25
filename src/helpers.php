@@ -96,12 +96,42 @@ function client_ip(): string
     return (string) ($_SERVER['REMOTE_ADDR'] ?? '0.0.0.0');
 }
 
+/** Знак валюты кабинета WB текущего пользователя (WB отдаёт суммы в валюте продавца). По умолчанию ₽. */
+function currency_sign(?string $code = null): string
+{
+    static $current = null;
+    $signs = ['RUB' => '₽', 'KGS' => 'с', 'KZT' => '₸', 'BYN' => 'Br', 'AMD' => '֏', 'UZS' => 'сум', 'TJS' => 'сом', 'GEL' => '₾', 'AZN' => '₼'];
+    if ($code !== null) {
+        return $signs[strtoupper($code)] ?? ($code !== '' ? strtoupper($code) : '₽');
+    }
+    if ($current === null) {
+        $current = '₽';
+        try {
+            $account = session_status() === PHP_SESSION_ACTIVE ? App\Core\Auth::account() : null;
+            if ($account) {
+                $c = App\Core\DB::value('SELECT currency FROM stores WHERE user_id = ? AND currency IS NOT NULL AND currency <> \'\' ORDER BY is_active DESC, id LIMIT 1', [$account['id']]);
+                if ($c) {
+                    $current = $signs[strtoupper((string) $c)] ?? strtoupper((string) $c);
+                }
+            }
+        } catch (\Throwable) {
+        }
+    }
+    return $current;
+}
+
 function money(float|int|string|null $value): string
 {
     if ($value === null || $value === '') {
         return '—';
     }
-    return number_format((float) $value, 0, ',', ' ') . ' ₽';
+    return number_format((float) $value, 0, ',', ' ') . ' ' . currency_sign();
+}
+
+/** Цена тарифа сервиса — всегда в рублях. */
+function rub(float|int|string|null $value): string
+{
+    return $value === null || $value === '' ? '—' : number_format((float) $value, 0, ',', ' ') . ' ₽';
 }
 
 /** Телефон в формате +7XXXXXXXXXX (или + и 10–15 цифр для других стран); null — некорректный. */

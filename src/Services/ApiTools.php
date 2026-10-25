@@ -141,7 +141,7 @@ final class ApiTools
         foreach (StoreService::forUser((int) $account['id']) as $s) {
             $scopes = json_decode((string) $s['scopes'], true) ?: [];
             $stores[] = [
-                'id' => (int) $s['id'], 'name' => $s['name'], 'seller' => $s['seller_name'], 'inn' => $s['seller_tin'], 'country' => $s['seller_country'],
+                'id' => (int) $s['id'], 'name' => $s['name'], 'seller' => $s['seller_name'], 'inn' => $s['seller_tin'], 'country' => $s['seller_country'], 'currency' => $s['currency'] ?? null,
                 'active' => (int) $s['is_active'] === 1 && in_array((int) $s['id'], $storeIds, true),
                 'token_scopes' => array_filter($scopes, static fn($v) => is_bool($v)), 'token_expires_at' => $s['token_expires_at'],
                 'initial_load_done' => (bool) $s['initial_done'], 'last_error' => $s['last_error'],

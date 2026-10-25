@@ -23,7 +23,7 @@
 <div class="card" style="padding:0">
   <div class="table-wrap">
     <table class="table fin-table">
-      <thead><tr><th>Товар</th><th class="num">Объём, л</th><th class="num">Средний остаток, шт</th><th class="num">Дней</th><th class="num">Хранение, ₽</th><th class="num">₽ за шт в день</th></tr></thead>
+      <thead><tr><th>Товар</th><th class="num">Объём, л</th><th class="num">Средний остаток, шт</th><th class="num">Дней</th><th class="num">Хранение, <?= currency_sign() ?></th><th class="num"><?= currency_sign() ?> за шт в день</th></tr></thead>
       <tbody>
       <?php foreach ($items as $i): ?>
         <tr>

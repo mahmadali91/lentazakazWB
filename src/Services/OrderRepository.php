@@ -321,7 +321,9 @@ final class OrderRepository
         $f2 = $f;
         unset($f2['status'], $f2['date_by']);
         [$where, $params] = self::buildWhere($storeIds, $f2);
-        $r = DB::one("SELECT COUNT(*) AS orders_count, COALESCE(SUM(o.seller_price),0) AS orders_sum
+        // Как в кабинете WB: «Заказы» — без отменённых, «Выкупы» — за вычетом возвратов
+        $r = DB::one("SELECT COUNT(*) AS orders_all, SUM(o.status <> 'cancel') AS orders_count,
+                COALESCE(SUM(CASE WHEN o.status <> 'cancel' THEN o.seller_price END),0) AS orders_sum
             FROM orders o LEFT JOIN products p ON p.store_id = o.store_id AND p.nm_id = o.nm_id
             WHERE $where", $params) ?? [];
         // Выкупы, отмены, возвраты — произошедшие в этом периоде (по дате статуса), даже если заказ оформлен раньше
@@ -330,15 +332,18 @@ final class OrderRepository
                 SUM(o.status = 'buyout') AS buyout_count,
                 COALESCE(SUM(CASE WHEN o.status = 'buyout' THEN o.seller_price END),0) AS buyout_sum,
                 SUM(o.status = 'cancel') AS cancel_count,
-                SUM(o.status IN ('return','returnDefective')) AS return_count
+                SUM(o.status IN ('return','returnDefective')) AS return_count,
+                COALESCE(SUM(CASE WHEN o.status IN ('return','returnDefective') THEN o.seller_price END),0) AS return_sum
             FROM orders o LEFT JOIN products p ON p.store_id = o.store_id AND p.nm_id = o.nm_id
             WHERE $whereS AND o.status <> 'created'", $paramsS) ?? [];
         $count = (int) ($r['orders_count'] ?? 0);
         $out = [
             'orders'      => $count,
             'orders_sum'  => (float) ($r['orders_sum'] ?? 0),
-            'buyout'      => (int) ($r['buyout_count'] ?? 0),
-            'buyout_sum'  => (float) ($r['buyout_sum'] ?? 0),
+            'orders_all'  => (int) ($r['orders_all'] ?? 0),
+            'buyout'      => (int) ($r['buyout_count'] ?? 0) - (int) ($r['return_count'] ?? 0),
+            'buyout_sum'  => round((float) ($r['buyout_sum'] ?? 0) - (float) ($r['return_sum'] ?? 0), 2),
+            'buyout_gross' => (int) ($r['buyout_count'] ?? 0),
             'cancel'      => (int) ($r['cancel_count'] ?? 0),
             'returns'     => (int) ($r['return_count'] ?? 0),
             'avg'         => $count ? round((float) $r['orders_sum'] / $count) : 0,

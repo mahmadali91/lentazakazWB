@@ -8,17 +8,17 @@
   <div class="card kpi"><div class="k-label">На пробном</div><div class="k-value"><a href="/admin/users?f=trial" style="color:inherit"><?= $stats['trial'] ?></a></div><div class="k-sub">ещё не платили</div></div>
   <div class="card kpi"><div class="k-label">Магазинов</div><div class="k-value"><?= $stats['stores'] ?></div><div class="k-sub">&nbsp;</div></div>
   <div class="card kpi"><div class="k-label">Заказов сегодня</div><div class="k-value"><?= number_format($stats['orders_today'], 0, ',', ' ') ?></div><div class="k-sub">по всем магазинам</div></div>
-  <div class="card kpi k-accent"><div class="k-label">Выручка 30 дней</div><div class="k-value"><?= money($stats['revenue_30']) ?></div><div class="k-sub">оплаты и ручные выдачи</div></div>
+  <div class="card kpi k-accent"><div class="k-label">Выручка 30 дней</div><div class="k-value"><?= rub($stats['revenue_30']) ?></div><div class="k-sub">оплаты и ручные выдачи</div></div>
 </div>
 
 <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(300px,1fr));margin-bottom:16px">
   <?php foreach ([['Новые клиенты', 'users', 'шт'], ['Выручка', 'revenue', '₽'], ['Заказы во всех магазинах', 'orders', 'шт']] as [$label, $key, $unit]):
       $pts = $series[$key]; $max = max(1, ...array_column($pts, 'v')); $sum = array_sum(array_column($pts, 'v')); $n = count($pts); ?>
     <div class="card">
-      <div class="card-title" style="display:flex;justify-content:space-between"><span><?= e($label) ?></span><span class="muted small" style="font-weight:500">30 дней: <?= $unit === '₽' ? money($sum) : number_format($sum, 0, ',', ' ') ?></span></div>
+      <div class="card-title" style="display:flex;justify-content:space-between"><span><?= e($label) ?></span><span class="muted small" style="font-weight:500">30 дней: <?= $unit === '₽' ? rub($sum) : number_format($sum, 0, ',', ' ') ?></span></div>
       <svg class="chart" viewBox="0 0 300 120" preserveAspectRatio="none" role="img" aria-label="<?= e($label) ?>">
         <?php foreach ($pts as $i => $p): $h = round(100 * $p['v'] / $max); $bw = 300 / $n; ?>
-          <rect class="bar" x="<?= round($i * $bw + $bw * 0.15, 1) ?>" y="<?= 104 - $h ?>" width="<?= round($bw * 0.7, 1) ?>" height="<?= max($h, $p['v'] ? 2 : 0) ?>" rx="2"><title><?= e($p['d']) ?>: <?= $unit === '₽' ? money($p['v']) : (int) $p['v'] ?></title></rect>
+          <rect class="bar" x="<?= round($i * $bw + $bw * 0.15, 1) ?>" y="<?= 104 - $h ?>" width="<?= round($bw * 0.7, 1) ?>" height="<?= max($h, $p['v'] ? 2 : 0) ?>" rx="2"><title><?= e($p['d']) ?>: <?= $unit === '₽' ? rub($p['v']) : (int) $p['v'] ?></title></rect>
           <?php if ($i % 7 === 0 && $i <= 21): ?><text x="<?= round($i * $bw, 1) ?>" y="118"><?= e($p['d']) ?></text><?php elseif ($i === $n - 1): ?><text x="300" y="118" text-anchor="end"><?= e($p['d']) ?></text><?php endif; ?>
         <?php endforeach; ?>
       </svg>

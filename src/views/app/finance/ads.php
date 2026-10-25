@@ -17,7 +17,7 @@ $advertOff = array_filter($status, static fn($s) => $s['advert'] === false);
     <div class="card-title" style="padding:14px 16px 0">Кампании</div>
     <div class="table-wrap">
       <table class="table fin-table">
-        <thead><tr><th>Кампания</th><th>Оплата</th><th class="num">Списаний</th><th class="num">Сумма, ₽</th><th>Товары</th></tr></thead>
+        <thead><tr><th>Кампания</th><th>Оплата</th><th class="num">Списаний</th><th class="num">Сумма, <?= currency_sign() ?></th><th>Товары</th></tr></thead>
         <tbody>
         <?php foreach ($camps as $c): $nms = array_filter(explode(',', (string) $c['nms'])); ?>
           <tr>

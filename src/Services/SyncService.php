@@ -225,6 +225,11 @@ final class SyncService
 
         $requestedAt = time();
         $data = $this->wb->orderFeed($start, $offset, self::FEED_LIMIT, $snapshot);
+        $currency = strtoupper(substr((string) ($data['currency'] ?? ''), 0, 8));
+        if ($currency !== '' && $currency !== ($this->store['currency'] ?? null)) {
+            DB::exec('UPDATE stores SET currency = ? WHERE id = ?', [$currency, $this->store['id']]);
+            $this->store['currency'] = $currency;
+        }
         $orders = $data['orders'] ?? [];
         $count = 0;
         $seenNm = [];

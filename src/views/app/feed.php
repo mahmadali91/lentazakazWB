@@ -52,8 +52,8 @@ $cronStale = !$cronLast || strtotime($cronLast) < time() - 600;
   </div>
 
   <div class="kpis" id="kpis">
-    <div class="card kpi k-accent"><div class="k-label">Заказы</div><div class="k-value" data-k="orders">—</div><div class="k-sub" data-k="orders_sum">&nbsp;</div></div>
-    <div class="card kpi"><div class="k-label">Выкупы</div><div class="k-value" data-k="buyout">—</div><div class="k-sub" data-k="buyout_sum">&nbsp;</div></div>
+    <div class="card kpi k-accent" title="Заказы за период без отменённых — как в кабинете WB"><div class="k-label">Заказы</div><div class="k-value" data-k="orders">—</div><div class="k-sub" data-k="orders_sum">&nbsp;</div></div>
+    <div class="card kpi" title="Выкупы по дате выкупа за вычетом возвратов — как в кабинете WB"><div class="k-label">Выкупы</div><div class="k-value" data-k="buyout">—</div><div class="k-sub" data-k="buyout_sum">&nbsp;</div></div>
     <div class="card kpi"><div class="k-label">Отмены</div><div class="k-value" data-k="cancel">—</div><div class="k-sub" data-k="cancel_pct">&nbsp;</div></div>
     <div class="card kpi"><div class="k-label">Возвраты</div><div class="k-value" data-k="returns">—</div><div class="k-sub">&nbsp;</div></div>
     <div class="card kpi"><div class="k-label">Средний чек</div><div class="k-value" data-k="avg">—</div><div class="k-sub">цена продавца</div></div>

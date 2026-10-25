@@ -9,7 +9,7 @@ namespace App\Core;
  */
 final class Migrator
 {
-    public const VERSION = 7;
+    public const VERSION = 8;
 
     public static function ensure(): void
     {
@@ -37,6 +37,11 @@ final class Migrator
             }
             if ($version < 6) {
                 self::v6();
+            }
+            if ($version < 8) {
+                // Валюта кабинета продавца (RUB, KGS, KZT…) — WB отдаёт суммы в ней
+                self::addColumn('stores', 'currency', 'VARCHAR(8) NULL AFTER seller_country');
+                DB::exec('UPDATE stores s SET currency = (SELECT r.currency FROM wb_reports r WHERE r.store_id = s.id AND r.currency <> \'\' ORDER BY r.date_from DESC LIMIT 1) WHERE currency IS NULL');
             }
             if ($version < 7) {
                 // Перезагрузить Статистику за историю тарифа: цены заказов берутся из priceWithDisc (как в кабинете WB)

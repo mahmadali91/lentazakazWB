@@ -60,7 +60,7 @@ $back = '/admin/users?' . http_build_query(['f' => $filter, 'q' => $q]);
           <td class="nowrap"><?= View::partial('admin/_status', ['u' => $u, 'paid' => (bool) $u['has_paid']]) ?></td>
           <td><?= (int) $u['stores_count'] ?><?= (int) $u['members_count'] ? '<div class="small muted">+' . (int) $u['members_count'] . ' сотр.</div>' : '' ?></td>
           <td><?= number_format((int) $u['orders_7d'], 0, ',', ' ') ?></td>
-          <td class="nowrap"><?= money($u['paid_total']) ?></td>
+          <td class="nowrap"><?= rub($u['paid_total']) ?></td>
           <td>
             <div class="row" style="gap:4px;min-width:150px">
               <?php foreach (['7d' => '+7 дн', '1m' => '+1 мес', '3m' => '+3 мес'] as $per => $lbl): ?>

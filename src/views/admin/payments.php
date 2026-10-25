@@ -13,7 +13,7 @@
           <td><?= e($p['email']) ?></td>
           <td><?= e(App\Services\Plans::get($p['plan_code'])['name']) ?></td>
           <td><?= (int) $p['months'] ?: '—' ?></td>
-          <td><?= money($p['amount']) ?></td>
+          <td><?= rub($p['amount']) ?></td>
           <td><span class="badge <?= in_array($p['status'], ['succeeded', 'manual'], true) ? 'badge-buyout' : ($p['status'] === 'canceled' ? 'badge-cancel' : 'badge-created') ?>"><?= e($names[$p['status']] ?? $p['status']) ?></span></td>
           <td class="small muted"><?= e($p['provider_id']) ?></td>
         </tr>

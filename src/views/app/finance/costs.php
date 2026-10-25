@@ -9,7 +9,7 @@
   <div class="card" style="padding:0">
     <div class="table-wrap">
       <table class="table fin-table">
-        <thead><tr><th>Товар</th><th class="num">Продано за период</th><th class="num" style="width:160px">Себестоимость, ₽</th></tr></thead>
+        <thead><tr><th>Товар</th><th class="num">Продано за период</th><th class="num" style="width:160px">Себестоимость, <?= currency_sign() ?></th></tr></thead>
         <tbody>
         <?php foreach ($items as $i): $key = (int) $i['store_id'] . '_' . (int) $i['nm_id']; ?>
           <tr>

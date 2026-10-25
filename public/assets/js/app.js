@@ -2,6 +2,10 @@
 (function () {
   'use strict';
 
+  // Валюта кабинета WB (₽, с, ₸…) — из <meta name="currency">
+  var curMeta = document.querySelector('meta[name="currency"]');
+  var CUR = curMeta ? curMeta.getAttribute('content') : '₽';
+
   var store = {
     get: function (k, d) { try { var v = localStorage.getItem(k); return v === null ? d : v; } catch (e) { return d; } },
     set: function (k, v) { try { localStorage.setItem(k, v); } catch (e) {} }
@@ -50,7 +54,7 @@
   function lzEsc(v) {
     return String(v === null || v === undefined ? '' : v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
   }
-  function lzMoney(v) { return v === null || v === undefined ? '—' : Math.round(v).toLocaleString('ru-RU') + ' ₽'; }
+  function lzMoney(v) { return v === null || v === undefined ? '—' : Math.round(v).toLocaleString('ru-RU') + ' ' + CUR; }
   function lzModal(html) {
     var box = document.getElementById('lzModal');
     if (!box) {
@@ -103,7 +107,7 @@
         var csrf = (document.querySelector('meta[name="csrf"]') || {}).content || '';
         html += '<form method="post" action="/app/products" class="p-edit">' +
           '<input type="hidden" name="_csrf" value="' + lzEsc(csrf) + '"><input type="hidden" name="q" value="' + lzEsc(pcfg.q) + '"><input type="hidden" name="empty" value="' + lzEsc(pcfg.empty) + '">' +
-          '<div><label>Себестоимость, ₽</label><input type="text" inputmode="decimal" name="cost[' + p.key + ']" value="' + (p.cost !== null ? p.cost : '') + '" placeholder="—"></div>' +
+          '<div><label>Себестоимость, ' + CUR + '</label><input type="text" inputmode="decimal" name="cost[' + p.key + ']" value="' + (p.cost !== null ? p.cost : '') + '" placeholder="—"></div>' +
           '<div><label>Комиссия, %</label><input type="text" inputmode="decimal" name="comm[' + p.key + ']" value="' + (p.comm_manual !== null ? p.comm_manual : '') + '" placeholder="' + p.comm_auto + ' (WB)"></div>' +
           '<button class="btn" style="grid-column:1/-1">Сохранить</button></form>';
       }
@@ -146,7 +150,7 @@
     var tax = parseFloat(promo.getAttribute('data-tax')) || 0;
     var vat = parseFloat(promo.getAttribute('data-vat')) || 0;
     var num = function (v) { v = parseFloat(String(v).replace(/\s/g, '').replace(',', '.')); return isNaN(v) ? 0 : v; };
-    var fmt = function (v) { return Math.round(v).toLocaleString('ru-RU') + ' ₽'; };
+    var fmt = function (v) { return Math.round(v).toLocaleString('ru-RU') + ' ' + CUR; };
     // Прибыль на 1 шт: цена − комиссия − логистика − налог и НДС (от цены покупателя после СПП) − реклама − себестоимость
     var profit = function (price, k) {
       var buyer = price * (1 - k.spp / 100);
@@ -197,7 +201,7 @@
   }
   function money(v) {
     if (v === null || v === undefined) return '—';
-    return Math.round(v).toLocaleString('ru-RU') + ' ₽';
+    return Math.round(v).toLocaleString('ru-RU') + ' ' + CUR;
   }
   // Даты с сервера приходят в ISO 8601 с часовым поясом (created_iso, status_iso, sync.last)
   function parseDate(s) { return s ? new Date(s.replace(' ', 'T')) : null; }
@@ -400,9 +404,9 @@
     set('orders', k.orders.toLocaleString('ru-RU'));
     set('orders_sum', money(k.orders_sum));
     set('buyout', k.buyout.toLocaleString('ru-RU'));
-    set('buyout_sum', money(k.buyout_sum));
+    set('buyout_sum', money(k.buyout_sum) + (k.returns ? ' · ' + k.buyout_gross + ' − ' + k.returns + ' возвр.' : ''));
     set('cancel', k.cancel.toLocaleString('ru-RU'));
-    set('cancel_pct', k.orders ? Math.round(k.cancel * 100 / k.orders) + '% от заказов' : ' ');
+    set('cancel_pct', k.orders_all ? Math.round(k.cancel * 100 / k.orders_all) + '% от заказов' : ' ');
     set('returns', k.returns.toLocaleString('ru-RU'));
     set('avg', money(k.avg));
     if (k.profit) {

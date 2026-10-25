@@ -40,7 +40,7 @@ $countryNames = ['RU' => 'Россия', 'KG' => 'Кыргызстан', 'KZ' =>
               <th title="Объём товара в упаковке — от него считается логистика">Объём</th>
               <th title="Комиссия WB для категории и схемы продажи. Можно указать свою">Комиссия, %</th>
               <th title="Логистика до покупателя по формуле WB">Логистика</th>
-              <th>Себестоимость, ₽</th>
+              <th>Себестоимость, <?= currency_sign() ?></th>
               <th title="Цена − комиссия − логистика − налог − прочие − себестоимость">Прибыль/шт</th>
             </tr></thead>
             <tbody>
@@ -160,10 +160,10 @@ $countryNames = ['RU' => 'Россия', 'KG' => 'Кыргызстан', 'KZ' =>
       <form method="post" action="/app/products/settings">
         <?= csrf_field() ?>
         <div class="field"><label>Налог, % от цены</label><input type="text" inputmode="decimal" name="tax" value="<?= e($fmt($settings['tax'])) ?>" <?= $canEdit ? '' : 'disabled' ?>><div class="hint">УСН «доходы» — 6%. Без налога — 0.</div></div>
-        <div class="field"><label>Прочие расходы на единицу, ₽</label><input type="text" inputmode="decimal" name="other" value="<?= e($fmt($settings['other'])) ?>" <?= $canEdit ? '' : 'disabled' ?>><div class="hint">Упаковка, хранение, реклама, фулфилмент.</div></div>
+        <div class="field"><label>Прочие расходы на единицу, <?= currency_sign() ?></label><input type="text" inputmode="decimal" name="other" value="<?= e($fmt($settings['other'])) ?>" <?= $canEdit ? '' : 'disabled' ?>><div class="hint">Упаковка, хранение, реклама, фулфилмент.</div></div>
         <div class="field"><label>Коэффициент склада, если неизвестен, %</label><input type="text" inputmode="decimal" name="coef" value="<?= e($fmt($settings['coef'])) ?>" <?= $canEdit ? '' : 'disabled' ?>><div class="hint">С 15 августа для складов РФ единый — 170%. Для складов СНГ — свои.</div></div>
         <div class="field"><label>Комиссия, если категория не найдена, %</label><input type="text" inputmode="decimal" name="commission" value="<?= e($fmt($settings['commission'])) ?>" <?= $canEdit ? '' : 'disabled' ?>></div>
-        <div class="field"><label>Логистика, если объём неизвестен, ₽</label><input type="text" inputmode="decimal" name="logistics" value="<?= e($fmt($settings['logistics'])) ?>" <?= $canEdit ? '' : 'disabled' ?>></div>
+        <div class="field"><label>Логистика, если объём неизвестен, <?= currency_sign() ?></label><input type="text" inputmode="decimal" name="logistics" value="<?= e($fmt($settings['logistics'])) ?>" <?= $canEdit ? '' : 'disabled' ?>></div>
         <?php if ($canEdit): ?><button class="btn btn-sm">Сохранить параметры</button><?php endif; ?>
       </form>
       <p class="small muted" style="margin-top:14px">Это оценка. Точные удержания WB — в еженедельном отчёте реализации.</p>

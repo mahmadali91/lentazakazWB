@@ -14,7 +14,7 @@ $total = array_sum(array_map(static fn($i) => (float) $i['amount'], $items));
     <?php else: ?>
       <div class="table-wrap">
         <table class="table fin-table">
-          <thead><tr><th>Дата</th><th>Статья</th><th>На товар</th><th>Комментарий</th><th class="num">Сумма, ₽</th><th></th></tr></thead>
+          <thead><tr><th>Дата</th><th>Статья</th><th>На товар</th><th>Комментарий</th><th class="num">Сумма, <?= currency_sign() ?></th><th></th></tr></thead>
           <tbody>
           <?php foreach ($items as $i): ?>
             <tr>
@@ -39,7 +39,7 @@ $total = array_sum(array_map(static fn($i) => (float) $i['amount'], $items));
         <label>Дата <input type="date" name="day" value="<?= e(min(date('Y-m-d'), $to)) ?>" required></label>
         <label>Статья <input type="text" name="category" list="expCats" required placeholder="Например, Фулфилмент"></label>
         <datalist id="expCats"><?php foreach (Finance::EXPENSE_CATEGORIES as $c): ?><option value="<?= e($c) ?>"><?php endforeach; ?></datalist>
-        <label>Сумма, ₽ <input type="text" inputmode="decimal" name="amount" required placeholder="0"></label>
+        <label>Сумма, <?= currency_sign() ?> <input type="text" inputmode="decimal" name="amount" required placeholder="0"></label>
         <label>Артикул WB <span class="muted small">(необязательно — расход ляжет на товар)</span><input type="text" inputmode="numeric" name="nm_id" placeholder="Например, 186452311"></label>
         <?php if (count($activeIds) > 1): ?>
           <label>Магазин <select name="store_id"><option value="0">Все магазины</option><?php foreach ($stores as $s): ?><option value="<?= (int) $s['id'] ?>"><?= e($s['name']) ?></option><?php endforeach; ?></select></label>

@@ -103,7 +103,7 @@ final class Telegram
     /** Рассылает уведомления о новых заказах и смене статусов. */
     public static function notifyOrders(): void
     {
-        $rows = DB::all("SELECT o.*, s.name AS store_name, s.user_id, u.plan_code, u.plan_expires_at,
+        $rows = DB::all("SELECT o.*, s.name AS store_name, s.currency AS store_currency, s.user_id, u.plan_code, u.plan_expires_at,
                 p.title AS p_title
             FROM orders o
             JOIN stores s ON s.id = o.store_id
@@ -195,7 +195,7 @@ final class Telegram
             $lines[] = implode(' · ', $ids);
         }
         if ($o['seller_price'] !== null) {
-            $lines[] = '💰 ' . money($o['seller_price']);
+            $lines[] = '💰 ' . number_format((float) $o['seller_price'], 0, ',', ' ') . ' ' . currency_sign((string) ($o['store_currency'] ?? 'RUB'));
         }
         $route = scheme_label($o['scheme']);
         if ($o['warehouse']) {

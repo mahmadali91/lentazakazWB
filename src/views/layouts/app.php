@@ -16,6 +16,7 @@ if (($user['role'] ?? '') === 'admin') {
 <?= App\Core\View::partial('partials/head', ['title' => $title ?? '']) ?>
 <meta name="robots" content="noindex">
 <meta name="csrf" content="<?= e(App\Core\Csrf::token()) ?>">
+<meta name="currency" content="<?= e(currency_sign()) ?>">
 </head>
 <body>
 <div class="app">

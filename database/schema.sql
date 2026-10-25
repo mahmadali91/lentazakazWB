@@ -38,6 +38,7 @@ CREATE TABLE IF NOT EXISTS stores (
   seller_sid      VARCHAR(64) NOT NULL DEFAULT '',
   seller_tin      VARCHAR(20) NOT NULL DEFAULT '',
   seller_country  VARCHAR(8) NOT NULL DEFAULT '',
+  currency        VARCHAR(8) NULL,                -- валюта кабинета WB: RUB, KGS, KZT…
   token_enc       TEXT NOT NULL,
   token_hint      VARCHAR(16) NOT NULL DEFAULT '',
   token_expires_at DATETIME NULL,
