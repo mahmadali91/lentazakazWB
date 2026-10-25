@@ -43,6 +43,10 @@ final class Config
         'app.support_email'     => false,
         'telegram.bot_username' => false,
         'telegram.bot_token'    => true,  // true — хранится зашифрованным
+        'yookassa.shop_id'      => false,
+        'yookassa.secret_key'   => true,
+        'yookassa.send_receipt' => false,
+        'yookassa.vat_code'     => false,
     ];
 
     public static function set(string $key, mixed $value): void

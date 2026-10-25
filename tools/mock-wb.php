@@ -23,6 +23,9 @@ function out(mixed $data, int $code = 200): never
 }
 
 // --- Эмуляция ЮKassa (для тестов оплаты): config yookassa.api = 'http://127.0.0.1:8090/v3'
+if ($path === '/v3/me') {
+    out(['account_id' => '123456', 'test' => true, 'status' => 'enabled']);
+}
 if (str_starts_with($path, '/v3/payments')) {
     $body = json_decode((string) file_get_contents('php://input'), true) ?: [];
     if ($_SERVER['REQUEST_METHOD'] === 'POST') {

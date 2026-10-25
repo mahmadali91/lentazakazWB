@@ -25,9 +25,9 @@ final class OrderRepository
         $status = in_array($o['status'] ?? '', self::STATUSES, true) ? $o['status'] : 'created';
         $sql = 'INSERT INTO orders
             (store_id, srid, scheme, status, cancel_type, nm_id, chrt_id, warehouse, warehouse_region, is_mp,
-             dest_city, dest_district, seller_price, is_b2b, order_created_at, status_at, first_seen_at, notified_status)
+             dest_city, dest_district, seller_price, is_b2b, in_feed, order_created_at, status_at, first_seen_at, notified_status)
             VALUES (:store, :srid, :scheme, :status, :cancel, :nm, :chrt, :wh, :whr, :ismp,
-             :city, :district, :price, :b2b, :created, :status_at, :seen, :notified)
+             :city, :district, :price, :b2b, 1, :created, :status_at, :seen, :notified)
             ON DUPLICATE KEY UPDATE
               scheme = IF(VALUES(scheme) = \'MP\' AND scheme IS NOT NULL, scheme, VALUES(scheme)),
               status = VALUES(status),
@@ -41,6 +41,7 @@ final class OrderRepository
               dest_district = VALUES(dest_district),
               seller_price = IF(finished_price IS NULL OR seller_price IS NULL, VALUES(seller_price), seller_price),
               is_b2b = VALUES(is_b2b),
+              in_feed = 1,
               order_created_at = VALUES(order_created_at),
               status_at = VALUES(status_at)';
         $created = wb_time($o['createdAt'] ?? null) ?? now();
@@ -321,9 +322,11 @@ final class OrderRepository
         $f2 = $f;
         unset($f2['status'], $f2['date_by']);
         [$where, $params] = self::buildWhere($storeIds, $f2);
-        // Как в кабинете WB: «Заказы» — без отменённых, «Выкупы» — за вычетом возвратов
-        $r = DB::one("SELECT COUNT(*) AS orders_all, SUM(o.status <> 'cancel') AS orders_count,
-                COALESCE(SUM(CASE WHEN o.status <> 'cancel' THEN o.seller_price END),0) AS orders_sum
+        // Как в кабинете WB: не считаем заказы, которые есть только в Статистике (неоплаченные, в Ленте заказов их нет);
+        // заказы из сборочных заданий без Ленты пока считаем — они появятся в Ленте в течение минуты
+        $counted = "(o.in_feed = 1 OR o.finished_price IS NULL OR o.mp_order_id IS NOT NULL)";
+        $r = DB::one("SELECT COUNT(*) AS orders_all, SUM($counted) AS orders_count,
+                COALESCE(SUM(CASE WHEN $counted THEN o.seller_price END),0) AS orders_sum
             FROM orders o LEFT JOIN products p ON p.store_id = o.store_id AND p.nm_id = o.nm_id
             WHERE $where", $params) ?? [];
         // Выкупы, отмены, возвраты — произошедшие в этом периоде (по дате статуса), даже если заказ оформлен раньше

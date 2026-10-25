@@ -43,6 +43,12 @@ final class YooKassa
         return $data;
     }
 
+    /** Проверка ключей магазина (GET /v3/me): данные аккаунта или исключение с причиной. */
+    public static function me(): array
+    {
+        return self::request('GET', '/me');
+    }
+
     /** Создаёт платёж и возвращает ссылку на оплату. */
     public static function createPayment(array $user, string $planCode, int $months): string
     {

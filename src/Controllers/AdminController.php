@@ -10,6 +10,7 @@ use App\Core\DB;
 use App\Services\Cron;
 use App\Services\Plans;
 use App\Services\Telegram;
+use App\Services\YooKassa;
 
 /** Админ-панель: клиенты, сроки тарифов, ручная выдача доступа, платежи, состояние синхронизации. */
 final class AdminController
@@ -328,7 +329,23 @@ final class AdminController
             'botUser'  => (string) config('telegram.bot_username', ''),
             'hasToken' => (string) config('telegram.bot_token', '') !== '',
             'bot'      => $bot,
+            'ykShop'   => (string) config('yookassa.shop_id', ''),
+            'ykHasKey' => (string) config('yookassa.secret_key', '') !== '',
+            'ykReceipt' => (bool) config('yookassa.send_receipt', false),
+            'ykVat'    => (int) config('yookassa.vat_code', 1),
+            'ykOk'     => YooKassa::enabled() ? $this->yookassaCheck() : null,
         ], 'app');
+    }
+
+    /** Проверка ключей ЮKassa для страницы настроек: ['ok' => bool, 'text' => string]. */
+    private function yookassaCheck(): array
+    {
+        try {
+            $me = YooKassa::me();
+            return ['ok' => true, 'text' => 'Магазин ' . ($me['account_id'] ?? '') . (!empty($me['test']) ? ' (тестовый)' : '') . ', статус: ' . ($me['status'] ?? '—')];
+        } catch (\Throwable $e) {
+            return ['ok' => false, 'text' => 'ЮKassa не приняла ключи: проверьте shopId и секретный ключ (подробности — storage/logs/payments.log).'];
+        }
     }
 
     public function saveSettings(): never
@@ -370,6 +387,24 @@ final class AdminController
             redirect('/admin/settings');
         }
         DB::setSetting('cfg.telegram.bot_username', $username);
+
+        // ЮKassa: shopId, секретный ключ (зашифрован; пусто — не менять), чек 54-ФЗ и ставка НДС
+        $shop = preg_replace('/\D/', '', (string) input('yk_shop_id', ''));
+        $secret = trim((string) input('yk_secret', ''));
+        if ($secret !== '' && !preg_match('/^(live|test)_[A-Za-z0-9_-]{20,}$/', $secret)) {
+            flash('error', 'Секретный ключ ЮKassa начинается с live_ или test_. Скопируйте его из личного кабинета ЮKassa → Интеграция → Ключи API.');
+            redirect('/admin/settings');
+        }
+        DB::setSetting('cfg.yookassa.shop_id', $shop);
+        if ($secret !== '') {
+            DB::setSetting('cfg.yookassa.secret_key', Crypto::encrypt($secret));
+        }
+        if (!empty($_POST['yk_remove'])) {
+            DB::setSetting('cfg.yookassa.secret_key', '');
+            DB::setSetting('cfg.yookassa.shop_id', '');
+        }
+        DB::setSetting('cfg.yookassa.send_receipt', !empty($_POST['yk_receipt']) ? '1' : '0');
+        DB::setSetting('cfg.yookassa.vat_code', (string) max(1, min(10, (int) input('yk_vat', 1))));
         if (!empty($_POST['bot_remove'])) {
             DB::setSetting('cfg.telegram.bot_token', '');
         }

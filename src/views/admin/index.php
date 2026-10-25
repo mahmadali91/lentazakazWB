@@ -61,7 +61,7 @@
   <p class="small muted" style="margin-top:12px">
     Telegram-бот: <b><?= App\Services\Telegram::enabled() ? 'подключён @' . e(config('telegram.bot_username')) : 'не настроен' ?></b> ·
     ЮKassa: <b><?= App\Services\YooKassa::enabled() ? 'подключена' : 'не настроена' ?></b>
-    — настраивается в <code>config/config.php</code>.
+    — настраивается в <a href="/admin/settings">«Настройках сервиса»</a>.
   </p>
 </div>
 

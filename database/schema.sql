@@ -103,6 +103,7 @@ CREATE TABLE IF NOT EXISTS orders (
   total_price      DECIMAL(12,2) NULL,
   spp              DECIMAL(5,2) NULL,
   is_b2b           TINYINT(1) NOT NULL DEFAULT 0,
+  in_feed          TINYINT(1) NOT NULL DEFAULT 0,   -- 1 — заказ есть в Ленте заказов WB (так считает кабинет)
   order_created_at DATETIME NOT NULL,
   status_at        DATETIME NULL,
   first_seen_at    DATETIME NOT NULL,

@@ -9,7 +9,7 @@ namespace App\Core;
  */
 final class Migrator
 {
-    public const VERSION = 8;
+    public const VERSION = 9;
 
     public static function ensure(): void
     {
@@ -37,6 +37,11 @@ final class Migrator
             }
             if ($version < 6) {
                 self::v6();
+            }
+            if ($version < 9) {
+                // Признак «заказ есть в Ленте заказов WB»: кабинет WB не считает заказы, которые есть только в Статистике (неоплаченные)
+                self::addColumn('orders', 'in_feed', 'TINYINT(1) NOT NULL DEFAULT 0 AFTER is_b2b');
+                DB::exec('UPDATE orders SET in_feed = 1 WHERE warehouse_region IS NOT NULL OR dest_city IS NOT NULL OR chrt_id IS NOT NULL');
             }
             if ($version < 8) {
                 // Валюта кабинета продавца (RUB, KGS, KZT…) — WB отдаёт суммы в ней
