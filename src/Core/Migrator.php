@@ -9,7 +9,7 @@ namespace App\Core;
  */
 final class Migrator
 {
-    public const VERSION = 6;
+    public const VERSION = 7;
 
     public static function ensure(): void
     {
@@ -37,6 +37,10 @@ final class Migrator
             }
             if ($version < 6) {
                 self::v6();
+            }
+            if ($version < 7) {
+                // Перезагрузить Статистику за историю тарифа: цены заказов берутся из priceWithDisc (как в кабинете WB)
+                DB::exec('UPDATE stores SET stats_cursor = NULL, stats_next_at = NULL');
             }
             DB::setSetting('schema_version', (string) self::VERSION);
             @file_put_contents($cache, (string) self::VERSION);

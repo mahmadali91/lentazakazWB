@@ -15,6 +15,10 @@ final class OrderRepository
      * Заказ из Ленты заказов (Аналитика) — главный источник статуса.
      * @return int 1 — новый заказ, 2 — обновлён, 0 — без изменений
      */
+    /**
+     * Цену продавца из Ленты записываем, только если нет цены из Статистики WB (priceWithDisc):
+     * её WB использует в продажах и отчётах, а sellerPrice Ленты бывает выше на 5–10%.
+     */
     public static function upsertFromFeed(int $storeId, array $o, bool $silent): int
     {
         $isMp = !empty($o['isMp']);
@@ -35,7 +39,7 @@ final class OrderRepository
               is_mp = VALUES(is_mp),
               dest_city = VALUES(dest_city),
               dest_district = VALUES(dest_district),
-              seller_price = VALUES(seller_price),
+              seller_price = IF(finished_price IS NULL OR seller_price IS NULL, VALUES(seller_price), seller_price),
               is_b2b = VALUES(is_b2b),
               order_created_at = VALUES(order_created_at),
               status_at = VALUES(status_at)';
@@ -90,10 +94,13 @@ final class OrderRepository
               finished_price = VALUES(finished_price),
               total_price = VALUES(total_price),
               spp = VALUES(spp),
-              seller_price = COALESCE(seller_price, VALUES(seller_price))';
+              seller_price = COALESCE(VALUES(seller_price), seller_price)';
         $created = wb_time($o['date'] ?? null) ?? now();
         $total = isset($o['totalPrice']) ? (float) $o['totalPrice'] : null;
-        $sellerPrice = $total !== null ? round($total * (100 - (float) ($o['discountPercent'] ?? 0)) / 100, 2) : null;
+        // Цена продавца со скидкой продавца — как в отчётах WB о продажах
+        $sellerPrice = isset($o['priceWithDisc']) && (float) $o['priceWithDisc'] > 0
+            ? round((float) $o['priceWithDisc'], 2)
+            : ($total !== null ? round($total * (100 - (float) ($o['discountPercent'] ?? 0)) / 100, 2) : null);
         return DB::exec($sql, [
             'store'     => $storeId,
             'srid'      => (string) $o['srid'],
