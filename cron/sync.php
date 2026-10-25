@@ -25,5 +25,22 @@ App\Core\Migrator::ensure();
 set_time_limit(58);
 $report = App\Services\Cron::run(50);
 if (in_array('-v', $argv, true)) {
+    // Диагностика: что включено у каждого магазина и когда следующий запрос к WB
+    $report['diagnostics'] = array_map(static function (array $s): array {
+        $scopes = json_decode((string) $s['scopes'], true) ?: [];
+        return [
+            'store'        => $s['id'] . ' · ' . $s['name'],
+            'active'       => (bool) $s['is_active'],
+            'scopes'       => $scopes,
+            'next'         => ['feed' => $s['feed_next_at'], 'marketplace' => $s['mp_next_at'], 'statistics' => $s['stats_next_at'], 'content' => $s['cards_next_at']],
+            'last_ok'      => ['feed' => $s['feed_ok_at'], 'marketplace' => $s['mp_ok_at'], 'statistics' => $s['stats_ok_at']],
+            'last_error'   => $s['last_error'] ? $s['last_error'] . ' (' . $s['last_error_at'] . ')' : null,
+            'orders_in_db' => (int) App\Core\DB::value('SELECT COUNT(*) FROM orders WHERE store_id = ?', [$s['id']]),
+            'recent_log'   => array_map(
+                static fn($l) => $l['created_at'] . ' ' . $l['source'] . ' ' . ($l['ok'] ? 'OK ' . $l['rows_count'] : 'ERR ' . $l['message']),
+                App\Core\DB::all('SELECT * FROM sync_log WHERE store_id = ? ORDER BY id DESC LIMIT 8', [$s['id']])
+            ),
+        ];
+    }, App\Core\DB::all('SELECT * FROM stores ORDER BY id'));
     echo json_encode($report, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT), PHP_EOL;
 }

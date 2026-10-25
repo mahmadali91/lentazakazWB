@@ -83,7 +83,8 @@ final class SyncService
         try {
             $rows = (int) $fn();
             $this->log($source, true, $rows, null);
-            if ($this->store['last_error']) {
+            $basicTokenWarning = str_contains((string) $this->store['last_error'], '«Базовый»');
+            if ($this->store['last_error'] && (!$basicTokenWarning || in_array($source, ['feed', 'stats'], true))) {
                 DB::exec('UPDATE stores SET last_error = NULL, last_error_at = NULL WHERE id = ?', [$this->store['id']]);
                 $this->store['last_error'] = null;
             }
@@ -104,6 +105,13 @@ final class SyncService
             if (!$e->isRateLimit()) {
                 $msg = mb_substr($e->humanMessage(), 0, 480);
                 DB::exec('UPDATE stores SET last_error = ?, last_error_at = ? WHERE id = ?', [$msg, now(), $this->store['id']]);
+            } elseif ($e->retryAfter > 3600 && in_array($source, ['feed', 'stats'], true)) {
+                // Лимит в часы на Аналитику/Статистику бывает только у «Базового» токена (1 запрос в 3 часа)
+                $msg = 'WB разрешает этому токену запрашивать заказы только раз в 3 часа — у него тип «Базовый». '
+                    . 'Создайте в кабинете WB токен типа «Персональный» (категории Аналитика, Статистика, Маркетплейс, Контент) '
+                    . 'и замените его здесь: «Управление магазином» → «Новый токен WB». Следующее обновление: ' . date('H:i', time() + $e->retryAfter) . '.';
+                DB::exec('UPDATE stores SET last_error = ?, last_error_at = ? WHERE id = ?', [$msg, now(), $this->store['id']]);
+                $this->store['last_error'] = $msg;
             }
             $this->log($source, false, 0, $e->status . ' ' . $e->getMessage());
             return 'error:' . $e->status;

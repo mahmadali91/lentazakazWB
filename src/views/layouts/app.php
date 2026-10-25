@@ -58,9 +58,18 @@ if (($user['role'] ?? '') === 'admin') {
     <?= $content ?>
   </main>
 </div>
+<?php
+// Нижнее меню на телефоне: основные разделы + «Профиль» (тариф, настройки, админка, выход)
+$mobile = [['feed', '/app', 'Лента', 'feed'], ['products', '/app/products', 'Товары', 'box']];
+if (!$isMember) {
+    $mobile[] = ['stores', '/app/stores', 'Магазины', 'store'];
+}
+$mobile[] = ['profile', '/app/profile', 'Профиль', 'user'];
+$profileActive = in_array($nav, ['profile', 'settings', 'billing', 'admin'], true);
+?>
 <nav class="mobile-nav">
-  <?php foreach ($items as [$key, $href, , $short, $ico]): ?>
-    <a href="<?= $href ?>" class="<?= $nav === $key ? 'active' : '' ?>"><?= icon($ico, 22) ?><?= e($short) ?></a>
+  <?php foreach ($mobile as [$key, $href, $short, $ico]): ?>
+    <a href="<?= $href ?>" class="<?= $nav === $key || ($key === 'profile' && $profileActive) ? 'active' : '' ?>"><?= icon($ico, 22) ?><?= e($short) ?></a>
   <?php endforeach; ?>
 </nav>
 <div class="toast" id="toast"></div>
