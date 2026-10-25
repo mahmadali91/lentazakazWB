@@ -37,6 +37,20 @@ final class SettingsController
         ], 'app');
     }
 
+    /** Профиль: тариф, переходы в разделы и выход (главное для мобильного меню). */
+    public function profilePage(): string
+    {
+        $user = Auth::require();
+        $account = Auth::account();
+        return view('app/profile', [
+            'title'   => 'Профиль',
+            'user'    => $user,
+            'account' => $account,
+            'plan'    => Plans::forUser($account),
+            'nav'     => 'profile',
+        ], 'app');
+    }
+
     // ---------------------------------------------------------------- сотрудники
 
     public function teamAdd(): never

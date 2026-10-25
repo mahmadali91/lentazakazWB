@@ -14,8 +14,8 @@
       <?php if (!empty($user)): ?>
         <a class="btn btn-sm" href="/app">Открыть ленту</a>
       <?php else: ?>
-        <a class="nav-link" href="/login">Войти</a>
-        <a class="btn btn-sm" href="/register">Попробовать бесплатно</a>
+        <a class="btn btn-sm btn-ghost" href="/login">Войти</a>
+        <a class="btn btn-sm" href="/register">Попробовать<span class="hide-xs"> бесплатно</span></a>
       <?php endif; ?>
     </nav>
   </div>

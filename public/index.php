@@ -85,6 +85,7 @@ $r->get('/app/billing', [BillingController::class, 'index']);
 $r->post('/app/billing/pay', [BillingController::class, 'pay']);
 $r->get('/app/billing/return', [BillingController::class, 'return']);
 $r->get('/app/settings', [SettingsController::class, 'index']);
+$r->get('/app/profile', [SettingsController::class, 'profilePage']);
 $r->post('/app/settings/profile', [SettingsController::class, 'profile']);
 $r->post('/app/settings/password', [SettingsController::class, 'password']);
 $r->post('/app/settings/telegram', [SettingsController::class, 'telegram']);
