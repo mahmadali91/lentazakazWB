@@ -41,7 +41,7 @@ final class StoreController
         }
         try {
             StoreService::create((int) $user['id'], (string) input('name', ''), (string) ($_POST['token'] ?? ''));
-            flash('success', 'Магазин подключён! Первые заказы появятся в ленте в течение 1–2 минут.');
+            flash('success', 'Магазин подключён! Первые заказы появятся в ленте в течение 5 минут.');
             redirect('/app');
         } catch (\InvalidArgumentException $e) {
             remember_input($_POST);
