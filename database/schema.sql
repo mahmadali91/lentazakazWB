@@ -36,6 +36,7 @@ CREATE TABLE IF NOT EXISTS stores (
   seller_name     VARCHAR(255) NOT NULL DEFAULT '',
   seller_sid      VARCHAR(64) NOT NULL DEFAULT '',
   seller_tin      VARCHAR(20) NOT NULL DEFAULT '',
+  seller_country  VARCHAR(8) NOT NULL DEFAULT '',
   token_enc       TEXT NOT NULL,
   token_hint      VARCHAR(16) NOT NULL DEFAULT '',
   token_expires_at DATETIME NULL,
@@ -51,6 +52,11 @@ CREATE TABLE IF NOT EXISTS stores (
   mp_next_at      DATETIME NULL,
   mp_ok_at        DATETIME NULL,
   cards_next_at   DATETIME NULL,
+  remains_state   TEXT NULL,
+  remains_next_at DATETIME NULL,
+  remains_ok_at   DATETIME NULL,
+  tariffs_next_at DATETIME NULL,
+  tariffs_ok_at   DATETIME NULL,
   last_error      VARCHAR(500) NULL,
   last_error_at   DATETIME NULL,
   created_at      DATETIME NOT NULL,
@@ -106,7 +112,15 @@ CREATE TABLE IF NOT EXISTS products (
   title       VARCHAR(255) NULL,
   brand       VARCHAR(120) NULL,
   subject     VARCHAR(120) NULL,
+  subject_id  INT NULL,
   photo       VARCHAR(500) NULL,
+  volume_l    DECIMAL(10,3) NULL,             -- объём товара в упаковке, л
+  volume_src  VARCHAR(16) NULL,               -- откуда объём: remains (отчёт остатков WB) | card (габариты карточки)
+  dims        VARCHAR(40) NULL,               -- габариты Д×Ш×В, см
+  stock_wb    INT NULL,                       -- остаток на складах WB, шт
+  stock_to_client INT NULL,                   -- в пути к покупателям
+  stock_from_client INT NULL,                 -- в пути возвраты на склад
+  stock_at    DATETIME NULL,
   cost_price  DECIMAL(12,2) NULL,             -- себестоимость единицы, ₽
   commission_pct DECIMAL(5,2) NULL,           -- комиссия WB для товара, % (пусто — из общих настроек)
   updated_at  DATETIME NOT NULL,
@@ -163,4 +177,36 @@ CREATE TABLE IF NOT EXISTS settings (
   name  VARCHAR(64) NOT NULL,
   value TEXT NULL,
   PRIMARY KEY (name)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Комиссии WB по предметам (загружаются токеном магазина: у продавцов из разных стран свои ставки)
+CREATE TABLE IF NOT EXISTS wb_commissions (
+  store_id     INT UNSIGNED NOT NULL,
+  subject_id   INT NOT NULL,
+  subject_name VARCHAR(160) NOT NULL,
+  parent_name  VARCHAR(160) NULL,
+  fbo          DECIMAL(5,2) NULL,
+  fbs          DECIMAL(5,2) NULL,
+  dbs          DECIMAL(5,2) NULL,
+  edbs         DECIMAL(5,2) NULL,
+  pickup       DECIMAL(5,2) NULL,
+  booking      DECIMAL(5,2) NULL,
+  updated_at   DATETIME NOT NULL,
+  PRIMARY KEY (store_id, subject_id),
+  KEY idx_comm_name (store_id, subject_name),
+  CONSTRAINT fk_comm_store FOREIGN KEY (store_id) REFERENCES stores (id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Тарифы WB для коробов по складам (логистика с учётом коэффициента склада)
+CREATE TABLE IF NOT EXISTS wb_box_tariffs (
+  warehouse_name VARCHAR(160) NOT NULL,
+  geo_name       VARCHAR(160) NULL,
+  delivery_base  DECIMAL(10,2) NULL,
+  delivery_liter DECIMAL(10,2) NULL,
+  delivery_coef  DECIMAL(7,2) NULL,
+  mp_base        DECIMAL(10,2) NULL,
+  mp_liter       DECIMAL(10,2) NULL,
+  mp_coef        DECIMAL(7,2) NULL,
+  updated_at     DATETIME NOT NULL,
+  PRIMARY KEY (warehouse_name)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

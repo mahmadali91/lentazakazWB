@@ -66,6 +66,7 @@ final class StoreService
             'seller_name'      => mb_substr((string) ($seller['name'] ?? ''), 0, 255),
             'seller_sid'       => (string) ($seller['sid'] ?? ''),
             'seller_tin'       => (string) ($seller['tin'] ?? ''),
+            'seller_country'   => mb_substr((string) ($seller['country'] ?? ''), 0, 8),
             'token_enc'        => Crypto::encrypt($token),
             'token_hint'       => '…' . substr($token, -6),
             'token_expires_at' => $info['expires_at'],
@@ -90,6 +91,9 @@ final class StoreService
             'mp_next_at'       => null,
             'stats_next_at'    => null,
             'cards_next_at'    => null,
+            'tariffs_next_at'  => null,
+            'remains_next_at'  => null,
+            'remains_state'    => null,
         ], 'id = :id', ['id' => $store['id']]);
     }
 

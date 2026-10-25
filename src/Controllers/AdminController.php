@@ -40,8 +40,24 @@ final class AdminController
             'orders_today' => (int) DB::value('SELECT COUNT(*) FROM orders WHERE order_created_at >= ?', [$today]),
             'revenue_30'   => (float) DB::value("SELECT COALESCE(SUM(amount),0) FROM payments WHERE status IN ('succeeded','manual') AND paid_at >= ?", [date('Y-m-d H:i:s', time() - 30 * 86400)]),
         ];
+        // Графики за 30 дней: регистрации, выручка, заказы
+        $series = ['users' => [], 'revenue' => [], 'orders' => []];
+        $from = date('Y-m-d', strtotime('-29 days'));
+        $maps = [
+            'users'   => DB::all("SELECT DATE(created_at) d, COUNT(*) v FROM users WHERE owner_id IS NULL AND created_at >= ? GROUP BY d", [$from]),
+            'revenue' => DB::all("SELECT DATE(paid_at) d, SUM(amount) v FROM payments WHERE status IN ('succeeded','manual') AND paid_at >= ? GROUP BY d", [$from]),
+            'orders'  => DB::all('SELECT DATE(order_created_at) d, COUNT(*) v FROM orders WHERE order_created_at >= ? GROUP BY d', [$from]),
+        ];
+        foreach ($maps as $k => $rows) {
+            $m = array_column($rows, 'v', 'd');
+            for ($i = 29; $i >= 0; $i--) {
+                $d = date('Y-m-d', strtotime("-$i days"));
+                $series[$k][] = ['d' => date('d.m', strtotime($d)), 'v' => (float) ($m[$d] ?? 0)];
+            }
+        }
         return view('admin/index', $this->base($admin) + [
-            'title'    => 'Админ-панель',
+            'series'   => $series,
+            'title'    => 'Дашборд',
             'stats'    => $stats,
             'cronLast' => DB::setting('cron_last_run'),
             'expiring' => DB::all('SELECT u.*, (SELECT COUNT(*) FROM stores s WHERE s.user_id = u.id) AS stores_count FROM users u

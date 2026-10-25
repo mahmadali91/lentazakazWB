@@ -56,6 +56,12 @@ final class SyncService
         if (!empty($this->scopes['content']) && $this->due('cards_next_at', $now)) {
             $done['cards'] = $this->safe('cards', fn() => $this->syncCards());
         }
+        if ($this->due('tariffs_next_at', $now)) {
+            $done['tariffs'] = $this->safe('tariffs', fn() => $this->syncTariffs());
+        }
+        if (!empty($this->scopes['analytics']) && (int) $this->store['initial_done'] && $this->due('remains_next_at', $now)) {
+            $done['remains'] = $this->safe('remains', fn() => $this->syncRemains());
+        }
 
         if (!(int) $this->store['initial_done'] && $this->initialComplete()) {
             DB::exec('UPDATE stores SET initial_done = 1 WHERE id = ?', [$this->store['id']]);
@@ -79,12 +85,17 @@ final class SyncService
     /** Выполняет шаг синхронизации, ловит ошибки WB и откладывает следующий запрос. */
     private function safe(string $source, callable $fn): string
     {
-        $column = ['feed' => 'feed_next_at', 'mp' => 'mp_next_at', 'stats' => 'stats_next_at', 'cards' => 'cards_next_at'][$source];
+        $column = [
+            'feed' => 'feed_next_at', 'mp' => 'mp_next_at', 'stats' => 'stats_next_at', 'cards' => 'cards_next_at',
+            'tariffs' => 'tariffs_next_at', 'remains' => 'remains_next_at',
+        ][$source];
+        // Справочные источники (тарифы, остатки) не должны отключать ленту и пугать ошибками
+        $auxiliary = in_array($source, ['tariffs', 'remains'], true);
         try {
             $rows = (int) $fn();
             $this->log($source, true, $rows, null);
             $basicTokenWarning = str_contains((string) $this->store['last_error'], '«Базовый»');
-            if ($this->store['last_error'] && (!$basicTokenWarning || in_array($source, ['feed', 'stats'], true))) {
+            if (!$auxiliary && $this->store['last_error'] && (!$basicTokenWarning || in_array($source, ['feed', 'stats'], true))) {
                 DB::exec('UPDATE stores SET last_error = NULL, last_error_at = NULL WHERE id = ?', [$this->store['id']]);
                 $this->store['last_error'] = null;
             }
@@ -97,6 +108,14 @@ final class SyncService
                 default             => 300,
             };
             $this->setNext($column, $delay);
+            if ($auxiliary) {
+                $this->setNext($column, $e->isRateLimit() ? max(61, $e->retryAfter + 1) : 6 * 3600);
+                if ($source === 'remains') {
+                    DB::exec('UPDATE stores SET remains_state = NULL WHERE id = ?', [$this->store['id']]);
+                }
+                $this->log($source, false, 0, $e->status . ' ' . $e->getMessage());
+                return 'error:' . $e->status;
+            }
             if ($e->isAuthError()) {
                 // Токен отозван или у него нет категории — отключаем источник, пользователь увидит предупреждение
                 $this->scopes[$this->scopeOf($source)] = false;
@@ -125,7 +144,7 @@ final class SyncService
 
     private function scopeOf(string $source): string
     {
-        return ['feed' => 'analytics', 'mp' => 'marketplace', 'stats' => 'statistics', 'cards' => 'content'][$source];
+        return ['feed' => 'analytics', 'mp' => 'marketplace', 'stats' => 'statistics', 'cards' => 'content', 'remains' => 'analytics', 'tariffs' => 'common'][$source];
     }
 
     private function log(string $source, bool $ok, int $rows, ?string $message): void
@@ -307,6 +326,126 @@ final class SyncService
             usleep(700000);
         }
         $this->setNext('cards_next_at', 6 * 3600);
+        return $count;
+    }
+
+    // ------------------------------------------------------------------ 5. Комиссии и тарифы складов
+
+    /** Комиссии WB по предметам для этого продавца (раз в сутки) и тарифы складов (общие, раз в 6 часов). */
+    private function syncTariffs(): int
+    {
+        $rows = $this->wb->commissions();
+        $storeId = (int) $this->store['id'];
+        $pct = static fn($v) => is_numeric($v) ? round((float) $v, 2) : null;
+        $pdo = DB::pdo();
+        $pdo->beginTransaction();
+        try {
+            DB::exec('DELETE FROM wb_commissions WHERE store_id = ?', [$storeId]);
+            $stmt = $pdo->prepare('INSERT INTO wb_commissions (store_id, subject_id, subject_name, parent_name, fbo, fbs, dbs, edbs, pickup, booking, updated_at)
+                VALUES (?,?,?,?,?,?,?,?,?,?,?) ON DUPLICATE KEY UPDATE subject_name = VALUES(subject_name)');
+            foreach ($rows as $c) {
+                if (empty($c['subjectID'])) {
+                    continue;
+                }
+                $stmt->execute([
+                    $storeId, (int) $c['subjectID'], mb_substr((string) ($c['subjectName'] ?? ''), 0, 160), mb_substr((string) ($c['parentName'] ?? ''), 0, 160),
+                    $pct($c['paidStorageKgvp'] ?? null), $pct($c['kgvpMarketplace'] ?? null), $pct($c['kgvpSupplier'] ?? null),
+                    $pct($c['kgvpSupplierExpress'] ?? null), $pct($c['kgvpPickup'] ?? null), $pct($c['kgvpBooking'] ?? null), now(),
+                ]);
+            }
+            $pdo->commit();
+        } catch (\Throwable $e) {
+            $pdo->rollBack();
+            throw $e;
+        }
+
+        // Тарифы коробов одинаковы для всех продавцов — обновляем раз в 6 часов любым токеном
+        $boxAt = DB::setting('box_tariffs_at');
+        if (!$boxAt || strtotime($boxAt) < time() - 6 * 3600) {
+            $num = static fn($v) => is_numeric($v = str_replace([',', ' '], ['.', ''], (string) $v)) ? (float) $v : null;
+            foreach ($this->wb->boxTariffs(date('Y-m-d')) as $w) {
+                if (empty($w['warehouseName'])) {
+                    continue;
+                }
+                DB::exec('INSERT INTO wb_box_tariffs (warehouse_name, geo_name, delivery_base, delivery_liter, delivery_coef, mp_base, mp_liter, mp_coef, updated_at)
+                    VALUES (?,?,?,?,?,?,?,?,?) ON DUPLICATE KEY UPDATE geo_name = VALUES(geo_name), delivery_base = VALUES(delivery_base),
+                    delivery_liter = VALUES(delivery_liter), delivery_coef = VALUES(delivery_coef), mp_base = VALUES(mp_base),
+                    mp_liter = VALUES(mp_liter), mp_coef = VALUES(mp_coef), updated_at = VALUES(updated_at)', [
+                    mb_substr($w['warehouseName'], 0, 160), $w['geoName'] ?? null, $num($w['boxDeliveryBase'] ?? null), $num($w['boxDeliveryLiter'] ?? null),
+                    $num($w['boxDeliveryCoefExpr'] ?? null), $num($w['boxDeliveryMarketplaceBase'] ?? null), $num($w['boxDeliveryMarketplaceLiter'] ?? null),
+                    $num($w['boxDeliveryMarketplaceCoefExpr'] ?? null), now(),
+                ]);
+            }
+            DB::setSetting('box_tariffs_at', now());
+        }
+        DB::exec('UPDATE stores SET tariffs_ok_at = ? WHERE id = ?', [now(), $storeId]);
+        $this->setNext('tariffs_next_at', 24 * 3600);
+        return count($rows);
+    }
+
+    // ------------------------------------------------------------------ 6. Остатки и объём (отчёт WB)
+
+    /**
+     * Отчёт «Остатки на складах WB» асинхронный: создаём задание → ждём готовности → скачиваем.
+     * Из него берём объём товара (л) и остатки: на складах, в пути к покупателям, возвраты в пути.
+     */
+    private function syncRemains(): int
+    {
+        $state = json_decode((string) ($this->store['remains_state'] ?? ''), true) ?: [];
+        $storeId = (int) $this->store['id'];
+        $saveState = function (?array $st): void {
+            DB::exec('UPDATE stores SET remains_state = ? WHERE id = ?', [$st ? json_encode($st) : null, $this->store['id']]);
+            $this->store['remains_state'] = $st ? json_encode($st) : null;
+        };
+        if (empty($state['task'])) {
+            $task = $this->wb->remainsCreate();
+            $saveState(['task' => $task, 'at' => time()]);
+            $this->setNext('remains_next_at', 60);
+            return 0;
+        }
+        $status = $this->wb->remainsStatus((string) $state['task']);
+        if (in_array($status, ['new', 'processing'], true) && time() - (int) $state['at'] < 1800) {
+            $this->setNext('remains_next_at', 60);
+            return 0;
+        }
+        if ($status !== 'done') {
+            $saveState(null);
+            $this->setNext('remains_next_at', 600);
+            return 0;
+        }
+        $rows = $this->wb->remainsDownload((string) $state['task']);
+        $count = 0;
+        foreach ($rows as $row) {
+            if (empty($row['nmId'])) {
+                continue;
+            }
+            $toClient = $fromClient = $total = 0;
+            $hasTotal = false;
+            $sum = 0;
+            foreach ((array) ($row['warehouses'] ?? []) as $w) {
+                $name = mb_strtolower((string) ($w['warehouseName'] ?? ''));
+                $q = (int) ($w['quantity'] ?? 0);
+                if (str_contains($name, 'в пути до получател')) {
+                    $toClient += $q;
+                } elseif (str_contains($name, 'в пути возврат')) {
+                    $fromClient += $q;
+                } elseif (str_starts_with($name, 'всего')) {
+                    $total = $q;
+                    $hasTotal = true;
+                } else {
+                    $sum += $q;
+                }
+            }
+            $volume = isset($row['volume']) && is_numeric($row['volume']) && (float) $row['volume'] > 0 ? round((float) $row['volume'], 3) : null;
+            OrderRepository::rememberProduct($storeId, (int) $row['nmId'], $row['vendorCode'] ?? null, $row['brand'] ?? null, $row['subjectName'] ?? null);
+            DB::exec('UPDATE products SET stock_wb = ?, stock_to_client = ?, stock_from_client = ?, stock_at = ?,
+                    volume_l = COALESCE(?, volume_l), volume_src = IF(? IS NULL, volume_src, \'remains\')
+                WHERE store_id = ? AND nm_id = ?', [$hasTotal ? $total : $sum, $toClient, $fromClient, now(), $volume, $volume, $storeId, (int) $row['nmId']]);
+            $count++;
+        }
+        $saveState(null);
+        DB::exec('UPDATE stores SET remains_ok_at = ? WHERE id = ?', [now(), $storeId]);
+        $this->setNext('remains_next_at', 2 * 3600);
         return $count;
     }
 

@@ -172,6 +172,47 @@ final class WbClient
         ]);
     }
 
+    /**
+     * Комиссия WB по предметам (Тарифы): GET /api/v1/tariffs/commission.
+     * Возвращает ставки этого продавца — у продавцов из разных стран (РФ, Кыргызстан и др.) они свои.
+     * Поля: paidStorageKgvp — FBO (склад WB), kgvpMarketplace — FBS, kgvpSupplier — DBS/DBW,
+     * kgvpSupplierExpress — EDBS (экспресс), kgvpPickup — самовывоз, kgvpBooking — бронирование.
+     */
+    public function commissions(): array
+    {
+        $resp = $this->request('common', 'GET', '/api/v1/tariffs/commission', ['locale' => 'ru']);
+        return $resp['report'] ?? [];
+    }
+
+    /**
+     * Тарифы для коробов по складам (Тарифы): GET /api/v1/tariffs/box?date=ГГГГ-ММ-ДД.
+     * boxDeliveryBase / boxDeliveryLiter — логистика за первый / доп. литр с уже учтённым коэффициентом склада
+     * boxDeliveryCoefExpr, %. Числа приходят строками с запятой.
+     */
+    public function boxTariffs(string $date): array
+    {
+        $resp = $this->request('common', 'GET', '/api/v1/tariffs/box', ['date' => $date]);
+        return $resp['response']['data']['warehouseList'] ?? [];
+    }
+
+    /** Отчёт «Остатки на складах WB»: создать задание (объём товара в литрах + остатки по складам). */
+    public function remainsCreate(): string
+    {
+        $resp = $this->request('analytics', 'GET', '/api/v1/warehouse_remains', ['locale' => 'ru', 'groupByNm' => 'true']);
+        return (string) ($resp['data']['taskId'] ?? '');
+    }
+
+    public function remainsStatus(string $taskId): string
+    {
+        $resp = $this->request('analytics', 'GET', '/api/v1/warehouse_remains/tasks/' . rawurlencode($taskId) . '/status');
+        return (string) ($resp['data']['status'] ?? '');
+    }
+
+    public function remainsDownload(string $taskId): array
+    {
+        return $this->request('analytics', 'GET', '/api/v1/warehouse_remains/tasks/' . rawurlencode($taskId) . '/download');
+    }
+
     /** Срок действия токена из его JWT-части (exp). null — не удалось определить. */
     public static function tokenExpiresAt(string $token): ?string
     {

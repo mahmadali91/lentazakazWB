@@ -157,9 +157,45 @@ switch ($path) {
     case '/api/v3/click-collect/orders/new':
         out(['orders' => []]);
 
+    case '/api/v1/tariffs/commission':
+        $subj = [['Платья', 101, 'Одежда', 25.5, 27.5], ['Кроссовки', 102, 'Обувь', 24.5, 26.5], ['Наборы посуды', 103, 'Дом', 19.5, 21.5],
+                 ['Рюкзаки', 104, 'Аксессуары', 23.0, 25.0], ['Футболки', 105, 'Одежда', 25.5, 27.5]];
+        out(['report' => array_map(static fn($x) => ['subjectName' => $x[0], 'subjectID' => $x[1], 'parentName' => $x[2], 'parentID' => 1,
+            'paidStorageKgvp' => $x[3], 'kgvpMarketplace' => $x[4], 'kgvpSupplier' => $x[4] - 3, 'kgvpSupplierExpress' => 3, 'kgvpPickup' => $x[4] - 4, 'kgvpBooking' => $x[4] - 4], $subj)]);
+
+    case '/api/v1/tariffs/box':
+        out(['response' => ['data' => ['dtNextBox' => '', 'dtTillMax' => '2026-12-31', 'warehouseList' => [
+            ['warehouseName' => 'Коледино', 'geoName' => 'Центральный федеральный округ', 'boxDeliveryBase' => '78,2', 'boxDeliveryLiter' => '23,8', 'boxDeliveryCoefExpr' => '170',
+             'boxDeliveryMarketplaceBase' => '78,2', 'boxDeliveryMarketplaceLiter' => '23,8', 'boxDeliveryMarketplaceCoefExpr' => '170', 'boxStorageBase' => '0,14', 'boxStorageLiter' => '0,14', 'boxStorageCoefExpr' => '100'],
+            ['warehouseName' => 'Электросталь', 'geoName' => 'Центральный федеральный округ', 'boxDeliveryBase' => '82,8', 'boxDeliveryLiter' => '25,2', 'boxDeliveryCoefExpr' => '180',
+             'boxDeliveryMarketplaceBase' => '82,8', 'boxDeliveryMarketplaceLiter' => '25,2', 'boxDeliveryMarketplaceCoefExpr' => '180', 'boxStorageBase' => '0,14', 'boxStorageLiter' => '0,14', 'boxStorageCoefExpr' => '100'],
+        ]]]]);
+
+    case '/api/v1/warehouse_remains':
+        out(['data' => ['taskId' => 'task-' . date('His')]]);
+
+    default:
+        if (preg_match('#^/api/v1/warehouse_remains/tasks/[^/]+/status$#', $path)) {
+            out(['data' => ['id' => 'task', 'status' => 'done']]);
+        }
+        if (preg_match('#^/api/v1/warehouse_remains/tasks/[^/]+/download$#', $path)) {
+            $vol = [186452311 => 1.8, 154422190 => 6.47, 99814522 => 12.0, 120987345 => 4.37, 173300812 => 0.55];
+            out(array_map(static fn($p) => ['brand' => $p[3], 'subjectName' => $p[4], 'vendorCode' => $p[1], 'nmId' => $p[0], 'barcode' => '', 'techSize' => '0',
+                'volume' => $vol[$p[0]], 'warehouses' => [
+                    ['warehouseName' => 'Коледино', 'quantity' => 40 + $p[0] % 30],
+                    ['warehouseName' => 'Электросталь', 'quantity' => 10 + $p[0] % 7],
+                    ['warehouseName' => 'В пути до получателей', 'quantity' => 5],
+                    ['warehouseName' => 'В пути возвраты на склад WB', 'quantity' => 2],
+                    ['warehouseName' => 'Всего находится на складах', 'quantity' => 50 + $p[0] % 30 + $p[0] % 7],
+                ]], $products));
+        }
+        break;
+
     case '/content/v2/get/cards/list':
         out(['cards' => array_map(static fn($p) => [
             'nmID' => $p[0], 'vendorCode' => $p[1], 'title' => $p[2], 'brand' => $p[3], 'subjectName' => $p[4],
+            'subjectID' => ['Платья' => 101, 'Кроссовки' => 102, 'Наборы посуды' => 103, 'Рюкзаки' => 104, 'Футболки' => 105][$p[4]],
+            'dimensions' => ['length' => 30, 'width' => 20, 'height' => 5, 'weightBrutto' => 0.5, 'isValid' => true],
             'photos' => [['c246x328' => 'https://placehold.co/246x328/png?text=' . urlencode($p[1])]],
         ], $products), 'cursor' => ['updatedAt' => date('c'), 'nmID' => end($products)[0], 'total' => count($products)]]);
 }
