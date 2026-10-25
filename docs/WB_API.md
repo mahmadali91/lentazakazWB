@@ -100,3 +100,46 @@ YAML-файлы разделов лежат по адресу `https://dev.wildb
 - Воронка продаж: `POST /api/analytics/v3/sales-funnel/products`.
 - Возвраты: `returns-api.wildberries.ru`.
 - Поставки FBW: `supplies-api.wildberries.ru`.
+
+## Комиссии, тарифы складов, объём и остатки (используются в расчёте прибыли)
+
+Раздел «Тарифы» — `https://dev.wildberries.ru/api/swagger/yaml/ru/10-rates.yaml`, «Товары» — `02-items.yaml`.
+
+| Метод | Что даёт | Лимит |
+|---|---|---|
+| `GET common-api /api/v1/tariffs/commission?locale=ru` | Комиссия по каждому предмету: `paidStorageKgvp` — FBO, `kgvpMarketplace` — FBS, `kgvpSupplier` — DBS/DBW, `kgvpSupplierExpress` — EDBS, `kgvpPickup` — самовывоз, `kgvpBooking` — бронирование. Запрашивается токеном магазина, поэтому ставки соответствуют стране продавца | 1/мин (Базовый: 5/час) |
+| `GET common-api /api/v1/tariffs/box?date=ГГГГ-ММ-ДД` | По складам: `boxDeliveryBase` / `boxDeliveryLiter` (логистика за 1-й / доп. литр с коэффициентом), `boxDeliveryCoefExpr` — коэффициент склада, %; то же для FBS (`boxDeliveryMarketplace*`). Числа приходят строками с запятой | 60/мин |
+| `GET seller-analytics-api /api/v1/warehouse_remains?groupByNm=true` → `/tasks/{id}/status` → `/tasks/{id}/download` | Асинхронный отчёт об остатках: `volume` (объём, л), `warehouses[]` (склад, количество; служебные строки «В пути до получателей», «В пути возвраты на склад WB», «Всего находится на складах») | создание 1/мин, статус 1/5 сек, скачивание 1/мин |
+| `POST content-api /content/v2/get/cards/list` | `subjectID` (для сопоставления с комиссией), `dimensions` (длина/ширина/высота, см → объём = Д×Ш×В/1000 л) | 100/мин |
+
+### Формула логистики (инструкция WB «Доставка: виды и расчёт стоимости», 19.10.2026)
+
+- Прямая доставка, до 1 л: 0,001–0,2 л — 23 ₽; 0,201–0,4 — 26 ₽; 0,401–0,6 — 29 ₽; 0,601–0,8 — 30 ₽; 0,801–1 — 32 ₽; × коэффициент склада.
+- Прямая доставка, от 1 л: (46 ₽ + 14 ₽ × доп. литры) × коэффициент склада. С 15 августа для складов РФ коэффициент единый — 170% (для СГТ — 100%, сумма 1000–3000 ₽).
+- Обратная доставка (отказ, возврат покупателем) — базовый тариф без коэффициента.
+- Возврат в ПВЗ по FBS: до 1 л — 25 ₽; от 1 л — 25 ₽ + 4 ₽ × доп. литры.
+- Примеры проверены в коде: 0,55 л × 170% = 49,3 ₽; 1,8 л × 170% = 97,24 ₽; обратная 1,8 л = 57,2 ₽.
+
+## Финансы: отчёты реализации, хранение, реклама (раздел «Финансы»)
+
+Раздел повторяет Excel-таблицу расчёта чистой прибыли («9.5»): лист «Исходник» — это детализация отчёта реализации, остальные листы — сводные.
+
+| Метод | Что даёт | Лимит |
+|---|---|---|
+| `POST finance-api /api/finance/v1/sales-reports/list` `{dateFrom, dateTo, limit ≤ 1000, offset, period: weekly}` | Список отчётов: `reportId`, `dateFrom`/`dateTo`, `reportType` (1 — основной, 2 — по выкупам), суммы строками: `retailAmountSum`, `forPaySum`, `deliveryServiceSum`, `paidStorageSum`, `paidAcceptanceSum`, `deductionSum`, `penaltySum`, `additionalPaymentSum`, `bankPaymentSum` (итого к оплате) | 1/мин, только Персональный/Сервисный токен; данные с 29.01.2024 |
+| `POST finance-api /api/finance/v1/sales-reports/detailed/{reportId}` `{limit ≤ 100000, rrdId, fields[]}` | Строки отчёта (как в файле из кабинета): `docTypeName`, `sellerOperName` (обоснование), `retailPriceWithDisc`, `retailAmount`, `forPay`, `acquiringFee`, `deliveryService`, `deliveryAmount`/`returnAmount`, `bonusTypeName`, `paidStorage`, `paidAcceptance`, `penalty`, `deduction`, `additionalPayment`, `cashback*`, `srid`, `shkId`… Деньги — строками. Следующая порция — с `rrdId` последней строки, пустой ответ (204) — конец | 1/мин |
+| `GET seller-analytics-api /api/v1/paid_storage?dateFrom&dateTo` (≤ 8 дней) → `/tasks/{id}/status` → `/tasks/{id}/download` | Платное хранение по дням: `date`, `nmId`, `vendorCode`, `warehouse`, `volume`, `barcodesCount`, `warehousePrice` (₽ за день) | 1/мин |
+| `GET advert-api /adv/v1/upd?from&to` (≤ 31 дня) | Списания за рекламу: `advertId`, `campName`, `updTime`, `updSum`, `paymentType` | 1/сек |
+| `GET advert-api /api/advert/v2/adverts?ids=` (≤ 50) | Кампании и их товары: `nm_settings[].nm_id` | 5/сек |
+
+**Как считаем** (`src/Services/Finance.php`, формулы вычисляемых столбцов листа «Исходник»):
+
+- Продажи — `retailPriceWithDisc` для обоснований «Продажа», «Корректная продажа», «Сторно возвратов», «Коррекция возвратов»; для компенсаций WB (брак, потеря, подмена, коррекция продаж, возмещение издержек) — `forPay`. Возвраты — то же для документов «Возврат». Выручка = продажи − возвраты.
+- Комиссия WB = ±(`retailPriceWithDisc` − `forPay` − `acquiringFee`), для компенсаций 0. Эквайринг — `acquiringFee` со знаком документа. Поэтому Выручка − Комиссия − Эквайринг = к перечислению за товар.
+- Логистика — `deliveryService`; хранение, приёмка, штрафы, удержания, доплаты — из своих столбцов; баллы лояльности — `cashbackAmount + cashbackCommissionChange − cashbackDiscount`.
+- Налоговая база — `retailAmount` (± по документу), для компенсаций — `forPay`; НДС = база / (1 + ставка) × ставка; налог = (база − НДС) × ставка налога.
+- Себестоимость: + за продажу и компенсацию брака/потери, − за возврат, 0 для «Коррекция продаж».
+- Оборот (придёт от WB) = Выручка − Комиссия − Эквайринг − Логистика − Лояльность. Чистая прибыль = Оборот − хранение и прочие удержания − себестоимость − налог − НДС − реклама − прочие расходы − самовыкупы.
+- Самовыкупы (список Srid): выручка не считается продажей, расход = `retailAmount − forPay` + логистика + налог + доп. затраты; себестоимость не списывается.
+- Сверка: Σ±`forPay` − логистика − хранение − приёмка − штрафы − удержания − доплаты − лояльность = `bankPaymentSum` («Итого к оплате»). Проверено на реальном отчёте: 640 233,41 ₽ — совпало.
+- ABC: накопленная доля до 80% — A, до 95% — B, остальное — C (по выручке и по прибыли).

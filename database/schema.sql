@@ -36,6 +36,7 @@ CREATE TABLE IF NOT EXISTS stores (
   seller_name     VARCHAR(255) NOT NULL DEFAULT '',
   seller_sid      VARCHAR(64) NOT NULL DEFAULT '',
   seller_tin      VARCHAR(20) NOT NULL DEFAULT '',
+  seller_country  VARCHAR(8) NOT NULL DEFAULT '',
   token_enc       TEXT NOT NULL,
   token_hint      VARCHAR(16) NOT NULL DEFAULT '',
   token_expires_at DATETIME NULL,
@@ -51,6 +52,20 @@ CREATE TABLE IF NOT EXISTS stores (
   mp_next_at      DATETIME NULL,
   mp_ok_at        DATETIME NULL,
   cards_next_at   DATETIME NULL,
+  remains_state   TEXT NULL,
+  remains_next_at DATETIME NULL,
+  remains_ok_at   DATETIME NULL,
+  tariffs_next_at DATETIME NULL,
+  tariffs_ok_at   DATETIME NULL,
+  fin_state       TEXT NULL,
+  fin_next_at     DATETIME NULL,
+  fin_ok_at       DATETIME NULL,
+  storage_state   TEXT NULL,
+  storage_next_at DATETIME NULL,
+  storage_ok_at   DATETIME NULL,
+  ads_state       TEXT NULL,
+  ads_next_at     DATETIME NULL,
+  ads_ok_at       DATETIME NULL,
   last_error      VARCHAR(500) NULL,
   last_error_at   DATETIME NULL,
   created_at      DATETIME NOT NULL,
@@ -106,7 +121,15 @@ CREATE TABLE IF NOT EXISTS products (
   title       VARCHAR(255) NULL,
   brand       VARCHAR(120) NULL,
   subject     VARCHAR(120) NULL,
+  subject_id  INT NULL,
   photo       VARCHAR(500) NULL,
+  volume_l    DECIMAL(10,3) NULL,             -- объём товара в упаковке, л
+  volume_src  VARCHAR(16) NULL,               -- откуда объём: remains (отчёт остатков WB) | card (габариты карточки)
+  dims        VARCHAR(40) NULL,               -- габариты Д×Ш×В, см
+  stock_wb    INT NULL,                       -- остаток на складах WB, шт
+  stock_to_client INT NULL,                   -- в пути к покупателям
+  stock_from_client INT NULL,                 -- в пути возвраты на склад
+  stock_at    DATETIME NULL,
   cost_price  DECIMAL(12,2) NULL,             -- себестоимость единицы, ₽
   commission_pct DECIMAL(5,2) NULL,           -- комиссия WB для товара, % (пусто — из общих настроек)
   updated_at  DATETIME NOT NULL,
@@ -163,4 +186,181 @@ CREATE TABLE IF NOT EXISTS settings (
   name  VARCHAR(64) NOT NULL,
   value TEXT NULL,
   PRIMARY KEY (name)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Комиссии WB по предметам (загружаются токеном магазина: у продавцов из разных стран свои ставки)
+CREATE TABLE IF NOT EXISTS wb_commissions (
+  store_id     INT UNSIGNED NOT NULL,
+  subject_id   INT NOT NULL,
+  subject_name VARCHAR(160) NOT NULL,
+  parent_name  VARCHAR(160) NULL,
+  fbo          DECIMAL(5,2) NULL,
+  fbs          DECIMAL(5,2) NULL,
+  dbs          DECIMAL(5,2) NULL,
+  edbs         DECIMAL(5,2) NULL,
+  pickup       DECIMAL(5,2) NULL,
+  booking      DECIMAL(5,2) NULL,
+  updated_at   DATETIME NOT NULL,
+  PRIMARY KEY (store_id, subject_id),
+  KEY idx_comm_name (store_id, subject_name),
+  CONSTRAINT fk_comm_store FOREIGN KEY (store_id) REFERENCES stores (id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Тарифы WB для коробов по складам (логистика с учётом коэффициента склада)
+CREATE TABLE IF NOT EXISTS wb_box_tariffs (
+  warehouse_name VARCHAR(160) NOT NULL,
+  geo_name       VARCHAR(160) NULL,
+  delivery_base  DECIMAL(10,2) NULL,
+  delivery_liter DECIMAL(10,2) NULL,
+  delivery_coef  DECIMAL(7,2) NULL,
+  mp_base        DECIMAL(10,2) NULL,
+  mp_liter       DECIMAL(10,2) NULL,
+  mp_coef        DECIMAL(7,2) NULL,
+  updated_at     DATETIME NOT NULL,
+  PRIMARY KEY (warehouse_name)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Финансы: отчёты реализации WB (детализация), платное хранение, реклама, прочие расходы, самовыкупы
+CREATE TABLE IF NOT EXISTS wb_reports (
+  store_id      INT UNSIGNED NOT NULL,
+  report_id     BIGINT NOT NULL,
+  date_from     DATE NOT NULL,
+  date_to       DATE NOT NULL,
+  create_date   DATE NULL,
+  report_type   TINYINT NOT NULL DEFAULT 1,
+  currency      VARCHAR(8) NULL,
+  retail_amount DECIMAL(14,2) NULL,
+  for_pay       DECIMAL(14,2) NULL,
+  delivery      DECIMAL(14,2) NULL,
+  storage       DECIMAL(14,2) NULL,
+  acceptance    DECIMAL(14,2) NULL,
+  deduction     DECIMAL(14,2) NULL,
+  penalty       DECIMAL(14,2) NULL,
+  additional    DECIMAL(14,2) NULL,
+  cashback      DECIMAL(14,2) NULL,
+  bank_payment  DECIMAL(14,2) NULL,
+  rows_loaded   INT NOT NULL DEFAULT 0,
+  rrd_cursor    BIGINT NOT NULL DEFAULT 0,
+  detail_done   TINYINT(1) NOT NULL DEFAULT 0,
+  loaded_at     DATETIME NULL,
+  updated_at    DATETIME NOT NULL,
+  PRIMARY KEY (store_id, report_id),
+  KEY idx_rep_period (store_id, date_from),
+  CONSTRAINT fk_rep_store FOREIGN KEY (store_id) REFERENCES stores (id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS wb_report_rows (
+  store_id          INT UNSIGNED NOT NULL,
+  rrd_id            BIGINT NOT NULL,
+  report_id         BIGINT NOT NULL,
+  date_from         DATE NOT NULL,
+  date_to           DATE NOT NULL,
+  gi_id             BIGINT NULL,
+  subject           VARCHAR(160) NULL,
+  nm_id             BIGINT NULL,
+  brand             VARCHAR(160) NULL,
+  vendor_code       VARCHAR(120) NULL,
+  title             VARCHAR(255) NULL,
+  ts_name           VARCHAR(60) NULL,
+  barcode           VARCHAR(40) NULL,
+  doc_type          VARCHAR(40) NULL,
+  oper              VARCHAR(160) NULL,
+  quantity          INT NOT NULL DEFAULT 0,
+  retail_price      DECIMAL(12,2) NOT NULL DEFAULT 0,
+  retail_amount     DECIMAL(12,2) NOT NULL DEFAULT 0,
+  retail_price_disc DECIMAL(12,2) NOT NULL DEFAULT 0,
+  sale_percent      DECIMAL(6,2) NULL,
+  commission_pct    DECIMAL(8,4) NULL,
+  spp               DECIMAL(6,2) NULL,
+  for_pay           DECIMAL(12,2) NOT NULL DEFAULT 0,
+  acquiring_fee     DECIMAL(12,2) NOT NULL DEFAULT 0,
+  delivery_amount   INT NOT NULL DEFAULT 0,
+  return_amount     INT NOT NULL DEFAULT 0,
+  delivery_service  DECIMAL(12,2) NOT NULL DEFAULT 0,
+  bonus_type        VARCHAR(255) NULL,
+  penalty           DECIMAL(12,2) NOT NULL DEFAULT 0,
+  additional        DECIMAL(12,2) NOT NULL DEFAULT 0,
+  paid_storage      DECIMAL(12,2) NOT NULL DEFAULT 0,
+  deduction         DECIMAL(12,2) NOT NULL DEFAULT 0,
+  paid_acceptance   DECIMAL(12,2) NOT NULL DEFAULT 0,
+  cashback_amount   DECIMAL(12,2) NOT NULL DEFAULT 0,
+  cashback_discount DECIMAL(12,2) NOT NULL DEFAULT 0,
+  cashback_comm     DECIMAL(12,2) NOT NULL DEFAULT 0,
+  office_name       VARCHAR(160) NULL,
+  pvz_name          VARCHAR(255) NULL,
+  order_dt          DATETIME NULL,
+  sale_dt           DATETIME NULL,
+  shk_id            BIGINT NULL,
+  srid              VARCHAR(80) NULL,
+  delivery_method   VARCHAR(80) NULL,
+  is_b2b            TINYINT(1) NOT NULL DEFAULT 0,
+  PRIMARY KEY (store_id, rrd_id),
+  KEY idx_rr_report (store_id, report_id),
+  KEY idx_rr_period (store_id, date_from),
+  KEY idx_rr_srid (store_id, srid),
+  KEY idx_rr_nm (store_id, nm_id),
+  CONSTRAINT fk_rr_store FOREIGN KEY (store_id) REFERENCES stores (id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS wb_storage (
+  store_id    INT UNSIGNED NOT NULL,
+  day         DATE NOT NULL,
+  nm_id       BIGINT NOT NULL,
+  vendor_code VARCHAR(120) NULL,
+  subject     VARCHAR(160) NULL,
+  volume      DECIMAL(12,3) NULL,
+  qty         INT NOT NULL DEFAULT 0,
+  amount      DECIMAL(12,4) NOT NULL DEFAULT 0,
+  PRIMARY KEY (store_id, day, nm_id),
+  CONSTRAINT fk_stor_store FOREIGN KEY (store_id) REFERENCES stores (id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS wb_ad_costs (
+  store_id     INT UNSIGNED NOT NULL,
+  uid          CHAR(32) NOT NULL,
+  advert_id    BIGINT NOT NULL,
+  camp_name    VARCHAR(255) NULL,
+  advert_type  INT NULL,
+  payment_type VARCHAR(40) NULL,
+  upd_num      BIGINT NULL,
+  upd_time     DATETIME NULL,
+  day          DATE NOT NULL,
+  amount       DECIMAL(12,2) NOT NULL DEFAULT 0,
+  PRIMARY KEY (store_id, uid),
+  KEY idx_ad_day (store_id, day),
+  CONSTRAINT fk_ad_store FOREIGN KEY (store_id) REFERENCES stores (id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS wb_ad_nms (
+  store_id  INT UNSIGNED NOT NULL,
+  advert_id BIGINT NOT NULL,
+  nm_id     BIGINT NOT NULL,
+  manual    TINYINT(1) NOT NULL DEFAULT 0,
+  PRIMARY KEY (store_id, advert_id, nm_id),
+  CONSTRAINT fk_adnm_store FOREIGN KEY (store_id) REFERENCES stores (id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS fin_expenses (
+  id          INT UNSIGNED NOT NULL AUTO_INCREMENT,
+  user_id     INT UNSIGNED NOT NULL,
+  store_id    INT UNSIGNED NULL,
+  day         DATE NOT NULL,
+  category    VARCHAR(80) NOT NULL,
+  nm_id       BIGINT NULL,
+  amount      DECIMAL(12,2) NOT NULL,
+  note        VARCHAR(255) NULL,
+  created_at  DATETIME NOT NULL,
+  PRIMARY KEY (id),
+  KEY idx_exp_user (user_id, day),
+  CONSTRAINT fk_exp_user FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS fin_selfbuys (
+  user_id    INT UNSIGNED NOT NULL,
+  srid       VARCHAR(80) NOT NULL,
+  extra_cost DECIMAL(12,2) NOT NULL DEFAULT 0,
+  note       VARCHAR(255) NULL,
+  created_at DATETIME NOT NULL,
+  PRIMARY KEY (user_id, srid),
+  CONSTRAINT fk_sb_user FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

@@ -41,8 +41,8 @@ $canAdd = count($stores) < (int) $plan['stores'];
       <?php endif; ?>
 
       <div class="scopes">
-        <?php foreach (StoreService::SCOPE_LABELS as $k => $label): $on = !empty($scopes[$k]); ?>
-          <div class="scope <?= $on ? 'on' : 'off' ?>"><span class="dot"><?= $on ? '✓' : '–' ?></span><span><?= e($label) ?></span></div>
+        <?php foreach (StoreService::SCOPE_LABELS as $k => $label): $on = !empty($scopes[$k]); $unknown = !array_key_exists($k, $scopes); ?>
+          <div class="scope <?= $on ? 'on' : 'off' ?>" <?= $unknown ? 'title="Проверим при первой загрузке финансов"' : '' ?>><span class="dot"><?= $on ? '✓' : ($unknown ? '?' : '–') ?></span><span><?= e($label) ?></span></div>
         <?php endforeach; ?>
       </div>
 
@@ -87,7 +87,7 @@ $canAdd = count($stores) < (int) $plan['stores'];
         <ol>
           <li>Откройте <a href="https://seller.wildberries.ru/supplier-settings/access-to-api" target="_blank" rel="noopener">кабинет продавца → Настройки → Доступ к API</a> и нажмите <span class="kbd">Создать новый токен</span>.</li>
           <li>Тип токена — <b>«Персональный»</b> (у «Базового» WB разрешает запрос ленты только раз в 3 часа).</li>
-          <li>Отметьте категории: <b>Аналитика</b>, <b>Статистика</b>, <b>Маркетплейс</b>, <b>Контент</b>. Обязательна хотя бы «Аналитика» или «Статистика».</li>
+          <li>Отметьте категории: <b>Аналитика</b>, <b>Статистика</b>, <b>Маркетплейс</b>, <b>Контент</b>, а для раздела «Финансы» — ещё <b>Финансы</b> и <b>Продвижение</b>. Обязательна хотя бы «Аналитика» или «Статистика».</li>
           <li>Включите <b>«Только на чтение»</b> — так сервис не сможет ничего изменить в вашем кабинете.</li>
           <li>Скопируйте токен и вставьте его ниже.</li>
         </ol>

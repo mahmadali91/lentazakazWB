@@ -57,6 +57,8 @@ return [
             'statistics'  => 'https://statistics-api.wildberries.ru',
             'marketplace' => 'https://marketplace-api.wildberries.ru',
             'content'     => 'https://content-api.wildberries.ru',
+            'finance'     => 'https://finance-api.wildberries.ru',
+            'advert'      => 'https://advert-api.wildberries.ru',
         ],
     ],
 ];

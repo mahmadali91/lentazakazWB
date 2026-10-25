@@ -177,11 +177,22 @@ final class OrderRepository
             $p = $card['photos'][0];
             $photo = $p['c246x328'] ?? $p['tm'] ?? $p['square'] ?? $p['big'] ?? null;
         }
+        // Объём из габаритов карточки (см → л); отчёт остатков WB, если есть, важнее
+        $d = $card['dimensions'] ?? [];
+        $volume = null;
+        $dims = null;
+        if (!empty($d['length']) && !empty($d['width']) && !empty($d['height'])) {
+            $volume = round($d['length'] * $d['width'] * $d['height'] / 1000, 3);
+            $dims = (int) $d['length'] . '×' . (int) $d['width'] . '×' . (int) $d['height'];
+        }
         DB::exec(
-            'INSERT INTO products (store_id, nm_id, vendor_code, title, brand, subject, photo, updated_at)
-             VALUES (?,?,?,?,?,?,?,?)
+            'INSERT INTO products (store_id, nm_id, vendor_code, title, brand, subject, subject_id, photo, volume_l, volume_src, dims, updated_at)
+             VALUES (?,?,?,?,?,?,?,?,?,?,?,?)
              ON DUPLICATE KEY UPDATE vendor_code = VALUES(vendor_code), title = VALUES(title), brand = VALUES(brand),
-               subject = VALUES(subject), photo = VALUES(photo), updated_at = VALUES(updated_at)',
+               subject = VALUES(subject), subject_id = VALUES(subject_id), photo = VALUES(photo), dims = VALUES(dims),
+               volume_l = IF(volume_src = \'remains\', volume_l, VALUES(volume_l)),
+               volume_src = IF(volume_src = \'remains\', volume_src, VALUES(volume_src)),
+               updated_at = VALUES(updated_at)',
             [
                 $storeId,
                 (int) $card['nmID'],
@@ -189,7 +200,11 @@ final class OrderRepository
                 mb_substr((string) ($card['title'] ?? ''), 0, 255) ?: null,
                 $card['brand'] ?? null,
                 $card['subjectName'] ?? null,
+                isset($card['subjectID']) ? (int) $card['subjectID'] : null,
                 $photo,
+                $volume,
+                $volume !== null ? 'card' : null,
+                $dims,
                 now(),
             ]
         );
@@ -254,7 +269,9 @@ final class OrderRepository
 
     private const SELECT = 'SELECT o.*, s.name AS store_name, p.title AS p_title, p.photo AS p_photo,
             p.brand AS p_brand, p.subject AS p_subject, p.vendor_code AS p_vendor,
-            p.cost_price AS p_cost, p.commission_pct AS p_commission
+            p.cost_price AS p_cost, p.commission_pct AS p_commission, p.subject_id AS p_subject_id,
+            p.volume_l AS p_volume, p.volume_src AS p_volume_src, p.dims AS p_dims,
+            p.stock_wb AS p_stock, p.stock_to_client AS p_stock_to, p.stock_from_client AS p_stock_from, p.stock_at AS p_stock_at
         FROM orders o
         JOIN stores s ON s.id = o.store_id
         LEFT JOIN products p ON p.store_id = o.store_id AND p.nm_id = o.nm_id';
@@ -295,17 +312,6 @@ final class OrderRepository
         $f2 = $f;
         unset($f2['status']);
         [$where, $params] = self::buildWhere($storeIds, $f2);
-        $profitSql = '';
-        if ($profit !== null) {
-            $unit = Profit::unitExpr($profit);
-            $loss = Profit::lossExpr($profit);
-            $profitSql = ",
-                SUM(CASE WHEN o.status = 'buyout' THEN $unit END) AS profit_buyout,
-                SUM(CASE WHEN o.status IN ('created','buyout') THEN $unit END) AS profit_orders,
-                SUM(CASE WHEN p.cost_price IS NOT NULL THEN $loss ELSE 0 END) AS profit_loss,
-                SUM(o.status IN ('created','buyout') AND p.cost_price IS NULL) AS no_cost,
-                COUNT(DISTINCT CASE WHEN o.status IN ('created','buyout') AND p.cost_price IS NULL THEN o.nm_id END) AS no_cost_items";
-        }
         $r = DB::one("SELECT
                 COUNT(*) AS orders_count,
                 COALESCE(SUM(o.seller_price),0) AS orders_sum,
@@ -313,7 +319,6 @@ final class OrderRepository
                 COALESCE(SUM(CASE WHEN o.status = 'buyout' THEN o.seller_price END),0) AS buyout_sum,
                 SUM(o.status = 'cancel') AS cancel_count,
                 SUM(o.status IN ('return','returnDefective')) AS return_count
-                $profitSql
             FROM orders o LEFT JOIN products p ON p.store_id = o.store_id AND p.nm_id = o.nm_id
             WHERE $where", $params) ?? [];
         $count = (int) ($r['orders_count'] ?? 0);
@@ -327,16 +332,50 @@ final class OrderRepository
             'avg'         => $count ? round((float) $r['orders_sum'] / $count) : 0,
         ];
         if ($profit !== null) {
-            $loss = (float) ($r['profit_loss'] ?? 0);
-            $out['profit'] = [
-                'orders'        => round((float) ($r['profit_orders'] ?? 0) - $loss),
-                'buyout'        => round((float) ($r['profit_buyout'] ?? 0)),
-                'loss'          => round($loss),
-                'no_cost'       => (int) ($r['no_cost'] ?? 0),
-                'no_cost_items' => (int) ($r['no_cost_items'] ?? 0),
-            ];
+            $out['profit'] = self::profitTotals($storeIds, $f2, $profit);
         }
         return $out;
+    }
+
+    /** Суммарная прибыль за период: считается по каждому заказу той же формулой, что и в карточке заказа. */
+    private static function profitTotals(array $storeIds, array $f, array $profit): array
+    {
+        [$where, $params] = self::buildWhere($storeIds, $f);
+        $ctx = Profit::context($storeIds);
+        $stmt = DB::query("SELECT o.store_id, o.status, o.cancel_type, o.scheme, o.is_mp, o.seller_price, o.warehouse, o.nm_id,
+                COALESCE(o.subject, p.subject) AS subject, p.cost_price AS p_cost, p.commission_pct AS p_commission,
+                p.subject_id AS p_subject_id, p.volume_l AS p_volume
+            FROM orders o LEFT JOIN products p ON p.store_id = o.store_id AND p.nm_id = o.nm_id
+            WHERE $where", $params);
+        $t = ['orders' => 0.0, 'buyout' => 0.0, 'loss' => 0.0, 'commission' => 0.0, 'logistics' => 0.0, 'no_cost' => 0, 'no_cost_items' => 0];
+        $noCostNm = [];
+        while ($r = $stmt->fetch()) {
+            $b = Profit::breakdown($r, $profit, $ctx);
+            if (!$b) {
+                continue;
+            }
+            if ($b['kind'] === 'loss') {
+                $t['loss'] += -$b['profit'];
+            } elseif ($b['kind'] === 'sale') {
+                if ($b['profit'] === null) {
+                    $t['no_cost']++;
+                    $noCostNm[$r['store_id'] . '_' . $r['nm_id']] = true;
+                    continue;
+                }
+                $t['orders'] += $b['profit'];
+                $t['commission'] += $b['commission'];
+                $t['logistics'] += $b['logistics'];
+                if ($r['status'] === 'buyout') {
+                    $t['buyout'] += $b['profit'];
+                }
+            }
+        }
+        $t['orders'] = round($t['orders'] - $t['loss']);
+        $t['no_cost_items'] = count($noCostNm);
+        foreach (['buyout', 'loss', 'commission', 'logistics'] as $k) {
+            $t[$k] = round($t[$k]);
+        }
+        return $t;
     }
 
     /** Данные для графика: по часам (если период ≤ 2 суток) или по дням. */
@@ -386,6 +425,7 @@ final class OrderRepository
     /** Приводит строку БД к виду для фронтенда. */
     public static function present(array $r, ?array $profit = null): array
     {
+        $calc = $profit !== null ? Profit::breakdown($r, $profit, Profit::context([(int) $r['store_id']])) : null;
         $title = $r['p_title'] ?: trim(($r['subject'] ?: $r['p_subject'] ?: '') . ' ' . ($r['brand'] ?: $r['p_brand'] ?: ''));
         return [
             'id'          => (int) $r['id'],
@@ -417,8 +457,19 @@ final class OrderRepository
             'status_at'   => $r['status_at'],
             'status_iso'  => $r['status_at'] ? date('c', strtotime($r['status_at'])) : null,
             'updated'     => $r['row_updated_at'],
-            'cost'        => $profit !== null && $r['p_cost'] !== null ? (float) $r['p_cost'] : null,
-            'profit'      => $profit !== null ? Profit::forOrder($r, $profit) : null,
+            'cost'        => $calc['cost'] ?? null,
+            'profit'      => $calc['profit'] ?? null,
+            'calc'        => $calc,
+            'barcode'     => $r['barcode'],
+            'category'    => $r['category'],
+            'region'      => $r['region'],
+            'volume'      => $r['p_volume'] !== null ? (float) $r['p_volume'] : null,
+            'volume_src'  => $r['p_volume_src'],
+            'dims'        => $r['p_dims'],
+            'stock'       => $r['p_stock'] !== null ? (int) $r['p_stock'] : null,
+            'stock_to'    => $r['p_stock_to'] !== null ? (int) $r['p_stock_to'] : null,
+            'stock_from'  => $r['p_stock_from'] !== null ? (int) $r['p_stock_from'] : null,
+            'stock_at'    => $r['p_stock_at'],
         ];
     }
 }

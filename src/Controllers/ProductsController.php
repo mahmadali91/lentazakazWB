@@ -46,10 +46,37 @@ final class ProductsController
         $since = date('Y-m-d H:i:s', strtotime('today') - 29 * 86400);
         $products = DB::all('SELECT p.*, s.name AS store_name,
                 (SELECT COUNT(*) FROM orders o WHERE o.store_id = p.store_id AND o.nm_id = p.nm_id AND o.order_created_at >= :since) AS orders_30,
-                (SELECT AVG(o.seller_price) FROM orders o WHERE o.store_id = p.store_id AND o.nm_id = p.nm_id AND o.order_created_at >= :since2) AS avg_price
+                (SELECT AVG(o.seller_price) FROM orders o WHERE o.store_id = p.store_id AND o.nm_id = p.nm_id AND o.order_created_at >= :since2) AS avg_price,
+                (SELECT o.scheme FROM orders o WHERE o.store_id = p.store_id AND o.nm_id = p.nm_id AND o.scheme IS NOT NULL
+                    GROUP BY o.scheme ORDER BY COUNT(*) DESC LIMIT 1) AS main_scheme
             FROM products p JOIN stores s ON s.id = p.store_id
             WHERE ' . implode(' AND ', $where) . '
             ORDER BY orders_30 DESC, p.nm_id DESC LIMIT 500', $params + ['since' => $since, 'since2' => $since]);
+
+        // Расчёт на единицу по той же формуле, что и в заказах: средняя цена, основная схема продажи товара
+        $settings = Profit::settings($account);
+        $ctx = Profit::context($storeIds);
+        foreach ($products as &$p) {
+            $p['calc'] = $p['avg_price'] !== null ? Profit::breakdown([
+                'seller_price' => $p['avg_price'], 'status' => 'created', 'cancel_type' => null,
+                'scheme' => $p['main_scheme'] ?: 'FBO', 'is_mp' => 0, 'warehouse' => null, 'store_id' => $p['store_id'],
+                'p_cost' => $p['cost_price'], 'p_commission' => $p['commission_pct'], 'p_subject_id' => $p['subject_id'],
+                'p_volume' => $p['volume_l'], 'subject' => $p['subject'],
+            ], $settings, $ctx) : null;
+            // Ставка категории без ручной — для подсказки в поле комиссии
+            $p['auto_comm'] = $p['calc'] && $p['commission_pct'] === null ? $p['calc']['commission_pct'] : null;
+        }
+        unset($p);
+        $in = $this->storeIn($storeIds, 's');
+        $storesIn = $storeIds ? 'id IN (' . implode(',', array_map('intval', $storeIds)) . ')' : '1 = 0';
+        $sources = [
+            'commissions' => DB::value('SELECT MAX(updated_at) FROM wb_commissions s WHERE ' . $in),
+            'comm_count'  => (int) DB::value('SELECT COUNT(*) FROM wb_commissions s WHERE ' . $in),
+            'box'         => DB::setting('box_tariffs_at'),
+            'box_count'   => (int) DB::value('SELECT COUNT(*) FROM wb_box_tariffs'),
+            'remains'     => DB::value('SELECT MAX(remains_ok_at) FROM stores WHERE ' . $storesIn),
+            'countries'   => array_values(array_filter(array_unique(array_column(DB::all('SELECT seller_country FROM stores WHERE ' . $storesIn), 'seller_country')))),
+        ];
 
         $total = (int) DB::value('SELECT COUNT(*) FROM products p WHERE ' . $this->storeIn($storeIds));
         $withCost = (int) DB::value('SELECT COUNT(*) FROM products p WHERE p.cost_price IS NOT NULL AND ' . $this->storeIn($storeIds));
@@ -59,7 +86,8 @@ final class ProductsController
             'user'      => $user,
             'plan'      => $plan,
             'products'  => $products,
-            'settings'  => Profit::settings($account),
+            'settings'  => $settings,
+            'sources'   => $sources,
             'canEdit'   => !Auth::isMember() && !empty($plan['profit']),
             'q'         => $q,
             'onlyEmpty' => $onlyEmpty,

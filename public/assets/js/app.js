@@ -46,6 +46,134 @@
     if (navigator.clipboard) navigator.clipboard.writeText(text).then(function () { toast('Скопировано'); });
   });
 
+  // ---------- Общее мини-окно (используется в разделе «Товары») ----------
+  function lzEsc(v) {
+    return String(v === null || v === undefined ? '' : v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  }
+  function lzMoney(v) { return v === null || v === undefined ? '—' : Math.round(v).toLocaleString('ru-RU') + ' ₽'; }
+  function lzModal(html) {
+    var box = document.getElementById('lzModal');
+    if (!box) {
+      box = document.createElement('div');
+      box.id = 'lzModal';
+      box.className = 'modal';
+      box.innerHTML = '<div class="modal-card" role="dialog" aria-modal="true"><button class="modal-x" type="button" aria-label="Закрыть">×</button><div class="modal-body"></div></div>';
+      document.body.appendChild(box);
+      box.addEventListener('click', function (e) { if (e.target === box || e.target.closest('.modal-x')) lzModalClose(); });
+      document.addEventListener('keydown', function (e) { if (e.key === 'Escape') lzModalClose(); });
+    }
+    box.querySelector('.modal-body').innerHTML = html;
+    box.querySelector('.modal-card').scrollTop = 0;
+    box.classList.add('open');
+    document.body.classList.add('modal-open');
+  }
+  function lzModalClose() {
+    var box = document.getElementById('lzModal');
+    if (box) box.classList.remove('open');
+    document.body.classList.remove('modal-open');
+  }
+
+  // ---------- Товары: карточка → окно с расчётом и полем себестоимости ----------
+  var pcfg = window.LZ_PRODUCTS;
+  if (pcfg) {
+    var kv = function (label, value, hint) {
+      return '<div class="kv"><span>' + label + (hint ? '<small>' + hint + '</small>' : '') + '</span><b>' + value + '</b></div>';
+    };
+    var openProduct = function (p) {
+      var c = p.calc;
+      var html = '<div class="m-head"><div class="m-photo">' + (p.photo ? '<img src="' + lzEsc(p.photo) + '" alt="" referrerpolicy="no-referrer">' : '') + '</div>' +
+        '<div style="min-width:0"><div class="m-title">' + lzEsc(p.title) + '</div>' +
+        '<div class="small muted" style="margin-top:4px">' + (p.article ? 'арт. ' + lzEsc(p.article) + ' · ' : '') + 'WB ' + p.nm + '</div>' +
+        '<div class="small" style="margin-top:6px"><a href="https://www.wildberries.ru/catalog/' + p.nm + '/detail.aspx" target="_blank" rel="noopener">Открыть на WB ↗</a></div></div></div>';
+      html += '<div class="m-calc"><h4>Расчёт прибыли на 1 шт</h4>';
+      if (!c) {
+        html += '<p class="small muted">За 30 дней не было заказов — средняя цена неизвестна.</p>';
+      } else {
+        html += kv('Средняя цена продавца', lzMoney(c.price), 'за 30 дней') +
+          kv('Комиссия WB ' + (Math.round(c.commission_pct * 100) / 100).toLocaleString('ru-RU') + '%', '−' + lzMoney(c.commission), lzEsc(c.commission_src)) +
+          kv('Логистика', '−' + lzMoney(c.logistics), lzEsc(c.logistics_src)) +
+          kv('Налог ' + c.tax_pct + '%', '−' + lzMoney(c.tax), 'из настроек') +
+          (c.other ? kv('Прочие расходы', '−' + lzMoney(c.other), 'из настроек') : '') +
+          kv('Себестоимость', c.cost !== null ? '−' + lzMoney(c.cost) : 'не указана', c.cost !== null ? 'ваше значение' : 'укажите ниже');
+        if (c.profit !== null) {
+          html += '<div class="kv total"><span>Прибыль ≈</span><b class="' + (c.profit < 0 ? 'neg' : 'pos') + '">' + (c.profit < 0 ? '−' : '+') + lzMoney(Math.abs(c.profit)) + '</b></div>';
+        }
+      }
+      if (pcfg.canEdit) {
+        var csrf = (document.querySelector('meta[name="csrf"]') || {}).content || '';
+        html += '<form method="post" action="/app/products" class="p-edit">' +
+          '<input type="hidden" name="_csrf" value="' + lzEsc(csrf) + '"><input type="hidden" name="q" value="' + lzEsc(pcfg.q) + '"><input type="hidden" name="empty" value="' + lzEsc(pcfg.empty) + '">' +
+          '<div><label>Себестоимость, ₽</label><input type="text" inputmode="decimal" name="cost[' + p.key + ']" value="' + (p.cost !== null ? p.cost : '') + '" placeholder="—"></div>' +
+          '<div><label>Комиссия, %</label><input type="text" inputmode="decimal" name="comm[' + p.key + ']" value="' + (p.comm_manual !== null ? p.comm_manual : '') + '" placeholder="' + p.comm_auto + ' (WB)"></div>' +
+          '<button class="btn" style="grid-column:1/-1">Сохранить</button></form>';
+      }
+      html += '</div>';
+      html += '<div class="m-grid"><div><h4>Продажи и остатки</h4>' +
+        kv('Заказов за 30 дней', p.orders) +
+        kv('Остаток на складах WB', p.stock !== null ? p.stock + ' шт' : '—', p.stock !== null ? 'в пути к покупателям ' + p.stock_to + ', возвраты ' + p.stock_from + (p.stock_at ? ' · ' + lzEsc(p.stock_at) : '') : 'ещё не загружен') +
+        (p.scheme ? kv('Основная схема', lzEsc(p.scheme)) : '') +
+        '</div><div><h4>Товар</h4>' +
+        (p.subject ? kv('Предмет', lzEsc(p.subject), lzEsc(p.brand || '')) : '') +
+        kv('Объём', p.volume !== null ? p.volume.toLocaleString('ru-RU') + ' л' : '—', p.volume_src === 'remains' ? 'отчёт WB об остатках' : (p.volume_src === 'card' ? 'габариты карточки ' + lzEsc(p.dims || '') + ' см' : 'неизвестен')) +
+        (p.store ? kv('Магазин', lzEsc(p.store)) : '') + '</div></div>';
+      lzModal(html);
+    };
+    document.addEventListener('click', function (e) {
+      if (e.target.closest('a')) return;
+      var card = e.target.closest('.p-card[data-p]');
+      if (!card) return;
+      try { openProduct(JSON.parse(card.getAttribute('data-p'))); } catch (err) { toast('Не удалось открыть товар: ' + err.message); }
+    });
+  }
+
+  // ---------- Финансы: выбор периода и калькулятор акций ----------
+  document.querySelectorAll('form[data-auto] select').forEach(function (sel) {
+    sel.addEventListener('change', function () {
+      var custom = sel.form.querySelector('.custom-dates');
+      if (sel.hasAttribute('data-custom-toggle') && sel.value === 'custom') {
+        if (custom) custom.classList.add('on');
+        return;
+      }
+      if (custom && sel.hasAttribute('data-custom-toggle')) {
+        custom.querySelectorAll('input').forEach(function (i) { i.disabled = true; });
+      }
+      sel.form.submit();
+    });
+  });
+
+  var promo = document.getElementById('promoTable');
+  if (promo) {
+    var tax = parseFloat(promo.getAttribute('data-tax')) || 0;
+    var vat = parseFloat(promo.getAttribute('data-vat')) || 0;
+    var num = function (v) { v = parseFloat(String(v).replace(/\s/g, '').replace(',', '.')); return isNaN(v) ? 0 : v; };
+    var fmt = function (v) { return Math.round(v).toLocaleString('ru-RU') + ' ₽'; };
+    // Прибыль на 1 шт: цена − комиссия − логистика − налог и НДС (от цены покупателя после СПП) − реклама − себестоимость
+    var profit = function (price, k) {
+      var buyer = price * (1 - k.spp / 100);
+      var vatSum = vat > 0 ? buyer / (1 + vat / 100) * (vat / 100) : 0;
+      var taxSum = (buyer - vatSum) * tax / 100;
+      return price - price * k.comm / 100 - k.log - taxSum - vatSum - price * k.drr / 100 - k.cost;
+    };
+    var calc = function (tr) {
+      var k = {};
+      tr.querySelectorAll('[data-k]').forEach(function (i) { k[i.getAttribute('data-k')] = num(i.value); });
+      var pNow = profit(k.now, k), pPromo = profit(k.promo, k);
+      var set = function (name, text, neg) {
+        var el = tr.querySelector('[data-out="' + name + '"]');
+        el.textContent = text;
+        el.classList.toggle('neg', !!neg);
+        el.classList.toggle('pos', !neg && name !== 'margin');
+      };
+      set('now', fmt(pNow), pNow < 0);
+      set('promo', fmt(pPromo), pPromo < 0);
+      set('margin', k.promo > 0 ? (pPromo / k.promo * 100).toFixed(1).replace('.', ',') + '%' : '—', pPromo < 0);
+    };
+    promo.querySelectorAll('tr[data-row]').forEach(function (tr) {
+      calc(tr);
+      tr.addEventListener('input', function () { calc(tr); });
+    });
+  }
+
   var cfg = window.LZ_FEED;
   if (!cfg || !cfg.enabled) return;
 
@@ -112,15 +240,16 @@
 
   var CANCEL = { app: 'до получения', receipt: 'при получении', expire: 'не забран', other: 'иное' };
 
+  var PHOTO_PH = '<svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>';
+  function signed(v) { return (v < 0 ? '−' : '+') + money(Math.abs(v)); }
+
   function renderOrder(o) {
-    var photo = o.photo
-      ? '<img src="' + esc(o.photo) + '" alt="" loading="lazy" referrerpolicy="no-referrer">'
-      : '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>';
+    var photo = o.photo ? '<img src="' + esc(o.photo) + '" alt="" loading="lazy" referrerpolicy="no-referrer">' : PHOTO_PH;
     var meta = [];
-    if (o.article) meta.push('арт. ' + esc(o.article));
-    if (o.nm_id) meta.push('<a href="https://www.wildberries.ru/catalog/' + o.nm_id + '/detail.aspx" target="_blank" rel="noopener">WB ' + o.nm_id + '</a>');
-    if (o.size && o.size !== '0') meta.push('размер ' + esc(o.size));
-    if (multiStore && !f.store && o.store) meta.push(esc(o.store));
+    if (o.article) meta.push('<span class="o-k">Арт.</span> ' + esc(o.article));
+    if (o.nm_id) meta.push('<span class="o-k">WB</span> <a href="https://www.wildberries.ru/catalog/' + o.nm_id + '/detail.aspx" target="_blank" rel="noopener">' + o.nm_id + '</a>');
+    if (o.size && o.size !== '0') meta.push('<span class="o-k">Размер</span> ' + esc(o.size));
+    if (multiStore && !f.store && o.store) meta.push('<span class="o-k">Магазин</span> ' + esc(o.store));
     var route = [];
     if (o.warehouse) route.push(esc(o.warehouse));
     if (o.city) route.push(esc(o.city));
@@ -129,27 +258,134 @@
     if (o.scheme) badges += '<span class="badge badge-scheme">' + esc(o.scheme_label) + '</span>';
     if (o.is_b2b) badges += '<span class="badge badge-accent">B2B</span>';
     if (o.mp_order_id) badges += '<span class="badge" title="Сборочное задание">№ ' + o.mp_order_id + '</span>';
-    var priceTitle = o.finished_price ? 'Покупатель заплатил ≈ ' + money(o.finished_price) + (o.spp ? ' (СПП ' + o.spp + '%)' : '') : 'Цена продавца со скидкой';
+
+    // Показатели с короткими подписями
+    var stats = '<div class="o-stat"><span class="o-cap">Цена продавца</span><b>' + money(o.price) + '</b></div>';
+    if (o.calc) {
+      if (o.profit !== null && o.profit !== undefined) {
+        stats += '<div class="o-stat"><span class="o-cap">Прибыль ≈</span><b class="' + (o.profit < 0 ? 'neg' : 'pos') + '">' + signed(o.profit) + '</b></div>';
+      } else {
+        stats += '<div class="o-stat"><span class="o-cap">Прибыль</span><b class="muted small">нет себест.</b></div>';
+      }
+    }
+    if (o.stock !== null && o.stock !== undefined) {
+      stats += '<div class="o-stat"><span class="o-cap">Остаток WB</span><b>' + o.stock + ' шт</b></div>';
+    }
     var el = document.createElement('div');
     el.className = 'order';
     el.setAttribute('data-id', o.id);
+    el.setAttribute('tabindex', '0');
+    el.setAttribute('role', 'button');
     el.innerHTML =
       '<div class="thumb">' + photo + '</div>' +
-      '<div style="min-width:0">' +
+      '<div class="o-info">' +
         '<div class="o-title" title="' + esc(o.title) + '">' + esc(o.title) + '</div>' +
-        '<div class="o-meta">' + meta.map(function (m) { return '<span>' + m + '</span>'; }).join('') +
-          (route.length ? '<span>' + route.join(' → ') + '</span>' : '') + '</div>' +
+        '<div class="o-meta">' + meta.map(function (m) { return '<span>' + m + '</span>'; }).join('') + '</div>' +
+        (route.length ? '<div class="o-meta"><span><span class="o-k">Склад → город</span> ' + route.join(' → ') + '</span></div>' : '') +
         '<div class="o-badges">' + badges + '</div>' +
       '</div>' +
-      '<div class="o-right"><div class="o-price" title="' + esc(priceTitle) + '">' + money(o.price) + '</div>' +
-        (o.profit !== null && o.profit !== undefined
-          ? '<div class="o-profit ' + (o.profit < 0 ? 'neg' : '') + '" title="Прибыль (оценка), себестоимость ' + money(o.cost) + '">' +
-            (o.profit < 0 ? '−' : '+') + money(Math.abs(o.profit)) + '</div>'
-          : '') +
-        '<div class="o-time" data-time="' + esc(o.created_iso) + '" title="Заказ: ' + esc(fmtFull(o.created_iso)) +
-        (o.status_iso && o.status_at !== o.created_at ? '\n' + esc(o.status_label) + ': ' + esc(fmtFull(o.status_iso)) : '') + '">' + ago(o.created_iso) + '</div></div>';
+      '<div class="o-right"><div class="o-stats">' + stats + '</div>' +
+        '<div class="o-time" data-time="' + esc(o.created_iso) + '" title="Заказ: ' + esc(fmtFull(o.created_iso)) + '">' + ago(o.created_iso) + '</div></div>';
     return el;
   }
+
+  // ---------- Мини-окно заказа с расчётом прибыли ----------
+  function row(label, value, hint) {
+    return '<div class="kv"><span>' + label + (hint ? '<small>' + hint + '</small>' : '') + '</span><b>' + value + '</b></div>';
+  }
+  function fmtNum(v, d) { return (Math.round(v * Math.pow(10, d || 0)) / Math.pow(10, d || 0)).toLocaleString('ru-RU'); }
+
+  function openOrder(o) {
+    var c = o.calc;
+    var head = '<div class="m-head"><div class="m-photo">' + (o.photo ? '<img src="' + esc(o.photo) + '" alt="" referrerpolicy="no-referrer">' : PHOTO_PH) + '</div>' +
+      '<div style="min-width:0"><div class="m-title">' + esc(o.title) + '</div>' +
+      '<div class="o-badges">' + '<span class="badge badge-' + esc(o.status) + '">' + esc(o.status_label) + (o.status === 'cancel' && o.cancel_type ? ' · ' + esc(CANCEL[o.cancel_type] || o.cancel_type) : '') + '</span>' +
+      (o.scheme ? '<span class="badge badge-scheme">' + esc(o.scheme_label) + '</span>' : '') + (o.is_b2b ? '<span class="badge badge-accent">B2B</span>' : '') + '</div>' +
+      '<div class="small muted" style="margin-top:6px">' + (o.nm_id ? '<a href="https://www.wildberries.ru/catalog/' + o.nm_id + '/detail.aspx" target="_blank" rel="noopener">Открыть на WB ↗</a>' : '') + '</div></div></div>';
+
+    var order = '<h4>Заказ</h4>' +
+      row('Оформлен', esc(fmtFull(o.created_iso))) +
+      (o.status !== 'created' && o.status_iso ? row(esc(o.status_label), esc(fmtFull(o.status_iso))) : '') +
+      row('Схема', esc(o.scheme_label || '—')) +
+      row('Склад → город', esc([o.warehouse, o.city].filter(Boolean).join(' → ') || '—'), o.district ? esc(o.district) : '') +
+      (o.mp_order_id ? row('Сборочное задание', '№ ' + o.mp_order_id) : '') +
+      row('ID заказа', '<span class="mono">' + esc(o.srid) + '</span>') +
+      (multiStore ? row('Магазин', esc(o.store)) : '');
+
+    var goods = '<h4>Товар</h4>' +
+      row('Артикул продавца', esc(o.article || '—')) +
+      row('Артикул WB', o.nm_id || '—') +
+      (o.barcode ? row('Баркод', esc(o.barcode)) : '') +
+      (o.size && o.size !== '0' ? row('Размер', esc(o.size)) : '') +
+      (o.subject ? row('Предмет', esc(o.subject), o.brand ? esc(o.brand) : '') : '') +
+      row('Объём', o.volume ? fmtNum(o.volume, 3) + ' л' : '—', o.volume_src === 'remains' ? 'отчёт WB об остатках' : (o.volume_src === 'card' ? 'габариты карточки ' + esc(o.dims || '') + ' см' : 'ещё не загружен')) +
+      row('Остаток на складах WB', o.stock !== null && o.stock !== undefined ? o.stock + ' шт' : '—',
+        o.stock !== null && o.stock !== undefined ? 'в пути к покупателям ' + (o.stock_to || 0) + ', возвраты ' + (o.stock_from || 0) : 'ещё не загружен');
+
+    var prices = '<h4>Цены</h4>' + row('Цена продавца', money(o.price), 'со скидкой продавца') +
+      (o.finished_price ? row('Покупатель заплатил', money(o.finished_price), o.spp ? 'скидка WB (СПП) ' + o.spp + '%' : '') : '');
+
+    var calc = '<h4>Расчёт прибыли</h4>';
+    if (!c) {
+      calc += '<p class="small muted">Расчёт прибыли доступен на платных тарифах.</p>';
+    } else if (c.kind === 'none') {
+      calc += '<p class="small">Отмена до получения: продажи нет, WB ничего не удерживает.</p>';
+    } else {
+      if (c.kind === 'loss') {
+        calc += '<p class="small muted">Отказ при получении или возврат: продажи нет, но оплачивается логистика туда и обратно.</p>' +
+          row('Логистика до покупателя', '−' + money(c.logistics), esc(c.logistics_src)) +
+          row('Обратная доставка', '−' + money(c.reverse), 'базовый тариф WB без коэффициента склада');
+      } else {
+        calc += row('Цена продавца', money(c.price)) +
+          row('Комиссия WB ' + fmtNum(c.commission_pct, 2) + '%', '−' + money(c.commission), esc(c.commission_src)) +
+          row('Логистика', '−' + money(c.logistics), esc(c.logistics_src)) +
+          row('Налог ' + fmtNum(c.tax_pct, 2) + '%', '−' + money(c.tax), 'из ваших настроек') +
+          (c.other ? row('Прочие расходы', '−' + money(c.other), 'из ваших настроек') : '') +
+          row('Себестоимость', c.cost !== null ? '−' + money(c.cost) : '<a href="/app/products?q=' + (o.nm_id || '') + '">указать →</a>', c.cost !== null ? 'из раздела «Товары»' : 'не указана — прибыль не посчитать');
+      }
+      if (c.profit !== null) {
+        calc += '<div class="kv total"><span>Прибыль ≈</span><b class="' + (c.profit < 0 ? 'neg' : 'pos') + '">' + signed(c.profit) + '</b></div>';
+      }
+      calc += '<p class="small muted" style="margin-top:8px">Оценка по тарифам WB. Точные удержания — в еженедельном отчёте реализации.</p>';
+    }
+
+    var box = document.getElementById('orderModal');
+    // Сначала расчёт прибыли, затем информация о заказе и товаре
+    box.querySelector('.modal-body').innerHTML = head + '<div class="m-calc">' + calc + '</div>' +
+      '<div class="m-grid"><div>' + order + prices + '</div><div>' + goods + '</div></div>';
+    box.querySelector('.modal-card').scrollTop = 0;
+    box.classList.add('open');
+    document.body.classList.add('modal-open');
+  }
+  function closeOrder() {
+    var box = document.getElementById('orderModal');
+    if (box) box.classList.remove('open');
+    document.body.classList.remove('modal-open');
+  }
+  (function setupModal() {
+    var box = document.createElement('div');
+    box.id = 'orderModal';
+    box.className = 'modal';
+    box.innerHTML = '<div class="modal-card" role="dialog" aria-modal="true"><button class="modal-x" type="button" aria-label="Закрыть">×</button><div class="modal-body"></div></div>';
+    document.body.appendChild(box);
+    box.addEventListener('click', function (e) { if (e.target === box || e.target.closest('.modal-x')) closeOrder(); });
+    document.addEventListener('keydown', function (e) { if (e.key === 'Escape') closeOrder(); });
+    listEl.addEventListener('click', function (e) {
+      if (e.target.closest('a')) return;
+      var el = e.target.closest('.order[data-id]');
+      if (!el || !orders[el.getAttribute('data-id')]) return;
+      try {
+        openOrder(orders[el.getAttribute('data-id')]);
+      } catch (err) {
+        toast('Не удалось открыть заказ: ' + err.message);
+      }
+    });
+    listEl.addEventListener('keydown', function (e) {
+      if (e.key !== 'Enter') return;
+      var el = e.target.closest('.order[data-id]');
+      if (el && orders[el.getAttribute('data-id')]) openOrder(orders[el.getAttribute('data-id')]);
+    });
+  })();
 
   function emptyState() {
     var hint = f.q || f.status || f.scheme ? 'Попробуйте изменить фильтры.' : 'Новые заказы появятся здесь автоматически.';

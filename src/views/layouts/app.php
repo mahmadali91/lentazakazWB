@@ -1,7 +1,7 @@
 <?php
 $nav = $nav ?? '';
 $isMember = !empty($user['owner_id']);
-$items = [['feed', '/app', 'Лента заказов', 'Лента', 'feed'], ['products', '/app/products', 'Товары и прибыль', 'Товары', 'box']];
+$items = [['feed', '/app', 'Лента заказов', 'Лента', 'feed'], ['products', '/app/products', 'Товары и прибыль', 'Товары', 'box'], ['finance', '/app/finance', 'Финансы', 'Финансы', 'chart']];
 if (!$isMember) {
     $items[] = ['stores', '/app/stores', 'Магазины', 'Магазины', 'store'];
     $items[] = ['billing', '/app/billing', 'Тариф и оплата', 'Тариф', 'card'];
@@ -20,7 +20,7 @@ if (($user['role'] ?? '') === 'admin') {
 <body>
 <div class="app">
   <aside class="sidebar">
-    <?= App\Core\View::partial('partials/logo') ?>
+    <?= App\Core\View::partial('partials/logo', ['href' => ($user['role'] ?? '') === 'admin' ? '/admin' : '/app']) ?>
     <nav class="side-nav">
       <?php foreach ($items as [$key, $href, $label, , $ico]): ?>
         <a href="<?= $href ?>" class="<?= $nav === $key ? 'active' : '' ?>"><?= icon($ico) ?> <?= e($label) ?></a>
@@ -60,7 +60,7 @@ if (($user['role'] ?? '') === 'admin') {
 </div>
 <?php
 // Нижнее меню на телефоне: основные разделы + «Профиль» (тариф, настройки, админка, выход)
-$mobile = [['feed', '/app', 'Лента', 'feed'], ['products', '/app/products', 'Товары', 'box']];
+$mobile = [['feed', '/app', 'Лента', 'feed'], ['products', '/app/products', 'Товары', 'box'], ['finance', '/app/finance', 'Финансы', 'chart']];
 if (!$isMember) {
     $mobile[] = ['stores', '/app/stores', 'Магазины', 'store'];
 }
