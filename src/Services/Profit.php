@@ -73,9 +73,30 @@ final class Profit
         if (isset($cache[$key])) {
             return $cache[$key];
         }
-        $ctx = ['comm' => [], 'commByName' => [], 'box' => [], 'commAt' => null, 'boxAt' => null];
+        $ctx = ['comm' => [], 'commByName' => [], 'box' => [], 'commAt' => null, 'boxAt' => null, 'cur' => [], 'dlv' => [], 'rev' => []];
         if ($storeIds) {
             $in = implode(',', array_map('intval', $storeIds));
+            foreach (DB::all("SELECT id, currency FROM stores WHERE id IN ($in)") as $st) {
+                $ctx['cur'][(int) $st['id']] = strtoupper((string) $st['currency']);
+            }
+            // Фактическая логистика по отчётам реализации (в валюте магазина) — для магазинов не в рублях:
+            // формула WB даёт тарифы в ₽, а цены у них в своей валюте
+            $nonRub = array_keys(array_filter($ctx['cur'], static fn($c) => $c !== '' && $c !== 'RUB'));
+            if ($nonRub) {
+                $inNr = implode(',', $nonRub);
+                foreach (DB::all("SELECT store_id, nm_id,
+                        AVG(CASE WHEN delivery_amount > 0 AND bonus_type LIKE 'К клиенту%' THEN delivery_service / delivery_amount END) dlv,
+                        SUM(CASE WHEN delivery_amount > 0 AND bonus_type LIKE 'К клиенту%' THEN delivery_amount END) dlv_n,
+                        AVG(CASE WHEN return_amount > 0 AND bonus_type LIKE 'От клиента%' THEN delivery_service / return_amount END) rev
+                    FROM wb_report_rows WHERE store_id IN ($inNr) AND nm_id IS NOT NULL AND date_from >= ? GROUP BY store_id, nm_id", [date('Y-m-d', time() - 90 * 86400)]) as $l) {
+                    if ($l['dlv'] !== null) {
+                        $ctx['dlv'][(int) $l['store_id']][(int) $l['nm_id']] = [round((float) $l['dlv'], 2), (int) $l['dlv_n']];
+                    }
+                    if ($l['rev'] !== null) {
+                        $ctx['rev'][(int) $l['store_id']][(int) $l['nm_id']] = round((float) $l['rev'], 2);
+                    }
+                }
+            }
             foreach (DB::all("SELECT * FROM wb_commissions WHERE store_id IN ($in)") as $c) {
                 $ctx['comm'][$c['store_id']][(int) $c['subject_id']] = $c;
                 $ctx['commByName'][$c['store_id']][mb_strtolower($c['subject_name'])] = $c;
@@ -158,9 +179,16 @@ final class Profit
                 $coefSrc = 'тариф WB склада «' . $r['warehouse'] . '»';
             }
         }
+        $sid = (int) ($r['store_id'] ?? 0);
+        $nm = (int) ($r['nm_id'] ?? 0);
+        $storeCur = $ctx['cur'][$sid] ?? '';
+        $actual = $nm ? ($ctx['dlv'][$sid][$nm] ?? null) : null;
         if ($sellerDelivers) {
             $direct = 0.0;
             $logSrc = 'доставляет продавец (' . $scheme . ') — логистики WB нет';
+        } elseif ($actual !== null) {
+            $direct = $actual[0];
+            $logSrc = 'средняя фактическая логистика по отчётам WB за 90 дней (' . $actual[1] . ' дост.), в валюте магазина ' . $storeCur;
         } elseif ($volume !== null) {
             $base = self::baseDelivery($volume);
             $direct = round($base * $coef / 100, 2);
@@ -170,15 +198,18 @@ final class Profit
             $direct = (float) $s['logistics'];
             $logSrc = 'фиксированная сумма из настроек — объём товара ещё не загружен';
         }
+        if ($actual === null && !$sellerDelivers && $storeCur !== '' && $storeCur !== 'RUB') {
+            $logSrc .= ' — тариф WB в рублях (магазин в ' . $storeCur . ': точнее станет после загрузки отчётов реализации)';
+        }
 
         // --- обратная доставка при отказе при получении / возврате
         $lostAtPickup = in_array($status, ['return', 'returnDefective'], true)
             || ($status === 'cancel' && in_array($r['cancel_type'] ?? '', ['receipt', 'expire'], true));
         $reverse = 0.0;
         if ($lostAtPickup && !$sellerDelivers) {
-            $reverse = $volume !== null
+            $reverse = $nm && isset($ctx['rev'][$sid][$nm]) ? $ctx['rev'][$sid][$nm] : ($volume !== null
                 ? ($scheme === 'FBO' ? self::baseDelivery($volume) : self::fbsReturn($volume))
-                : (float) $s['logistics'];
+                : (float) $s['logistics']);
         }
 
         $cost = isset($r['p_cost']) && $r['p_cost'] !== null ? (float) $r['p_cost'] : null;

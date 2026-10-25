@@ -43,6 +43,14 @@ final class FinanceController
         $active = StoreService::activeIds((int) $account['id'], $plan);
         $storeId = (int) input('store', 0);
         $ids = $storeId && in_array($storeId, $active, true) ? [$storeId] : $active;
+        // Валюта: отчёты WB приходят в валюте продавца; при разных валютах считаем по одной (выбор ?cur=)
+        $currencies = $ids ? array_column(DB::all('SELECT currency, COUNT(*) c FROM wb_reports WHERE store_id IN (' . implode(',', $ids) . ")
+            AND currency <> '' GROUP BY currency ORDER BY c DESC"), 'currency') : [];
+        $cur = in_array(strtoupper((string) input('cur', '')), $currencies, true) ? strtoupper((string) input('cur')) : ($currencies[0] ?? currency_of_stores($ids)['code']);
+        Finance::$currency = count($currencies) > 1 ? $cur : null;
+        if ($cur) {
+            currency_use($cur);
+        }
         $periods = Finance::availablePeriods($ids);
         [$from, $to, $preset] = $this->period($periods);
         return [
@@ -50,6 +58,7 @@ final class FinanceController
             'stores' => $active ? DB::all('SELECT * FROM stores WHERE id IN (' . implode(',', $active) . ') ORDER BY id') : [],
             'periods' => $periods, 'from' => $from, 'to' => $to, 'preset' => $preset,
             'canEdit' => !Auth::isMember(), 'settings' => Profit::settings($account),
+            'currencies' => $currencies, 'currency' => $cur,
         ];
     }
 
@@ -649,7 +658,7 @@ final class FinanceController
 
     private function back(string $tab): never
     {
-        $q = array_filter(['p' => input('p'), 'from' => input('from'), 'to' => input('to'), 'store' => input('store')]);
+        $q = array_filter(['p' => input('p'), 'from' => input('from'), 'to' => input('to'), 'store' => input('store'), 'cur' => input('cur')]);
         redirect('/app/finance' . ($tab !== '' && isset(self::TABS[$tab]) ? '/' . $tab : '') . ($q ? '?' . http_build_query($q) : ''));
     }
 }

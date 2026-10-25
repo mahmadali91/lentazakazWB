@@ -59,7 +59,7 @@ final class ProductsController
         foreach ($products as &$p) {
             $p['calc'] = $p['avg_price'] !== null ? Profit::breakdown([
                 'seller_price' => $p['avg_price'], 'status' => 'created', 'cancel_type' => null,
-                'scheme' => $p['main_scheme'] ?: 'FBO', 'is_mp' => 0, 'warehouse' => null, 'store_id' => $p['store_id'],
+                'scheme' => $p['main_scheme'] ?: 'FBO', 'is_mp' => 0, 'warehouse' => null, 'store_id' => $p['store_id'], 'nm_id' => $p['nm_id'],
                 'p_cost' => $p['cost_price'], 'p_commission' => $p['commission_pct'], 'p_subject_id' => $p['subject_id'],
                 'p_volume' => $p['volume_l'], 'subject' => $p['subject'],
             ], $settings, $ctx) : null;

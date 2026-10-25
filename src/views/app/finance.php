@@ -5,7 +5,7 @@ use App\Services\Finance;
 
 $monthsRu = ['январь', 'февраль', 'март', 'апрель', 'май', 'июнь', 'июль', 'август', 'сентябрь', 'октябрь', 'ноябрь', 'декабрь'];
 // Параметры периода и магазина — сохраняются при переходе между вкладками
-$keep = array_filter(['p' => $preset !== 'w4' ? $preset : null, 'from' => $preset === 'custom' ? $from : null, 'to' => $preset === 'custom' ? $to : null, 'store' => $storeId ?: null]);
+$keep = array_filter(['p' => $preset !== 'w4' ? $preset : null, 'from' => $preset === 'custom' ? $from : null, 'to' => $preset === 'custom' ? $to : null, 'store' => $storeId ?: null, 'cur' => count($currencies) > 1 ? $currency : null]);
 $qs = static fn(array $extra = []) => ($q = http_build_query(array_filter($extra + $keep, static fn($v) => $v !== null && $v !== ''))) ? '?' . $q : '';
 $hidden = '';
 foreach ($keep as $k => $v) {
@@ -92,5 +92,11 @@ $hasData = ($periods['max'] ?? null) !== null;
   <?php foreach (['g', 'q', 'sort'] as $k): if (input($k)): ?><input type="hidden" name="<?= $k ?>" value="<?= e((string) input($k)) ?>"><?php endif; endforeach; ?>
   <span class="muted small">Отчёты с <?= date_ru($from, false) ?> по <?= date_ru($to, false) ?></span>
 </form>
+<?php if (count($currencies) > 1): ?>
+  <div class="row" style="margin:-6px 0 14px;gap:10px">
+    <div class="seg"><?php foreach ($currencies as $c): ?><a href="?<?= e(http_build_query(['cur' => $c] + $keep)) ?>" class="<?= $c === $currency ? 'on' : '' ?>"><?= e($c . ' ' . currency_sign($c)) ?></a><?php endforeach; ?></div>
+    <span class="muted small">Отчёты WB в разных валютах — суммы считаются отдельно по каждой валюте, без пересчёта курса.</span>
+  </div>
+<?php endif; ?>
 
 <?= View::partial('app/finance/' . ($tab !== '' ? $tab : 'summary'), get_defined_vars()) ?>

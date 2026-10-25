@@ -247,7 +247,10 @@
   var PHOTO_PH = '<svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>';
   function signed(v) { return (v < 0 ? '−' : '+') + money(Math.abs(v)); }
 
-  function renderOrder(o) {
+  // У каждого заказа — валюта его магазина (магазины могут быть в разных странах)
+  function withCur(o, fn) { var prev = CUR; CUR = o.cur || prev; try { return fn(o); } finally { CUR = prev; } }
+  function renderOrder(o) { return withCur(o, renderOrderInner); }
+  function renderOrderInner(o) {
     // Крупное фото: для экранов с высокой плотностью берём версию 516×688
     var big = o.photo && o.photo.indexOf('c246x328') !== -1 ? o.photo.replace('c246x328', 'c516x688') : '';
     var photo = o.photo ? '<img src="' + esc(o.photo) + '"' + (big ? ' srcset="' + esc(o.photo) + ' 1x, ' + esc(big) + ' 2x"' : '') + ' alt="" loading="lazy" referrerpolicy="no-referrer">' : PHOTO_PH;
@@ -301,7 +304,8 @@
   }
   function fmtNum(v, d) { return (Math.round(v * Math.pow(10, d || 0)) / Math.pow(10, d || 0)).toLocaleString('ru-RU'); }
 
-  function openOrder(o) {
+  function openOrder(o) { return withCur(o, openOrderInner); }
+  function openOrderInner(o) {
     var c = o.calc;
     var head = '<div class="m-head"><div class="m-photo">' + (o.photo ? '<img src="' + esc(o.photo) + '" alt="" referrerpolicy="no-referrer">' : PHOTO_PH) + '</div>' +
       '<div style="min-width:0"><div class="m-title">' + esc(o.title) + '</div>' +
@@ -400,6 +404,12 @@
 
   function renderKpi(k) {
     if (!k) return;
+    // Выбран один магазин — его валюта
+    var sc = cfg.storeCur && f.store ? cfg.storeCur[f.store] : null;
+    if (sc && sc !== CUR) { return withCur({ cur: sc }, function () { renderKpiInner(k); }); }
+    renderKpiInner(k);
+  }
+  function renderKpiInner(k) {
     var set = function (key, val) { var el = document.querySelector('[data-k="' + key + '"]'); if (el) el.textContent = val; };
     set('orders', k.orders.toLocaleString('ru-RU'));
     set('orders_sum', money(k.orders_sum));

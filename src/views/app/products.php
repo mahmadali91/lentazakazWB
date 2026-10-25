@@ -7,6 +7,7 @@ $countryNames = ['RU' => 'Россия', 'KG' => 'Кыргызстан', 'KZ' =>
   <a class="btn btn-ghost btn-sm" href="/app/products/export"><?= icon('download', 16) ?> Выгрузить CSV</a>
 </div>
 
+<?= App\Core\View::partial('partials/currency_note') ?>
 <?php if (empty($plan['profit'])): ?>
   <div class="alert alert-warn">Расчёт прибыли доступен на платных тарифах. <a href="/app/billing">Выбрать тариф</a></div>
 <?php elseif ($total && $withCost < $total): ?>

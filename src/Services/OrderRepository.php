@@ -277,7 +277,7 @@ final class OrderRepository
         return [implode(' AND ', $where), $params];
     }
 
-    private const SELECT = 'SELECT o.*, s.name AS store_name, p.title AS p_title, p.photo AS p_photo,
+    private const SELECT = 'SELECT o.*, s.name AS store_name, s.currency AS store_currency, p.title AS p_title, p.photo AS p_photo,
             p.brand AS p_brand, p.subject AS p_subject, p.vendor_code AS p_vendor,
             p.cost_price AS p_cost, p.commission_pct AS p_commission, p.subject_id AS p_subject_id,
             p.volume_l AS p_volume, p.volume_src AS p_volume_src, p.dims AS p_dims,
@@ -518,6 +518,7 @@ final class OrderRepository
             'created_at'  => $r['order_created_at'],
             'created_iso' => date('c', strtotime($r['order_created_at'])),
             'status_at'   => $r['status_at'],
+            'cur'         => currency_sign((string) ($r['store_currency'] ?? '') ?: 'RUB'),
             'status_iso'  => $r['status_at'] ? date('c', strtotime($r['status_at'])) : null,
             'updated'     => $r['row_updated_at'],
             'cost'        => $calc['cost'] ?? null,

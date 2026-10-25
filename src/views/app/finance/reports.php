@@ -82,7 +82,7 @@
     <?php else: ?>
       <div class="table-wrap">
         <table class="table fin-table">
-          <thead><tr><th>Период</th><th>Отчёт</th><?= count($activeIds) > 1 ? '<th>Магазин</th>' : '' ?><th class="num">Продажа</th><th class="num">К перечислению за товар</th><th class="num">Логистика</th><th class="num">Хранение</th><th class="num">Итого к оплате (WB)</th><th class="num">Наш расчёт</th><th>Строк</th></tr></thead>
+          <thead><tr><th>Период</th><th>Отчёт</th><th>Валюта</th><?= count($activeIds) > 1 ? '<th>Магазин</th>' : '' ?><th class="num">Продажа</th><th class="num">К перечислению за товар</th><th class="num">Логистика</th><th class="num">Хранение</th><th class="num">Итого к оплате (WB)</th><th class="num">Наш расчёт</th><th>Строк</th></tr></thead>
           <tbody>
           <?php foreach ($reports as $r): $diff = $r['pay_calc'] !== null ? abs((float) $r['pay_calc'] - (float) $r['bank_payment']) : null; ?>
             <tr>
@@ -91,6 +91,7 @@
                 <?php if ((int) $r['report_id'] < 0 && $canEdit): ?>
                   <form method="post" action="/app/finance/reports/<?= (int) $r['store_id'] ?>/<?= (int) $r['report_id'] ?>/delete" style="display:inline" data-confirm="Удалить загруженный отчёт?"><?= csrf_field() ?><button class="link-btn">удалить</button></form>
                 <?php endif; ?></td>
+              <td class="small"><?= e($r['currency'] ?: '—') ?></td>
               <?= count($activeIds) > 1 ? '<td>' . e($r['store_name']) . '</td>' : '' ?>
               <td class="num"><?= num_ru($r['retail_amount']) ?></td>
               <td class="num"><?= num_ru($r['for_pay']) ?></td>

@@ -116,7 +116,7 @@ final class ReportImport
             }
             DB::insert('wb_reports', [
                 'store_id' => $storeId, 'report_id' => $reportId, 'date_from' => $from, 'date_to' => $to, 'create_date' => date('Y-m-d'), 'report_type' => 1,
-                'currency' => 'RUB', 'retail_amount' => round($sum['retail'], 2), 'for_pay' => round($sum['pay'], 2), 'delivery' => round($sum['delivery'], 2),
+                'currency' => (string) (DB::value('SELECT currency FROM stores WHERE id = ?', [$storeId]) ?: 'RUB'), 'retail_amount' => round($sum['retail'], 2), 'for_pay' => round($sum['pay'], 2), 'delivery' => round($sum['delivery'], 2),
                 'storage' => round($sum['storage'], 2), 'acceptance' => round($sum['acceptance'], 2), 'deduction' => round($sum['deduction'], 2),
                 'penalty' => round($sum['penalty'], 2), 'additional' => round($sum['additional'], 2), 'cashback' => 0,
                 'bank_payment' => round($sum['pay'] - $sum['delivery'] - $sum['storage'] - $sum['acceptance'] - $sum['penalty'] - $sum['deduction'] - $sum['additional'], 2),

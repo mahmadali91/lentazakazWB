@@ -96,28 +96,53 @@ function client_ip(): string
     return (string) ($_SERVER['REMOTE_ADDR'] ?? '0.0.0.0');
 }
 
-/** Знак валюты кабинета WB текущего пользователя (WB отдаёт суммы в валюте продавца). По умолчанию ₽. */
+const CURRENCY_SIGNS = ['RUB' => '₽', 'KGS' => 'с', 'KZT' => '₸', 'BYN' => 'Br', 'AMD' => '֏', 'UZS' => 'сум', 'TJS' => 'сом', 'GEL' => '₾', 'AZN' => '₼'];
+
+/**
+ * Знак валюты. С кодом — знак этой валюты; без кода — текущей валюты страницы (currency_use()),
+ * иначе валюты магазинов кабинета. WB отдаёт суммы в валюте продавца: RUB, KGS, KZT…
+ */
 function currency_sign(?string $code = null): string
 {
-    static $current = null;
-    $signs = ['RUB' => '₽', 'KGS' => 'с', 'KZT' => '₸', 'BYN' => 'Br', 'AMD' => '֏', 'UZS' => 'сум', 'TJS' => 'сом', 'GEL' => '₾', 'AZN' => '₼'];
     if ($code !== null) {
-        return $signs[strtoupper($code)] ?? ($code !== '' ? strtoupper($code) : '₽');
+        return CURRENCY_SIGNS[strtoupper($code)] ?? ($code !== '' ? strtoupper($code) : '₽');
     }
-    if ($current === null) {
-        $current = '₽';
+    $cur = currency_use();
+    return $cur === null ? '₽' : currency_sign($cur);
+}
+
+/** Текущая валюта страницы: задать (код) или получить. По умолчанию — валюта магазинов кабинета. */
+function currency_use(?string $set = null): ?string
+{
+    static $current = false;
+    if ($set !== null) {
+        $current = strtoupper($set);
+        return $current;
+    }
+    if ($current === false) {
+        $current = null;
         try {
             $account = session_status() === PHP_SESSION_ACTIVE ? App\Core\Auth::account() : null;
             if ($account) {
-                $c = App\Core\DB::value('SELECT currency FROM stores WHERE user_id = ? AND currency IS NOT NULL AND currency <> \'\' ORDER BY is_active DESC, id LIMIT 1', [$account['id']]);
-                if ($c) {
-                    $current = $signs[strtoupper((string) $c)] ?? strtoupper((string) $c);
-                }
+                $ids = array_column(App\Core\DB::all('SELECT id FROM stores WHERE user_id = ?', [$account['id']]), 'id');
+                $current = currency_of_stores($ids)['code'];
             }
         } catch (\Throwable) {
         }
     }
     return $current;
+}
+
+/** Валюта набора магазинов: ['code' => 'KGS'|null, 'mixed' => bool, 'all' => ['RUB', 'KGS']]. */
+function currency_of_stores(array $storeIds): array
+{
+    $codes = [];
+    if ($storeIds) {
+        $in = implode(',', array_map('intval', $storeIds));
+        $codes = array_values(array_unique(array_map('strtoupper', array_column(
+            App\Core\DB::all("SELECT currency FROM stores WHERE id IN ($in) AND currency IS NOT NULL AND currency <> ''"), 'currency'))));
+    }
+    return ['code' => count($codes) === 1 ? $codes[0] : ($codes[0] ?? null), 'mixed' => count($codes) > 1, 'all' => $codes];
 }
 
 function money(float|int|string|null $value): string

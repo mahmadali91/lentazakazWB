@@ -18,6 +18,7 @@ final class ApiTools
         'description' => 'Период отчётов реализации: w4 (последние 4 недели, по умолчанию), w12, all, месяц ГГГГ-ММ или неделя week:ГГГГ-ММ-ДД. Вместо него можно передать from и to'];
     private const DATE = ['type' => 'string', 'description' => 'Дата ГГГГ-ММ-ДД'];
     private const STORE = ['type' => 'integer', 'description' => 'ID магазина (из account_info); не указан — все магазины'];
+    private const CURRENCY = ['type' => 'string', 'description' => 'Валюта отчётов (RUB, KGS, KZT…), если у магазинов отчёты в разных валютах; не указана — все отчёты'];
 
     /** Описание инструментов (JSON Schema входных параметров). */
     public static function definitions(array $account): array
@@ -52,18 +53,18 @@ final class ApiTools
             'finance_summary' => [
                 'title' => 'Финансы: сводка',
                 'description' => 'Чистая прибыль по отчётам реализации WB за период: выручка, комиссия, логистика, удержания, себестоимость, налог, реклама, прочие расходы, прибыль, маржа, ROI, сверка «Итого к оплате»; разбивка по неделям.',
-                'properties' => ['period' => self::PERIOD_FIN, 'from' => self::DATE, 'to' => self::DATE, 'store_id' => self::STORE],
+                'properties' => ['currency' => self::CURRENCY, 'period' => self::PERIOD_FIN, 'from' => self::DATE, 'to' => self::DATE, 'store_id' => self::STORE],
             ],
             'finance_opiu' => [
                 'title' => 'Финансы: ОПИУ',
                 'description' => 'Отчёт о прибылях и убытках по неделям или месяцам (все строки ОПИУ) и прочие расходы по статьям.',
-                'properties' => ['period' => self::PERIOD_FIN, 'from' => self::DATE, 'to' => self::DATE, 'store_id' => self::STORE,
+                'properties' => ['currency' => self::CURRENCY, 'period' => self::PERIOD_FIN, 'from' => self::DATE, 'to' => self::DATE, 'store_id' => self::STORE,
                     'group' => ['type' => 'string', 'enum' => ['week', 'month'], 'description' => 'Группировка (по умолчанию week)']],
             ],
             'finance_sku' => [
                 'title' => 'Финансы: прибыль по товарам',
                 'description' => 'Прибыль по каждому товару за период с ABC-классами по выручке и прибыли.',
-                'properties' => ['period' => self::PERIOD_FIN, 'from' => self::DATE, 'to' => self::DATE, 'store_id' => self::STORE,
+                'properties' => ['currency' => self::CURRENCY, 'period' => self::PERIOD_FIN, 'from' => self::DATE, 'to' => self::DATE, 'store_id' => self::STORE,
                     'sort' => ['type' => 'string', 'enum' => ['revenue', 'profit', 'sales_qty', 'margin'], 'description' => 'Сортировка (по умолчанию revenue)'],
                     'limit' => ['type' => 'integer', 'minimum' => 1, 'maximum' => 500, 'description' => 'По умолчанию 100']],
             ],
@@ -87,6 +88,11 @@ final class ApiTools
                 'title' => 'Живая сверка с WB',
                 'description' => 'Запрашивает у WB (Статистика, токеном магазина) заказы и выкупы за день и сравнивает с данными сайта: количество, суммы по цене продавца и для покупателя, отмены, возвраты, заказы которых нет на сайте или в WB. Лимит WB — 1 запрос в минуту, вызывайте не чаще раза в 2 минуты.',
                 'properties' => ['date' => self::DATE, 'store_id' => self::STORE],
+            ],
+            'currency_check' => [
+                'title' => 'Проверка валют',
+                'description' => 'В какой валюте WB отдаёт данные каждого магазина: валюта Ленты заказов (запрос к WB сейчас), валюты отчётов реализации, сравнение цены заказа из Ленты и из Статистики по одним и тем же заказам.',
+                'properties' => ['store_id' => self::STORE],
             ],
             'sync_status' => [
                 'title' => 'Состояние синхронизации',
@@ -129,6 +135,7 @@ final class ApiTools
             }
             $storeIds = [(int) $args['store_id']];
         }
+        Finance::$currency = !empty($args['currency']) ? strtoupper(substr((string) $args['currency'], 0, 8)) : null;
         $method = 'tool' . str_replace(' ', '', ucwords(str_replace('_', ' ', $name)));
         return self::$method($args, $account, $plan, $storeIds);
     }
@@ -315,7 +322,7 @@ final class ApiTools
             return ['reports' => []];
         }
         $limit = max(1, min(200, (int) ($a['limit'] ?? 30)));
-        $rows = DB::all('SELECT r.store_id, r.report_id, r.date_from, r.date_to, r.create_date, r.report_type, r.retail_amount, r.for_pay, r.delivery,
+        $rows = DB::all('SELECT r.store_id, r.report_id, r.date_from, r.date_to, r.create_date, r.report_type, r.currency, r.retail_amount, r.for_pay, r.delivery,
                 r.storage, r.acceptance, r.penalty, r.deduction, r.additional, r.bank_payment, r.rows_loaded, r.detail_done,
                 (SELECT ROUND(SUM(CASE WHEN rr.doc_type = \'Продажа\' THEN rr.for_pay WHEN rr.doc_type = \'Возврат\' THEN -rr.for_pay ELSE 0 END)
                     - SUM(rr.delivery_service + rr.paid_storage + rr.paid_acceptance + rr.penalty + rr.deduction + rr.additional)
@@ -346,6 +353,38 @@ final class ApiTools
     }
 
     // ------------------------------------------------------------------ проверка работы
+
+    private static function toolCurrencyCheck(array $a, array $account, array $plan, array $storeIds): array
+    {
+        $out = ['stores' => []];
+        foreach ($storeIds as $sid) {
+            $store = DB::one('SELECT * FROM stores WHERE id = ?', [$sid]);
+            $res = ['store_id' => $sid, 'name' => $store['name'], 'seller' => $store['seller_name'], 'stored_currency' => $store['currency'] ?? null,
+                'reports_by_currency' => array_map([self::class, 'typed'], DB::all('SELECT currency, report_type, COUNT(*) reports, MIN(date_from) since, MAX(date_to) till,
+                    ROUND(SUM(retail_amount), 2) retail_amount, ROUND(SUM(for_pay), 2) for_pay, ROUND(SUM(bank_payment), 2) bank_payment
+                    FROM wb_reports WHERE store_id = ? GROUP BY currency, report_type', [$sid]))];
+            try {
+                $wb = new \App\Wb\WbClient(\App\Core\Crypto::decrypt($store['token_enc']));
+                $data = $wb->orderFeed(date('c', time() - 6 * 3600), 0, 30);
+                $res['feed_currency_now'] = $data['currency'] ?? null;
+                $sample = [];
+                foreach (array_slice((array) ($data['orders'] ?? []), 0, 30) as $o) {
+                    $db = DB::one('SELECT seller_price, finished_price, total_price, spp, in_feed FROM orders WHERE store_id = ? AND srid = ?', [$sid, (string) $o['srid']]);
+                    $sample[] = ['srid' => $o['srid'], 'created' => $o['createdAt'] ?? null, 'feed_seller_price' => $o['sellerPrice'] ?? null,
+                        'site_seller_price' => $db ? (float) $db['seller_price'] : null, 'stats_buyer_price' => $db && $db['finished_price'] !== null ? (float) $db['finished_price'] : null,
+                        'stats_total_price' => $db && $db['total_price'] !== null ? (float) $db['total_price'] : null,
+                        'ratio_feed_to_site' => $db && (float) $db['seller_price'] > 0 && isset($o['sellerPrice']) ? round((float) $o['sellerPrice'] / (float) $db['seller_price'], 4) : null];
+                }
+                $res['feed_vs_site_sample'] = $sample;
+                $ratios = array_filter(array_column($sample, 'ratio_feed_to_site'));
+                $res['ratio_feed_to_site_avg'] = $ratios ? round(array_sum($ratios) / count($ratios), 4) : null;
+            } catch (\App\Wb\WbException $e) {
+                $res['feed_error'] = $e->status . ' ' . $e->humanMessage() . ($e->isRateLimit() ? ' — повторите через 1–2 минуты' : '');
+            }
+            $out['stores'][] = $res;
+        }
+        return $out;
+    }
 
     private static function toolWbLiveCheck(array $a, array $account, array $plan, array $storeIds): array
     {

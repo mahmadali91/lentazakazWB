@@ -86,6 +86,9 @@ final class Finance
     public const EXPENSE_CATEGORIES = ['Фулфилмент', 'Упаковка и маркировка', 'Доставка до склада WB', 'Самовыкупы и раздачи', 'Внешняя реклама',
         'Фото и контент', 'Зарплата', 'Аренда', 'Сервисы и подписки', 'Банк и комиссии', 'Сертификация', 'Прочее'];
 
+    /** Валюта отчётов для расчёта (если у магазинов отчёты в разных валютах). null — все отчёты. */
+    public static ?string $currency = null;
+
     public static function empty(): array
     {
         return array_fill_keys(self::METRICS, 0.0);
@@ -216,6 +219,10 @@ final class Finance
         $in = implode(',', array_map('intval', $storeIds));
         $where = "r.store_id IN ($in) AND r.date_from BETWEEN :f AND :t";
         $params = ['f' => $from, 't' => $to];
+        if (self::$currency !== null) {
+            $where .= ' AND r.report_id IN (SELECT wr.report_id FROM wb_reports wr WHERE wr.store_id = r.store_id AND wr.currency = :cur)';
+            $params['cur'] = self::$currency;
+        }
         if (!empty($opt['nm'])) {
             $where .= ' AND r.nm_id = :nm';
             $params['nm'] = (int) $opt['nm'];
