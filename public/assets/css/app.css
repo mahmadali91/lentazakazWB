@@ -385,3 +385,82 @@ body.modal-open { overflow: hidden; }
 .p-edit { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px; }
 .p-edit label { font-size: 13px; }
 .order, .p-card, .modal-card { -webkit-tap-highlight-color: transparent; }
+
+/* ---------- Финансы ---------- */
+.tabs { display: flex; gap: 6px; overflow-x: auto; margin: -4px 0 16px; padding-bottom: 4px; scrollbar-width: thin; -webkit-overflow-scrolling: touch; }
+.tabs a { flex: none; padding: 8px 14px; border-radius: 999px; border: 1px solid var(--border); background: var(--surface); color: var(--muted); font-size: 14px; font-weight: 500; text-decoration: none !important; white-space: nowrap; }
+.tabs a:hover { color: var(--text); }
+.tabs a.on { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+.fin-grid { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 16px; align-items: start; }
+@media (max-width: 1100px) { .fin-grid { grid-template-columns: minmax(0, 1fr); } }
+.fin-table td.num, .fin-table th.num { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.fin-table .b { font-weight: 700; }
+.fin-table .neg, .breakdown .neg, .top-item .neg, .fin-card .neg, .kv b.neg, td.neg { color: var(--bad); }
+.fin-table .pos, .breakdown .pos, .top-item .pos, td.pos { color: var(--ok); }
+.fin-table td.warn { color: var(--warn); }
+.fin-table .sticky { position: sticky; left: 0; background: var(--surface); z-index: 1; }
+.fin-table thead .sticky { z-index: 2; }
+.opiu td.sticky { min-width: 230px; }
+.opiu tr.l-total td, .opiu tr.l-profit td, .fin-table tr.l-profit td { font-weight: 700; background: var(--surface-2); }
+.opiu tr.l-profit td { font-size: 15px; }
+.opiu tr.l-qty td { color: var(--muted); }
+.fin-table tr.l-detail td { font-size: 13px; }
+.fin-table .small-table td, .small-table td { font-size: 13px; padding: 8px 10px; }
+.sku-cell { display: flex; gap: 10px; align-items: center; min-width: 200px; }
+span.p-thumb { overflow: hidden; }
+span.p-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.p-thumb.sm { width: 36px; height: 48px; border-radius: 6px; }
+.sku-table .p-thumb { width: 40px; height: 54px; }
+.abc { display: inline-block; min-width: 20px; padding: 1px 5px; margin-right: 2px; border-radius: 5px; font-size: 12px; font-weight: 700; text-align: center; }
+.abc-A { background: color-mix(in srgb, #16a34a 18%, transparent); color: #15803d; }
+.abc-B { background: color-mix(in srgb, #d97706 18%, transparent); color: #b45309; }
+.abc-C { background: color-mix(in srgb, #dc2626 16%, transparent); color: #b91c1c; }
+.abc-grid { display: grid; grid-template-columns: 70px repeat(3, minmax(0, 1fr)); gap: 10px; align-items: stretch; }
+.abc-head { display: grid; place-items: center; font-size: 18px; }
+.abc-corner { display: grid; place-items: center; text-align: center; }
+.abc-cell { padding: 12px 14px; }
+.abc-cell .abc-hint { margin-top: 6px; line-height: 1.35; }
+.abc-ztop { border-color: #16a34a; }
+.abc-zgrow { border-color: color-mix(in srgb, #16a34a 45%, var(--border)); }
+.abc-zbad { border-color: color-mix(in srgb, #dc2626 50%, var(--border)); }
+@media (max-width: 700px) { .abc-grid { grid-template-columns: 34px repeat(3, minmax(0, 1fr)); gap: 6px; } .abc-cell { padding: 8px; font-size: 13px; } .abc-cell .abc-hint { display: none; } }
+.fin-chart .axis { stroke: var(--border); }
+.fin-chart .bar2 { fill: #16a34a; opacity: .85; }
+.fin-chart .bar2.neg { fill: #dc2626; }
+.legend { display: flex; gap: 16px; font-size: 13px; color: var(--muted); margin-top: 6px; }
+.legend i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 6px; vertical-align: -1px; }
+.lg-rev { background: var(--accent); }
+.lg-profit { background: #16a34a; }
+.breakdown { display: grid; gap: 8px; }
+.bd-row { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(60px, 1fr) auto 52px; gap: 10px; align-items: center; font-size: 14px; }
+.bd-bar { height: 8px; border-radius: 4px; background: var(--surface-2); overflow: hidden; }
+.bd-bar i { display: block; height: 100%; background: var(--accent); opacity: .7; border-radius: 4px; }
+.bd-bar i.neg { background: #dc2626; }
+.bd-total { border-top: 1px solid var(--border); padding-top: 8px; }
+.bd-total .bd-bar i { background: #16a34a; opacity: 1; }
+.bd-pct { text-align: right; }
+@media (max-width: 600px) { .bd-row { grid-template-columns: minmax(0, 1fr) auto 46px; } .bd-bar { display: none; } }
+.top-item { color: inherit; text-decoration: none !important; }
+.top-item .grow { display: flex; flex-direction: column; }
+.clip { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 320px; }
+.link-btn { border: 0; background: none; color: var(--muted); font: inherit; font-size: 13px; text-decoration: underline; cursor: pointer; padding: 0; }
+.link-btn:hover { color: var(--bad); }
+.num-input { width: 110px; text-align: right; padding: 6px 8px; }
+.num-input.sm { width: 72px; }
+.num-input.need { border-color: var(--warn); }
+.sticky-save { position: sticky; bottom: 12px; display: flex; justify-content: flex-end; margin-top: 12px; }
+@media (max-width: 900px) { .sticky-save { bottom: 84px; } }
+.row-link { cursor: pointer; }
+.row-link:hover td { background: var(--surface-2); }
+.fin-cards .fin-card { padding: 0; margin-bottom: 10px; overflow: hidden; }
+.fin-card summary { list-style: none; display: grid; grid-template-columns: 81px minmax(0, 1fr) auto; gap: 12px; padding: 12px 14px; cursor: pointer; align-items: center; }
+.fin-card summary::-webkit-details-marker { display: none; }
+.fin-card .p-thumb { width: 81px; height: 108px; border-radius: 10px; }
+.fin-card-profit { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; text-align: right; }
+.fin-card-profit b { font-size: 16px; }
+.fin-card .kv-list { padding: 4px 14px 12px; border-top: 1px solid var(--border); }
+.kv-list .kv { display: flex; justify-content: space-between; gap: 12px; padding: 5px 0; font-size: 14px; }
+.kv-list .kv.total { font-weight: 700; border-top: 1px dashed var(--border); }
+.promo-table .num-input { width: 86px; }
+.promo-table .num-input.sm { width: 64px; }
+.fin-card summary { -webkit-tap-highlight-color: transparent; -webkit-user-select: none; user-select: none; outline: none; }

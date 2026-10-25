@@ -104,6 +104,16 @@ function money(float|int|string|null $value): string
     return number_format((float) $value, 0, ',', ' ') . ' ₽';
 }
 
+/** Число по-русски: 1 234,5. null — прочерк. */
+function num_ru(float|int|string|null $value, int $decimals = 0): string
+{
+    if ($value === null || $value === '') {
+        return '—';
+    }
+    $v = round((float) $value, $decimals);
+    return number_format($v == 0 ? 0.0 : $v, $decimals, ',', ' ');
+}
+
 function plural(int $n, string $one, string $few, string $many): string
 {
     $n = abs($n) % 100;

@@ -27,6 +27,7 @@ final class Profit
         'logistics'  => 80.0,  // логистика, если объём товара неизвестен, ₽
         'tax'        => 6.0,   // налог, % от цены
         'other'      => 0.0,   // прочие расходы на единицу, ₽
+        'vat'        => 0.0,   // НДС, % (для раздела «Финансы»; 0 — без НДС)
     ];
 
     /** Базовый тариф прямой доставки до 1 литра: верхняя граница объёма => ₽. */
@@ -49,12 +50,14 @@ final class Profit
         return $s;
     }
 
+    /** Сохраняет переданные параметры; не переданные остаются прежними. */
     public static function save(int $accountId, array $input): void
     {
+        $current = self::settings(DB::one('SELECT profit_settings FROM users WHERE id = ?', [$accountId]) ?? []);
         $s = [];
-        foreach (self::DEFAULTS as $k => $default) {
+        foreach ($current as $k => $default) {
             $v = str_replace([',', ' '], ['.', ''], (string) ($input[$k] ?? $default));
-            $max = in_array($k, ['commission', 'tax'], true) ? 100.0 : ($k === 'coef' ? 1000.0 : 1000000.0);
+            $max = in_array($k, ['commission', 'tax', 'vat'], true) ? 100.0 : ($k === 'coef' ? 1000.0 : 1000000.0);
             $s[$k] = is_numeric($v) ? max(0.0, min($max, (float) $v)) : $default;
         }
         DB::exec('UPDATE users SET profit_settings = ? WHERE id = ?', [json_encode($s), $accountId]);

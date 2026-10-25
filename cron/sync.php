@@ -32,8 +32,11 @@ if (in_array('-v', $argv, true)) {
             'store'        => $s['id'] . ' · ' . $s['name'],
             'active'       => (bool) $s['is_active'],
             'scopes'       => $scopes,
-            'next'         => ['feed' => $s['feed_next_at'], 'marketplace' => $s['mp_next_at'], 'statistics' => $s['stats_next_at'], 'content' => $s['cards_next_at']],
-            'last_ok'      => ['feed' => $s['feed_ok_at'], 'marketplace' => $s['mp_ok_at'], 'statistics' => $s['stats_ok_at']],
+            'next'         => ['feed' => $s['feed_next_at'], 'marketplace' => $s['mp_next_at'], 'statistics' => $s['stats_next_at'], 'content' => $s['cards_next_at'],
+                'finance' => $s['fin_next_at'] ?? null, 'storage' => $s['storage_next_at'] ?? null, 'ads' => $s['ads_next_at'] ?? null],
+            'last_ok'      => ['feed' => $s['feed_ok_at'], 'marketplace' => $s['mp_ok_at'], 'statistics' => $s['stats_ok_at'],
+                'finance' => $s['fin_ok_at'] ?? null, 'storage' => $s['storage_ok_at'] ?? null, 'ads' => $s['ads_ok_at'] ?? null],
+            'finance'      => App\Core\DB::one('SELECT COUNT(*) reports, COALESCE(SUM(detail_done), 0) loaded, COALESCE(SUM(rows_loaded), 0) rows_count, MIN(date_from) since FROM wb_reports WHERE store_id = ?', [$s['id']]),
             'last_error'   => $s['last_error'] ? $s['last_error'] . ' (' . $s['last_error_at'] . ')' : null,
             'orders_in_db' => (int) App\Core\DB::value('SELECT COUNT(*) FROM orders WHERE store_id = ?', [$s['id']]),
             'recent_log'   => array_map(

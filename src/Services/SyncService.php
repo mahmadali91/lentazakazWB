@@ -16,6 +16,8 @@ use App\Wb\WbException;
  *  2. mp    — новые сборочные задания FBS/DBS/DBW/Самовывоз (Маркетплейс): моментально, уточняет схему.
  *  3. stats — заказы из Статистики: бренд, предмет, артикул, реальный склад WB. Раз в 30 минут.
  *  4. cards — карточки товаров (Контент): названия и фото. Раз в 6 часов.
+ *  5. tariffs, remains — комиссии WB, тарифы складов, остатки и объём товаров.
+ *  6. fin, storage, ads — отчёты реализации, платное хранение и реклама для раздела «Финансы» (платные тарифы).
  */
 final class SyncService
 {
@@ -63,6 +65,19 @@ final class SyncService
             $done['remains'] = $this->safe('remains', fn() => $this->syncRemains());
         }
 
+        if (!empty($this->plan['profit']) && (int) $this->store['initial_done']) {
+            $fin = new FinanceSync($this->store, $this->wb);
+            if (($this->scopes['finance'] ?? null) !== false && $this->due('fin_next_at', $now)) {
+                $done['fin'] = $this->safe('fin', fn() => $fin->reports());
+            }
+            if (!empty($this->scopes['analytics']) && ($this->scopes['storage'] ?? null) !== false && $this->due('storage_next_at', $now)) {
+                $done['storage'] = $this->safe('storage', fn() => $fin->storage());
+            }
+            if (($this->scopes['advert'] ?? null) !== false && $this->due('ads_next_at', $now)) {
+                $done['ads'] = $this->safe('ads', fn() => $fin->ads());
+            }
+        }
+
         if (!(int) $this->store['initial_done'] && $this->initialComplete()) {
             DB::exec('UPDATE stores SET initial_done = 1 WHERE id = ?', [$this->store['id']]);
         }
@@ -88,12 +103,20 @@ final class SyncService
         $column = [
             'feed' => 'feed_next_at', 'mp' => 'mp_next_at', 'stats' => 'stats_next_at', 'cards' => 'cards_next_at',
             'tariffs' => 'tariffs_next_at', 'remains' => 'remains_next_at',
+            'fin' => 'fin_next_at', 'storage' => 'storage_next_at', 'ads' => 'ads_next_at',
         ][$source];
-        // Справочные источники (тарифы, остатки) не должны отключать ленту и пугать ошибками
-        $auxiliary = in_array($source, ['tariffs', 'remains'], true);
+        // Справочные и финансовые источники не должны отключать ленту и пугать ошибками
+        $auxiliary = in_array($source, ['tariffs', 'remains', 'fin', 'storage', 'ads'], true);
+        // Флаг в scopes для финансовых источников: false — WB не дал доступ, раздел «Финансы» покажет подсказку
+        $flag = ['fin' => 'finance', 'storage' => 'storage', 'ads' => 'advert'][$source] ?? null;
         try {
             $rows = (int) $fn();
             $this->log($source, true, $rows, null);
+            if ($flag && empty($this->scopes[$flag])) {
+                $this->scopes[$flag] = true;
+                unset($this->scopes[$flag . '_error']);
+                DB::exec('UPDATE stores SET scopes = ? WHERE id = ?', [json_encode($this->scopes), $this->store['id']]);
+            }
             $basicTokenWarning = str_contains((string) $this->store['last_error'], '«Базовый»');
             if (!$auxiliary && $this->store['last_error'] && (!$basicTokenWarning || in_array($source, ['feed', 'stats'], true))) {
                 DB::exec('UPDATE stores SET last_error = NULL, last_error_at = NULL WHERE id = ?', [$this->store['id']]);
@@ -109,9 +132,23 @@ final class SyncService
             };
             $this->setNext($column, $delay);
             if ($auxiliary) {
-                $this->setNext($column, $e->isRateLimit() ? max(61, $e->retryAfter + 1) : 6 * 3600);
+                $this->setNext($column, match (true) {
+                    $e->isRateLimit() => max(61, $e->retryAfter + 1),
+                    $flag !== null && ($e->status >= 500 || $e->status === 0) => 600,
+                    default => 6 * 3600,
+                });
                 if ($source === 'remains') {
                     DB::exec('UPDATE stores SET remains_state = NULL WHERE id = ?', [$this->store['id']]);
+                }
+                if ($source === 'storage') {
+                    $st = json_decode((string) ($this->store['storage_state'] ?? ''), true) ?: [];
+                    unset($st['task']);
+                    DB::exec('UPDATE stores SET storage_state = ? WHERE id = ?', [json_encode($st), $this->store['id']]);
+                }
+                if ($flag && $e->isAuthError()) {
+                    $this->scopes[$flag] = false;
+                    $this->scopes[$flag . '_error'] = mb_substr($e->status . ' ' . $e->getMessage(), 0, 300);
+                    DB::exec('UPDATE stores SET scopes = ? WHERE id = ?', [json_encode($this->scopes), $this->store['id']]);
                 }
                 $this->log($source, false, 0, $e->status . ' ' . $e->getMessage());
                 return 'error:' . $e->status;
@@ -127,7 +164,7 @@ final class SyncService
             } elseif ($e->retryAfter > 3600 && in_array($source, ['feed', 'stats'], true)) {
                 // Лимит в часы на Аналитику/Статистику бывает только у «Базового» токена (1 запрос в 3 часа)
                 $msg = 'WB разрешает этому токену запрашивать заказы только раз в 3 часа — у него тип «Базовый». '
-                    . 'Создайте в кабинете WB токен типа «Персональный» (категории Аналитика, Статистика, Маркетплейс, Контент) '
+                    . 'Создайте в кабинете WB токен типа «Персональный» (категории Аналитика, Статистика, Маркетплейс, Контент, Финансы, Продвижение) '
                     . 'и замените его здесь: «Управление магазином» → «Новый токен WB». Следующее обновление: ' . date('H:i', time() + $e->retryAfter) . '.';
                 DB::exec('UPDATE stores SET last_error = ?, last_error_at = ? WHERE id = ?', [$msg, now(), $this->store['id']]);
                 $this->store['last_error'] = $msg;
@@ -144,7 +181,8 @@ final class SyncService
 
     private function scopeOf(string $source): string
     {
-        return ['feed' => 'analytics', 'mp' => 'marketplace', 'stats' => 'statistics', 'cards' => 'content', 'remains' => 'analytics', 'tariffs' => 'common'][$source];
+        return ['feed' => 'analytics', 'mp' => 'marketplace', 'stats' => 'statistics', 'cards' => 'content', 'remains' => 'analytics', 'tariffs' => 'common',
+            'fin' => 'finance', 'storage' => 'storage', 'ads' => 'advert'][$source];
     }
 
     private function log(string $source, bool $ok, int $rows, ?string $message): void

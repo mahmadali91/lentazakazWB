@@ -13,16 +13,29 @@ use App\Core\Config;
  *  - Статистика → statistics-api (заказы с брендом/категорией/складом, обновление раз в 30 мин)
  *  - Маркетплейс → marketplace-api (новые сборочные задания FBS / DBS / DBW / Самовывоз)
  *  - Контент    → content-api (названия и фото товаров)
+ *  - Финансы    → finance-api (еженедельные отчёты реализации и их детализация)
+ *  - Продвижение → advert-api (расходы на рекламу)
  */
 final class WbClient
 {
+    /** Домены по умолчанию — для сервисов, которых нет в config.php, созданном старой версией установщика. */
+    private const DEFAULT_HOSTS = [
+        'common'      => 'https://common-api.wildberries.ru',
+        'analytics'   => 'https://seller-analytics-api.wildberries.ru',
+        'statistics'  => 'https://statistics-api.wildberries.ru',
+        'marketplace' => 'https://marketplace-api.wildberries.ru',
+        'content'     => 'https://content-api.wildberries.ru',
+        'finance'     => 'https://finance-api.wildberries.ru',
+        'advert'      => 'https://advert-api.wildberries.ru',
+    ];
+
     public function __construct(private readonly string $token)
     {
     }
 
     private function host(string $service): string
     {
-        $host = Config::get('wb.hosts.' . $service);
+        $host = Config::get('wb.hosts.' . $service) ?: (self::DEFAULT_HOSTS[$service] ?? null);
         if (!$host) {
             throw new \InvalidArgumentException("Неизвестный сервис WB: $service");
         }
@@ -211,6 +224,63 @@ final class WbClient
     public function remainsDownload(string $taskId): array
     {
         return $this->request('analytics', 'GET', '/api/v1/warehouse_remains/tasks/' . rawurlencode($taskId) . '/download');
+    }
+
+    // ------------------------------------------------------------------ Финансы
+
+    /**
+     * Список отчётов реализации (Финансы): POST /api/finance/v1/sales-reports/list.
+     * Данные с 29.01.2024, лимит 1 запрос в минуту, только Персональный или Сервисный токен.
+     * Суммы приходят строками: retailAmountSum, forPaySum, deliveryServiceSum, paidStorageSum, bankPaymentSum…
+     */
+    public function salesReports(string $dateFrom, string $dateTo, int $offset = 0): array
+    {
+        return $this->request('finance', 'POST', '/api/finance/v1/sales-reports/list', [], [
+            'dateFrom' => $dateFrom, 'dateTo' => $dateTo, 'limit' => 1000, 'offset' => $offset, 'period' => 'weekly',
+        ]);
+    }
+
+    /**
+     * Детализация отчёта реализации: POST /api/finance/v1/sales-reports/detailed/{reportId}.
+     * Порциями до 100 000 строк: следующая порция — с rrdId последней строки; пустой ответ (204) — строк больше нет.
+     */
+    public function salesReportRows(int $reportId, int $rrdId, int $limit = 100000): array
+    {
+        return $this->request('finance', 'POST', '/api/finance/v1/sales-reports/detailed/' . $reportId, [], [
+            'limit' => $limit, 'rrdId' => $rrdId,
+        ]);
+    }
+
+    /** Отчёт о платном хранении (Аналитика): создать задание за период до 8 дней. */
+    public function paidStorageCreate(string $dateFrom, string $dateTo): string
+    {
+        $resp = $this->request('analytics', 'GET', '/api/v1/paid_storage', ['dateFrom' => $dateFrom, 'dateTo' => $dateTo]);
+        return (string) ($resp['data']['taskId'] ?? '');
+    }
+
+    public function paidStorageStatus(string $taskId): string
+    {
+        $resp = $this->request('analytics', 'GET', '/api/v1/paid_storage/tasks/' . rawurlencode($taskId) . '/status');
+        return (string) ($resp['data']['status'] ?? '');
+    }
+
+    /** Строки: date, nmId, vendorCode, subject, warehouse, volume, barcodesCount, warehousePrice (₽ за день). */
+    public function paidStorageDownload(string $taskId): array
+    {
+        return $this->request('analytics', 'GET', '/api/v1/paid_storage/tasks/' . rawurlencode($taskId) . '/download');
+    }
+
+    /** Списания за рекламу (Продвижение): GET /adv/v1/upd?from&to, период до 31 дня. */
+    public function adCosts(string $from, string $to): array
+    {
+        return $this->request('advert', 'GET', '/adv/v1/upd', ['from' => $from, 'to' => $to]);
+    }
+
+    /** Кампании с их товарами: GET /api/advert/v2/adverts?ids= (до 50 ID). */
+    public function adverts(array $ids): array
+    {
+        $resp = $this->request('advert', 'GET', '/api/advert/v2/adverts', ['ids' => implode(',', array_map('intval', $ids))]);
+        return $resp['adverts'] ?? [];
     }
 
     /** Срок действия токена из его JWT-части (exp). null — не удалось определить. */

@@ -4,7 +4,7 @@
  *
  * Запуск:  php -S 127.0.0.1:8090 tools/mock-wb.php
  * Можно поднять один порт на все сервисы или по порту на сервис (тогда ping различает категории):
- *   8090 common, 8091 analytics, 8092 statistics, 8093 marketplace, 8094 content.
+ *   8090 common, 8091 analytics, 8092 statistics, 8093 marketplace, 8094 content, 8095 finance, 8096 advert.
  * Токены: любой, начинающийся с "test" — все категории; "test-nocontent…" — без Контента;
  *         "test-nofeed…" — без Аналитики; иначе — 401.
  * Новые заказы появляются каждые 2 минуты (детерминированно от текущего времени).
@@ -37,6 +37,10 @@ if (str_starts_with($path, '/v3/payments')) {
 
 if (!str_starts_with($token, 'test')) {
     out(['title' => 'unauthorized', 'detail' => 'token is invalid', 'status' => 401], 401);
+}
+
+if (str_contains($token, 'nofin') && in_array($_SERVER['SERVER_PORT'], ['8095', '8096'], true)) {
+    out(['title' => 'token scope not allowed', 'detail' => 'нет категории', 'status' => 401], 401);
 }
 
 $products = [
@@ -87,10 +91,126 @@ function iso(int $ts): string
 
 $body = json_decode((string) file_get_contents('php://input'), true) ?: [];
 
+/** Детализация недельного отчёта реализации (синтетика): продажи, логистика, возвраты, хранение, приёмка, штрафы, компенсации. */
+function reportRows(string $monday): array
+{
+    global $products;
+    $reportId = (int) date('Ymd', strtotime($monday));
+    $rows = [];
+    $i = 0;
+    $base = ['reportId' => $reportId, 'dateFrom' => $monday, 'dateTo' => date('Y-m-d', strtotime($monday) + 6 * 86400), 'currency' => 'RUB', 'reportType' => 1,
+        'docTypeName' => '', 'sellerOperName' => '', 'quantity' => 0, 'retailPrice' => '0', 'retailAmount' => '0', 'retailPriceWithDisc' => '0', 'forPay' => '0',
+        'acquiringFee' => '0', 'deliveryAmount' => 0, 'returnAmount' => 0, 'deliveryService' => '0', 'bonusTypeName' => '', 'penalty' => '0',
+        'additionalPayment' => '0', 'paidStorage' => '0', 'deduction' => '0', 'paidAcceptance' => '0', 'cashbackAmount' => '0', 'cashbackDiscount' => '0',
+        'cashbackCommissionChange' => '0', 'officeName' => 'Коледино', 'srid' => '', 'nmId' => 0, 'shkId' => 0];
+    $prices = [186452311 => 2490, 154422190 => 3990, 99814522 => 5490, 120987345 => 1990, 173300812 => 990];
+    for ($d = 0; $d < 7; $d++) {
+        $day = date('Y-m-d', strtotime($monday) + $d * 86400);
+        foreach ($products as $k => $p) {
+            $n = (crc32($day . $p[0]) % 4);
+            for ($j = 0; $j < $n; $j++) {
+                $price = $prices[$p[0]];
+                $disc = round($price * 0.8, 2);
+                $retail = round($disc * 0.75, 2);
+                $acq = round($retail * 0.015, 2);
+                $forPay = round($disc * (1 - 0.245) - $acq, 2);
+                $srid = 'sr' . $reportId . '-' . $k . '-' . $d . '-' . $j;
+                $item = ['nmId' => $p[0], 'vendorCode' => $p[1], 'title' => $p[2], 'brandName' => $p[3], 'subjectName' => $p[4], 'techSize' => '0',
+                    'sku' => '20' . $p[0], 'srid' => $srid, 'shkId' => crc32($srid), 'orderDt' => $day . 'T09:00:00Z', 'saleDt' => $day . 'T18:00:00Z', 'giId' => 1000 + $k];
+                $rows[] = array_merge($base, $item, ['rrdId' => $reportId * 10000 + ++$i, 'docTypeName' => 'Продажа', 'sellerOperName' => 'Продажа', 'quantity' => 1,
+                    'retailPrice' => (string) $price, 'retailAmount' => (string) $retail, 'retailPriceWithDisc' => (string) $disc, 'forPay' => (string) $forPay,
+                    'acquiringFee' => (string) $acq, 'commissionPercent' => 24.5, 'spp' => 25, 'salePercent' => 20]);
+                $rows[] = array_merge($base, $item, ['rrdId' => $reportId * 10000 + ++$i, 'sellerOperName' => 'Логистика', 'deliveryAmount' => 1,
+                    'deliveryService' => (string) (60 + $k * 15), 'bonusTypeName' => 'К клиенту при продаже']);
+            }
+            if (crc32('ret' . $day . $p[0]) % 9 === 0) {
+                $disc = round($prices[$p[0]] * 0.8, 2);
+                $retail = round($disc * 0.75, 2);
+                $acq = round($retail * 0.015, 2);
+                $item = ['nmId' => $p[0], 'vendorCode' => $p[1], 'title' => $p[2], 'brandName' => $p[3], 'subjectName' => $p[4], 'techSize' => '0', 'srid' => 'ret' . $reportId . $k . $d];
+                $rows[] = array_merge($base, $item, ['rrdId' => $reportId * 10000 + ++$i, 'docTypeName' => 'Возврат', 'sellerOperName' => 'Возврат', 'quantity' => 1,
+                    'retailAmount' => (string) $retail, 'retailPriceWithDisc' => (string) $disc, 'forPay' => (string) round($disc * 0.755 - $acq, 2), 'acquiringFee' => (string) $acq]);
+                $rows[] = array_merge($base, $item, ['rrdId' => $reportId * 10000 + ++$i, 'sellerOperName' => 'Логистика', 'returnAmount' => 1,
+                    'deliveryService' => '50', 'bonusTypeName' => 'От клиента при возврате']);
+            }
+        }
+    }
+    $rows[] = array_merge($base, ['rrdId' => $reportId * 10000 + ++$i, 'sellerOperName' => 'Хранение', 'paidStorage' => '812.40']);
+    $rows[] = array_merge($base, ['rrdId' => $reportId * 10000 + ++$i, 'sellerOperName' => 'Услуга по обработке Товара', 'paidAcceptance' => '310.00']);
+    if ((int) date('W', strtotime($monday)) % 2 === 0) {
+        $rows[] = array_merge($base, ['rrdId' => $reportId * 10000 + ++$i, 'sellerOperName' => 'Штраф', 'penalty' => '300.00', 'bonusTypeName' => 'Штраф за нарушение упаковки']);
+        $p = $products[1];
+        $rows[] = array_merge($base, ['rrdId' => $reportId * 10000 + ++$i, 'docTypeName' => 'Продажа', 'sellerOperName' => 'Компенсация брака', 'quantity' => 1,
+            'nmId' => $p[0], 'vendorCode' => $p[1], 'subjectName' => $p[4], 'forPay' => '2100.00', 'srid' => 'def' . $reportId, 'shkId' => 77]);
+    }
+    return $rows;
+}
+
+/** Завершённые недели (понедельники) в периоде: отчёт формируется в понедельник после недели. */
+function reportWeeks(string $from, string $to): array
+{
+    $weeks = [];
+    $t = strtotime('monday this week', strtotime($from));
+    $limit = min(strtotime($to), strtotime('monday this week') - 7 * 86400);
+    for (; $t <= $limit; $t += 7 * 86400) {
+        if ($t >= strtotime($from) - 6 * 86400) {
+            $weeks[] = date('Y-m-d', $t);
+        }
+    }
+    return $weeks;
+}
+
 switch ($path) {
+    case '/api/finance/v1/sales-reports/list':
+        $list = [];
+        foreach (reportWeeks((string) $body['dateFrom'], (string) $body['dateTo']) as $w) {
+            $rows = reportRows($w);
+            $sum = static fn($k, $doc = null) => array_sum(array_map(static fn($r) => $doc === null || $r['docTypeName'] === $doc ? (float) $r[$k] : 0, $rows));
+            $forPay = $sum('forPay', 'Продажа') - $sum('forPay', 'Возврат');
+            $list[] = ['reportId' => (int) date('Ymd', strtotime($w)), 'sellerFinanceName' => 'ИП Тестов', 'dateFrom' => $w, 'dateTo' => date('Y-m-d', strtotime($w) + 6 * 86400),
+                'createDate' => date('Y-m-d', strtotime($w) + 7 * 86400), 'currency' => 'RUB', 'reportType' => 1,
+                'retailAmountSum' => (string) round($sum('retailAmount', 'Продажа') - $sum('retailAmount', 'Возврат'), 2), 'forPaySum' => (string) round($forPay, 2),
+                'avgSalePercent' => 20, 'deliveryServiceSum' => (string) $sum('deliveryService'), 'paidStorageSum' => (string) $sum('paidStorage'),
+                'paidAcceptanceSum' => (string) $sum('paidAcceptance'), 'deductionSum' => '0', 'penaltySum' => (string) $sum('penalty'), 'additionalPaymentSum' => '0',
+                'cashbackAmountSum' => '0', 'cashbackDiscountSum' => '0', 'cashbackCommissionChangeSum' => '0', 'paymentSchedule' => '',
+                'bankPaymentSum' => (string) round($forPay - $sum('deliveryService') - $sum('paidStorage') - $sum('paidAcceptance') - $sum('penalty'), 2)];
+        }
+        if (!$list) {
+            http_response_code(204);
+            exit;
+        }
+        out($list);
+
+    case '/adv/v1/upd':
+        $list = [];
+        for ($t = strtotime((string) $_GET['from']); $t <= strtotime((string) $_GET['to']); $t += 86400) {
+            $list[] = ['updNum' => 0, 'updTime' => date('Y-m-d', $t) . 'T12:00:00+03:00', 'updSum' => 350 + date('j', $t) * 3, 'advertId' => 5001,
+                'campName' => 'Платья — поиск', 'advertType' => 9, 'paymentType' => 'Баланс', 'advertStatus' => 9];
+            if (date('N', $t) <= 5) {
+                $list[] = ['updNum' => 0, 'updTime' => date('Y-m-d', $t) . 'T13:00:00+03:00', 'updSum' => 120, 'advertId' => 5002,
+                    'campName' => 'Обувь и рюкзаки', 'advertType' => 8, 'paymentType' => 'Счёт', 'advertStatus' => 11];
+            }
+        }
+        out($list);
+
+    case '/api/advert/v2/adverts':
+        $map = [5001 => [186452311], 5002 => [154422190, 120987345]];
+        $adverts = [];
+        foreach (explode(',', (string) ($_GET['ids'] ?? '')) as $id) {
+            if (isset($map[(int) $id])) {
+                $adverts[] = ['id' => (int) $id, 'settings' => ['name' => 'Кампания ' . $id], 'status' => 9,
+                    'nm_settings' => array_map(static fn($nm) => ['nm_id' => $nm], $map[(int) $id])];
+            }
+        }
+        out(['adverts' => $adverts]);
+
+    case '/api/v1/paid_storage':
+        out(['data' => ['taskId' => 'st-' . $_GET['dateFrom'] . '-' . $_GET['dateTo']]]);
+
     case '/ping':
-        $service = ['8091' => 'analytics', '8092' => 'statistics', '8093' => 'marketplace', '8094' => 'content'][$_SERVER['SERVER_PORT']] ?? 'common';
-        if ((str_contains($token, 'nocontent') && $service === 'content') || (str_contains($token, 'nofeed') && $service === 'analytics')) {
+        $service = ['8091' => 'analytics', '8092' => 'statistics', '8093' => 'marketplace', '8094' => 'content', '8095' => 'finance', '8096' => 'advert'][$_SERVER['SERVER_PORT']] ?? 'common';
+        if ((str_contains($token, 'nocontent') && $service === 'content') || (str_contains($token, 'nofeed') && $service === 'analytics')
+            || (str_contains($token, 'nofin') && in_array($service, ['finance', 'advert'], true))) {
             out(['title' => 'token scope not allowed'], 401);
         }
         out(['TS' => date('c'), 'Status' => 'OK']);
@@ -175,6 +295,31 @@ switch ($path) {
         out(['data' => ['taskId' => 'task-' . date('His')]]);
 
     default:
+        if (preg_match('#^/api/finance/v1/sales-reports/detailed/(\d+)$#', $path, $m)) {
+            $rows = array_values(array_filter(reportRows(date('Y-m-d', strtotime((string) $m[1]))), static fn($r) => $r['rrdId'] > (int) ($body['rrdId'] ?? 0)));
+            $rows = array_slice($rows, 0, (int) ($body['limit'] ?? 100000));
+            if (!$rows) {
+                http_response_code(204);
+                exit;
+            }
+            out($rows);
+        }
+        if (preg_match('#^/api/v1/paid_storage/tasks/[^/]+/status$#', $path)) {
+            out(['data' => ['id' => 'task', 'status' => 'done']]);
+        }
+        if (preg_match('#^/api/v1/paid_storage/tasks/st-(\d{4}-\d\d-\d\d)-(\d{4}-\d\d-\d\d)/download$#', $path, $m)) {
+            $list = [];
+            for ($t = strtotime($m[1]); $t <= strtotime($m[2]); $t += 86400) {
+                foreach ($products as $k => $p) {
+                    foreach (['Коледино', 'Электросталь'] as $wh) {
+                        $list[] = ['date' => date('Y-m-d', $t), 'warehouse' => $wh, 'warehouseCoef' => 1.7, 'nmId' => $p[0], 'vendorCode' => $p[1], 'subject' => $p[4],
+                            'brand' => $p[3], 'barcode' => '20' . $p[0], 'size' => '0', 'volume' => 2.5 + $k, 'calcType' => 'короба: без габаритов',
+                            'warehousePrice' => round(3.2 + $k * 1.7, 2), 'barcodesCount' => 20 + $k * 5];
+                    }
+                }
+            }
+            out($list);
+        }
         if (preg_match('#^/api/v1/warehouse_remains/tasks/[^/]+/status$#', $path)) {
             out(['data' => ['id' => 'task', 'status' => 'done']]);
         }

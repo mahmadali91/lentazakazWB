@@ -16,6 +16,8 @@ final class StoreService
         'marketplace' => 'Маркетплейс — новые сборочные задания FBS / DBS / DBW / Самовывоз',
         'statistics'  => 'Статистика — бренд, предмет, склад WB, цены',
         'content'     => 'Контент — названия и фото товаров',
+        'finance'     => 'Финансы — отчёты реализации для расчёта чистой прибыли',
+        'advert'      => 'Продвижение — расходы на рекламу по товарам',
     ];
 
     /**
@@ -94,6 +96,9 @@ final class StoreService
             'tariffs_next_at'  => null,
             'remains_next_at'  => null,
             'remains_state'    => null,
+            'fin_next_at'      => null,
+            'storage_next_at'  => null,
+            'ads_next_at'      => null,
         ], 'id = :id', ['id' => $store['id']]);
     }
 
