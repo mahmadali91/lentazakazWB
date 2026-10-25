@@ -1,0 +1,24 @@
+# Лента заказов WB — корневой .htaccess для Beget / Apache.
+# Позволяет разместить весь репозиторий прямо в public_html:
+# все запросы уходят в папку public/, служебные папки закрыты.
+Options -Indexes
+DirectoryIndex index.php
+
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+  # Закрываем исходники, конфиги, логи и служебные файлы
+  RewriteRule ^(src|config|cron|database|storage|docs|tools|\.git)(/|$) - [F,L]
+  RewriteRule ^(\.env|composer\.(json|lock)|README\.md)$ - [F,L]
+  # Всё остальное — в public/
+  RewriteRule ^(.*)$ public/$1 [L]
+</IfModule>
+
+<FilesMatch "\.(sql|log|lock|md|example)$">
+  <IfModule mod_authz_core.c>
+    Require all denied
+  </IfModule>
+  <IfModule !mod_authz_core.c>
+    Order deny,allow
+    Deny from all
+  </IfModule>
+</FilesMatch>
