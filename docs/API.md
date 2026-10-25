@@ -38,6 +38,7 @@ curl -H "Authorization: Bearer lz_…" "https://wb.linkoz.ru/api/v1/finance_summ
 | `finance_reports` | Отчёты WB и сверка «Итого к оплате» | `store_id`, `limit` |
 | `finance_order` | Строки отчётов и расчёт по одному заказу | `srid` |
 | `orders_check` | Сверка с кабинетом WB по дням: заказы по источникам, суммы до и после СПП, выкупы по дате события | `from`, `to`, `store_id` |
+| `wb_live_check` | Живая сверка: запрашивает у WB (Статистика) заказы и выкупы за день токеном магазина и сравнивает с сайтом, показывает расхождения по Srid | `date`, `store_id` |
 | `sync_status` | Cron, источники WB по магазинам, ошибки, журнал запросов | `store_id`, `log_limit` |
 | `admin_overview` | Только для администратора: клиенты, тарифы, ошибки магазинов, платежи | `limit` |
 

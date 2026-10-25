@@ -83,6 +83,11 @@ final class ApiTools
                 'description' => 'Сверка по дням для сравнения с кабинетом WB: заказы (всего, из Ленты заказов, из Статистики, только из одного источника), суммы по цене продавца и по цене для покупателя (после СПП), выкупы/отмены/возвраты по дате события и по дате заказа, по схемам.',
                 'properties' => ['from' => self::DATE, 'to' => self::DATE, 'store_id' => self::STORE],
             ],
+            'wb_live_check' => [
+                'title' => 'Живая сверка с WB',
+                'description' => 'Запрашивает у WB (Статистика, токеном магазина) заказы и выкупы за день и сравнивает с данными сайта: количество, суммы по цене продавца и для покупателя, отмены, возвраты, заказы которых нет на сайте или в WB. Лимит WB — 1 запрос в минуту, вызывайте не чаще раза в 2 минуты.',
+                'properties' => ['date' => self::DATE, 'store_id' => self::STORE],
+            ],
             'sync_status' => [
                 'title' => 'Состояние синхронизации',
                 'description' => 'Проверка работы сервиса: последний запуск cron, по каждому магазину — когда обновлялся каждый источник WB, следующий запрос, ошибки и журнал последних запросов к WB.',
@@ -341,6 +346,77 @@ final class ApiTools
     }
 
     // ------------------------------------------------------------------ проверка работы
+
+    private static function toolWbLiveCheck(array $a, array $account, array $plan, array $storeIds): array
+    {
+        $date = preg_match('/^\d{4}-\d{2}-\d{2}$/', (string) ($a['date'] ?? '')) ? $a['date'] : date('Y-m-d', time() - 86400);
+        $out = ['date' => $date, 'timezone' => date_default_timezone_get(), 'stores' => []];
+        foreach ($storeIds as $sid) {
+            $store = DB::one('SELECT * FROM stores WHERE id = ?', [$sid]);
+            $res = ['store_id' => $sid, 'name' => $store['name']];
+            $wb = new \App\Wb\WbClient(\App\Core\Crypto::decrypt($store['token_enc']));
+            $day = static fn($v) => substr((string) wb_time((string) $v), 0, 10) === $date;
+            try {
+                $orders = array_values(array_filter($wb->supplierOrdersDay($date), static fn($o) => $day($o['date'] ?? '')));
+                $res['wb_orders'] = [
+                    'count' => count($orders),
+                    'sum_seller_price' => round(array_sum(array_map(static fn($o) => (float) ($o['priceWithDisc'] ?? 0), $orders)), 2),
+                    'sum_buyer_price' => round(array_sum(array_map(static fn($o) => (float) ($o['finishedPrice'] ?? 0), $orders)), 2),
+                    'cancelled_so_far' => count(array_filter($orders, static fn($o) => !empty($o['isCancel']))),
+                    'fbo' => count(array_filter($orders, static fn($o) => ($o['warehouseType'] ?? '') !== 'Склад продавца')),
+                ];
+                $wbSrids = array_column($orders, 'srid');
+            } catch (\App\Wb\WbException $e) {
+                $res['wb_orders'] = ['error' => $e->status . ' ' . $e->humanMessage()];
+                $wbSrids = null;
+            }
+            usleep(1500000);
+            try {
+                $sales = array_values(array_filter($wb->supplierSalesDay($date), static fn($s) => $day($s['date'] ?? '')));
+                $buy = array_values(array_filter($sales, static fn($s) => str_starts_with((string) ($s['saleID'] ?? ''), 'S')));
+                $ret = array_values(array_filter($sales, static fn($s) => str_starts_with((string) ($s['saleID'] ?? ''), 'R')));
+                $res['wb_buyouts'] = [
+                    'count' => count($buy),
+                    'sum_seller_price' => round(array_sum(array_map(static fn($s) => (float) ($s['priceWithDisc'] ?? 0), $buy)), 2),
+                    'sum_buyer_price' => round(array_sum(array_map(static fn($s) => (float) ($s['finishedPrice'] ?? 0), $buy)), 2),
+                    'for_pay' => round(array_sum(array_map(static fn($s) => (float) ($s['forPay'] ?? 0), $buy)), 2),
+                    'returns' => count($ret),
+                ];
+                $buySrids = array_column($buy, 'srid');
+            } catch (\App\Wb\WbException $e) {
+                $res['wb_buyouts'] = ['error' => $e->status . ' ' . $e->humanMessage() . ($e->isRateLimit() ? ' — повторите через 1–2 минуты' : '')];
+                $buySrids = null;
+            }
+            // Данные сайта за тот же день
+            $range = [$sid, $date . ' 00:00:00', $date . ' 23:59:59'];
+            $site = DB::one("SELECT COUNT(*) count, ROUND(SUM(seller_price), 2) sum_seller_price, ROUND(SUM(finished_price), 2) sum_buyer_price
+                FROM orders WHERE store_id = ? AND order_created_at BETWEEN ? AND ?", $range);
+            $siteBuy = DB::one("SELECT COUNT(*) count, ROUND(SUM(seller_price), 2) sum_seller_price, ROUND(SUM(finished_price), 2) sum_buyer_price
+                FROM orders WHERE store_id = ? AND status = 'buyout' AND COALESCE(status_at, order_created_at) BETWEEN ? AND ?", $range);
+            $res['site_orders'] = self::typed($site);
+            $res['site_buyouts'] = self::typed($siteBuy);
+            if ($wbSrids !== null) {
+                $siteSrids = array_column(DB::all('SELECT srid FROM orders WHERE store_id = ? AND order_created_at BETWEEN ? AND ?', $range), 'srid');
+                $res['orders_missing_on_site'] = array_slice(array_values(array_diff($wbSrids, $siteSrids)), 0, 20);
+                $res['orders_not_in_wb_stats'] = array_slice(array_values(array_diff($siteSrids, $wbSrids)), 0, 20);
+                $res['orders_missing_on_site_count'] = count(array_diff($wbSrids, $siteSrids));
+                $res['orders_not_in_wb_stats_count'] = count(array_diff($siteSrids, $wbSrids));
+            }
+            if ($buySrids !== null) {
+                $siteBuySrids = array_column(DB::all("SELECT srid FROM orders WHERE store_id = ? AND status = 'buyout' AND COALESCE(status_at, order_created_at) BETWEEN ? AND ?", $range), 'srid');
+                $missing = array_values(array_diff($buySrids, $siteBuySrids));
+                $res['buyouts_missing_on_site_count'] = count($missing);
+                $res['buyouts_missing_on_site'] = [];
+                foreach (array_slice($missing, 0, 20) as $sr) {
+                    $o = DB::one('SELECT srid, status, order_created_at, status_at FROM orders WHERE store_id = ? AND srid = ?', [$sid, $sr]);
+                    $res['buyouts_missing_on_site'][] = $o ? self::typed($o) : ['srid' => $sr, 'status' => 'нет на сайте'];
+                }
+                $res['buyouts_on_site_not_in_wb_count'] = count(array_diff($siteBuySrids, $buySrids));
+            }
+            $out['stores'][] = $res;
+        }
+        return $out;
+    }
 
     private static function toolOrdersCheck(array $a, array $account, array $plan, array $storeIds): array
     {

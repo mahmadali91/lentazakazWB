@@ -155,6 +155,18 @@ final class WbClient
         return $this->request('statistics', 'GET', '/api/v1/supplier/orders', ['dateFrom' => $dateFrom, 'flag' => 0]);
     }
 
+    /** Заказы за один день (flag=1 — все заказы с датой dateFrom), для сверки с кабинетом WB. */
+    public function supplierOrdersDay(string $date): array
+    {
+        return $this->request('statistics', 'GET', '/api/v1/supplier/orders', ['dateFrom' => $date, 'flag' => 1]);
+    }
+
+    /** Продажи (выкупы, saleID «S…») и возвраты («R…») за один день — как «Выкупили» в кабинете WB. */
+    public function supplierSalesDay(string $date): array
+    {
+        return $this->request('statistics', 'GET', '/api/v1/supplier/sales', ['dateFrom' => $date, 'flag' => 1]);
+    }
+
     /** Новые сборочные задания: FBS, DBS, DBW, Самовывоз (Click & Collect). */
     public function newAssemblyOrders(string $scheme): array
     {
