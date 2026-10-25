@@ -242,7 +242,12 @@
     listEl.addEventListener('click', function (e) {
       if (e.target.closest('a')) return;
       var el = e.target.closest('.order[data-id]');
-      if (el && orders[el.getAttribute('data-id')]) openOrder(orders[el.getAttribute('data-id')]);
+      if (!el || !orders[el.getAttribute('data-id')]) return;
+      try {
+        openOrder(orders[el.getAttribute('data-id')]);
+      } catch (err) {
+        toast('Не удалось открыть заказ: ' + err.message);
+      }
     });
     listEl.addEventListener('keydown', function (e) {
       if (e.key !== 'Enter') return;
