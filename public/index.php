@@ -42,7 +42,7 @@ if (Config::installed()) {
     App\Core\Migrator::ensure();
 }
 
-$isWebhook = str_starts_with($path, '/webhook/') || $path === '/cron-run' || str_starts_with($path, '/api/v1') || str_starts_with($path, '/mcp/');
+$isWebhook = str_starts_with($path, '/webhook/') || $path === '/cron-run' || str_starts_with($path, '/api/v1') || str_starts_with($path, '/mcp/') || $path === '/mcp';
 if (!$isWebhook) {
     Auth::startSession();
     if ($method === 'POST' && !Csrf::check()) {
@@ -143,6 +143,8 @@ $r->get('/api/feed/updates', [ApiController::class, 'updates']);
 $r->get('/api/v1', [ApiV1Controller::class, 'index']);
 $r->get('/api/v1/{name}', [ApiV1Controller::class, 'tool']);
 $r->post('/api/v1/{name}', [ApiV1Controller::class, 'tool']);
+$r->post('/mcp', [ApiV1Controller::class, 'mcpHeader']);
+$r->get('/mcp', [ApiV1Controller::class, 'mcpHeader']);
 $r->post('/mcp/{key}', [ApiV1Controller::class, 'mcp']);
 $r->get('/mcp/{key}', [ApiV1Controller::class, 'mcp']);
 $r->get('/app/api', [ApiKeysController::class, 'index']);

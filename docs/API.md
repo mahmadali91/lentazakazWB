@@ -7,7 +7,8 @@
 
 Адрес: `https://wb.linkoz.ru/mcp/<ключ>` — Model Context Protocol, транспорт Streamable HTTP (на каждый POST — JSON-ответ, без SSE).
 
-- **claude.ai**: Настройки → Коннекторы → «Добавить пользовательский коннектор» → URL = адрес выше, поля OAuth пустые.
+- **claude.ai**: Настройки → Коннекторы → «Добавить пользовательский коннектор» → URL = адрес выше, аутентификация «Без входа».
+  Или надёжнее: URL `https://wb.linkoz.ru/mcp`, в «Заголовки запроса» — `Authorization: Bearer <ключ>` (Claude хранит значение скрыто).
 - **Claude Code**: `claude mcp add --transport http lenta-wb https://wb.linkoz.ru/mcp/<ключ>`
 
 Поддерживаются `initialize`, `ping`, `tools/list`, `tools/call` (версии протокола 2025-06-18, 2025-03-26, 2024-11-05).

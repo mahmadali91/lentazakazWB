@@ -9,7 +9,7 @@ use App\Services\ApiTools;
 /**
  * Внешнее API по ключу (только чтение):
  *  - REST: GET|POST /api/v1/<инструмент>, ключ в заголовке Authorization: Bearer <ключ> (или X-Api-Key, или ?key=)
- *  - MCP:  POST /mcp/<ключ> — сервер Model Context Protocol (Streamable HTTP, JSON-ответы) для коннектора Claude.
+ *  - MCP:  POST /mcp/<ключ> или POST /mcp с ключом в заголовке — сервер Model Context Protocol (Streamable HTTP, JSON-ответы) для коннектора Claude.
  * Ключи создаёт владелец кабинета на странице «API и Claude»; в БД хранится только SHA-256 ключа.
  */
 final class ApiV1Controller
@@ -97,6 +97,12 @@ final class ApiV1Controller
     }
 
     // ------------------------------------------------------------------ MCP
+
+    /** MCP без ключа в адресе: ключ в заголовке Authorization: Bearer … или X-Api-Key (поле «Заголовки запроса» в Claude). */
+    public function mcpHeader(): never
+    {
+        $this->mcp(self::keyFromRequest());
+    }
 
     public function mcp(string $key): never
     {
