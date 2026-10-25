@@ -46,6 +46,86 @@
     if (navigator.clipboard) navigator.clipboard.writeText(text).then(function () { toast('Скопировано'); });
   });
 
+  // ---------- Общее мини-окно (используется в разделе «Товары») ----------
+  function lzEsc(v) {
+    return String(v === null || v === undefined ? '' : v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  }
+  function lzMoney(v) { return v === null || v === undefined ? '—' : Math.round(v).toLocaleString('ru-RU') + ' ₽'; }
+  function lzModal(html) {
+    var box = document.getElementById('lzModal');
+    if (!box) {
+      box = document.createElement('div');
+      box.id = 'lzModal';
+      box.className = 'modal';
+      box.innerHTML = '<div class="modal-card" role="dialog" aria-modal="true"><button class="modal-x" type="button" aria-label="Закрыть">×</button><div class="modal-body"></div></div>';
+      document.body.appendChild(box);
+      box.addEventListener('click', function (e) { if (e.target === box || e.target.closest('.modal-x')) lzModalClose(); });
+      document.addEventListener('keydown', function (e) { if (e.key === 'Escape') lzModalClose(); });
+    }
+    box.querySelector('.modal-body').innerHTML = html;
+    box.querySelector('.modal-card').scrollTop = 0;
+    box.classList.add('open');
+    document.body.classList.add('modal-open');
+  }
+  function lzModalClose() {
+    var box = document.getElementById('lzModal');
+    if (box) box.classList.remove('open');
+    document.body.classList.remove('modal-open');
+  }
+
+  // ---------- Товары: карточка → окно с расчётом и полем себестоимости ----------
+  var pcfg = window.LZ_PRODUCTS;
+  if (pcfg) {
+    var kv = function (label, value, hint) {
+      return '<div class="kv"><span>' + label + (hint ? '<small>' + hint + '</small>' : '') + '</span><b>' + value + '</b></div>';
+    };
+    var openProduct = function (p) {
+      var c = p.calc;
+      var html = '<div class="m-head"><div class="m-photo">' + (p.photo ? '<img src="' + lzEsc(p.photo) + '" alt="" referrerpolicy="no-referrer">' : '') + '</div>' +
+        '<div style="min-width:0"><div class="m-title">' + lzEsc(p.title) + '</div>' +
+        '<div class="small muted" style="margin-top:4px">' + (p.article ? 'арт. ' + lzEsc(p.article) + ' · ' : '') + 'WB ' + p.nm + '</div>' +
+        '<div class="small" style="margin-top:6px"><a href="https://www.wildberries.ru/catalog/' + p.nm + '/detail.aspx" target="_blank" rel="noopener">Открыть на WB ↗</a></div></div></div>';
+      html += '<div class="m-calc"><h4>Расчёт прибыли на 1 шт</h4>';
+      if (!c) {
+        html += '<p class="small muted">За 30 дней не было заказов — средняя цена неизвестна.</p>';
+      } else {
+        html += kv('Средняя цена продавца', lzMoney(c.price), 'за 30 дней') +
+          kv('Комиссия WB ' + (Math.round(c.commission_pct * 100) / 100).toLocaleString('ru-RU') + '%', '−' + lzMoney(c.commission), lzEsc(c.commission_src)) +
+          kv('Логистика', '−' + lzMoney(c.logistics), lzEsc(c.logistics_src)) +
+          kv('Налог ' + c.tax_pct + '%', '−' + lzMoney(c.tax), 'из настроек') +
+          (c.other ? kv('Прочие расходы', '−' + lzMoney(c.other), 'из настроек') : '') +
+          kv('Себестоимость', c.cost !== null ? '−' + lzMoney(c.cost) : 'не указана', c.cost !== null ? 'ваше значение' : 'укажите ниже');
+        if (c.profit !== null) {
+          html += '<div class="kv total"><span>Прибыль ≈</span><b class="' + (c.profit < 0 ? 'neg' : 'pos') + '">' + (c.profit < 0 ? '−' : '+') + lzMoney(Math.abs(c.profit)) + '</b></div>';
+        }
+      }
+      if (pcfg.canEdit) {
+        var csrf = (document.querySelector('meta[name="csrf"]') || {}).content || '';
+        html += '<form method="post" action="/app/products" class="p-edit">' +
+          '<input type="hidden" name="_csrf" value="' + lzEsc(csrf) + '"><input type="hidden" name="q" value="' + lzEsc(pcfg.q) + '"><input type="hidden" name="empty" value="' + lzEsc(pcfg.empty) + '">' +
+          '<div><label>Себестоимость, ₽</label><input type="text" inputmode="decimal" name="cost[' + p.key + ']" value="' + (p.cost !== null ? p.cost : '') + '" placeholder="—"></div>' +
+          '<div><label>Комиссия, %</label><input type="text" inputmode="decimal" name="comm[' + p.key + ']" value="' + (p.comm_manual !== null ? p.comm_manual : '') + '" placeholder="' + p.comm_auto + ' (WB)"></div>' +
+          '<button class="btn" style="grid-column:1/-1">Сохранить</button></form>';
+      }
+      html += '</div>';
+      html += '<div class="m-grid"><div><h4>Продажи и остатки</h4>' +
+        kv('Заказов за 30 дней', p.orders) +
+        kv('Остаток на складах WB', p.stock !== null ? p.stock + ' шт' : '—', p.stock !== null ? 'в пути к покупателям ' + p.stock_to + ', возвраты ' + p.stock_from + (p.stock_at ? ' · ' + lzEsc(p.stock_at) : '') : 'ещё не загружен') +
+        (p.scheme ? kv('Основная схема', lzEsc(p.scheme)) : '') +
+        '</div><div><h4>Товар</h4>' +
+        (p.subject ? kv('Предмет', lzEsc(p.subject), lzEsc(p.brand || '')) : '') +
+        kv('Объём', p.volume !== null ? p.volume.toLocaleString('ru-RU') + ' л' : '—', p.volume_src === 'remains' ? 'отчёт WB об остатках' : (p.volume_src === 'card' ? 'габариты карточки ' + lzEsc(p.dims || '') + ' см' : 'неизвестен')) +
+        (p.store ? kv('Магазин', lzEsc(p.store)) : '') + '</div></div>';
+      lzModal(html);
+    };
+    document.addEventListener('click', function (e) {
+      if (e.target.closest('a')) return;
+      var card = e.target.closest('.p-card[data-p]');
+      if (!card) return;
+      try { openProduct(JSON.parse(card.getAttribute('data-p'))); } catch (err) { toast('Не удалось открыть товар: ' + err.message); }
+    });
+  }
+
   var cfg = window.LZ_FEED;
   if (!cfg || !cfg.enabled) return;
 

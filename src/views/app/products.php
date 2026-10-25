@@ -27,7 +27,7 @@ $countryNames = ['RU' => 'Россия', 'KG' => 'Кыргызстан', 'KZ' =>
     <?php if (!$products): ?>
       <div class="empty"><div class="ico"><?= icon('box', 28) ?></div><h3>Товаров пока нет</h3><p>Товары появляются автоматически вместе с заказами после синхронизации с WB.</p></div>
     <?php else: ?>
-      <form method="post" action="/app/products">
+      <form method="post" action="/app/products" class="p-desktop">
         <?= csrf_field() ?>
         <input type="hidden" name="q" value="<?= e($q) ?>"><input type="hidden" name="empty" value="<?= $onlyEmpty ? '1' : '' ?>">
         <div class="table-wrap">
@@ -99,6 +99,44 @@ $countryNames = ['RU' => 'Россия', 'KG' => 'Кыргызстан', 'KZ' =>
             <span class="small muted" style="margin-left:10px">Пустая комиссия — берётся ставка WB для категории. Наведите курсор на цифру, чтобы увидеть, откуда она.</span></div>
         <?php endif; ?>
       </form>
+
+      <?php /* Телефон: карточки товаров, по нажатию — окно с подробностями и полем себестоимости */ ?>
+      <div class="p-cards">
+        <?php foreach ($products as $p):
+            $c = $p['calc'];
+            $title = $p['title'] ?: trim(($p['subject'] ?? '') . ' ' . ($p['brand'] ?? '')) ?: 'Товар ' . $p['nm_id'];
+            $data = [
+                'key' => (int) $p['store_id'] . '_' . (int) $p['nm_id'], 'title' => $title, 'photo' => $p['photo'],
+                'nm' => (int) $p['nm_id'], 'article' => $p['vendor_code'], 'subject' => $p['subject'], 'brand' => $p['brand'],
+                'store' => $multi ? $p['store_name'] : null, 'scheme' => $p['main_scheme'] ? scheme_label($p['main_scheme']) : null,
+                'stock' => $p['stock_wb'] !== null ? (int) $p['stock_wb'] : null, 'stock_to' => (int) $p['stock_to_client'], 'stock_from' => (int) $p['stock_from_client'],
+                'stock_at' => $p['stock_at'] ? date_ru($p['stock_at']) : null,
+                'orders' => (int) $p['orders_30'], 'avg' => $p['avg_price'] !== null ? round((float) $p['avg_price']) : null,
+                'volume' => $p['volume_l'] !== null ? (float) $p['volume_l'] : null, 'volume_src' => $p['volume_src'], 'dims' => $p['dims'],
+                'cost' => $p['cost_price'] !== null ? (float) $p['cost_price'] : null,
+                'comm_manual' => $p['commission_pct'] !== null ? (float) $p['commission_pct'] : null,
+                'comm_auto' => $p['auto_comm'] ?? $settings['commission'],
+                'calc' => $c,
+            ];
+        ?>
+          <div class="p-card" role="button" tabindex="0" data-p="<?= e(json_encode($data, JSON_UNESCAPED_UNICODE)) ?>">
+            <?php if ($p['photo']): ?><img class="p-card-photo" src="<?= e($p['photo']) ?>" alt="" loading="lazy" referrerpolicy="no-referrer">
+            <?php else: ?><div class="p-card-photo"></div><?php endif; ?>
+            <div class="p-card-info">
+              <div class="p-card-title"><?= e($title) ?></div>
+              <div class="small muted"><?= $p['vendor_code'] ? 'арт. ' . e($p['vendor_code']) . ' · ' : '' ?>WB <?= (int) $p['nm_id'] ?></div>
+              <div class="p-card-stats">
+                <div class="o-stat"><span class="o-cap">Цена</span><b><?= $p['avg_price'] !== null ? money($p['avg_price']) : '—' ?></b></div>
+                <div class="o-stat"><span class="o-cap">Прибыль/шт</span>
+                  <?php if ($c && $c['profit'] !== null): ?><b class="<?= $c['profit'] < 0 ? 'neg' : 'pos' ?>"><?= ($c['profit'] < 0 ? '−' : '+') . money(abs($c['profit'])) ?></b>
+                  <?php else: ?><b class="muted small">нет себест.</b><?php endif; ?></div>
+                <div class="o-stat"><span class="o-cap">Остаток</span><b><?= $p['stock_wb'] !== null ? (int) $p['stock_wb'] . ' шт' : '—' ?></b></div>
+              </div>
+            </div>
+          </div>
+        <?php endforeach; ?>
+      </div>
+      <script>window.LZ_PRODUCTS = <?= json_encode(['canEdit' => $canEdit, 'q' => $q, 'empty' => $onlyEmpty ? '1' : ''], JSON_UNESCAPED_UNICODE) ?>;</script>
     <?php endif; ?>
   </div>
 
