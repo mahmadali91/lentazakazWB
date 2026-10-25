@@ -464,3 +464,8 @@ span.p-thumb img { width: 100%; height: 100%; object-fit: cover; display: block;
 .promo-table .num-input { width: 86px; }
 .promo-table .num-input.sm { width: 64px; }
 .fin-card summary { -webkit-tap-highlight-color: transparent; -webkit-user-select: none; user-select: none; outline: none; }
+
+/* API и Claude */
+.copy-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.copy-row code { flex: 1; min-width: 0; padding: 8px 10px; }
+.api-new { border-color: var(--ok); }

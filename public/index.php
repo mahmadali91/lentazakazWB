@@ -10,6 +10,8 @@ require dirname(__DIR__) . '/src/bootstrap.php';
 
 use App\Controllers\AdminController;
 use App\Controllers\ApiController;
+use App\Controllers\ApiKeysController;
+use App\Controllers\ApiV1Controller;
 use App\Controllers\AuthController;
 use App\Controllers\BillingController;
 use App\Controllers\FeedController;
@@ -40,7 +42,7 @@ if (Config::installed()) {
     App\Core\Migrator::ensure();
 }
 
-$isWebhook = str_starts_with($path, '/webhook/') || $path === '/cron-run';
+$isWebhook = str_starts_with($path, '/webhook/') || $path === '/cron-run' || str_starts_with($path, '/api/v1') || str_starts_with($path, '/mcp/');
 if (!$isWebhook) {
     Auth::startSession();
     if ($method === 'POST' && !Csrf::check()) {
@@ -52,6 +54,15 @@ if (!$isWebhook) {
             . '<h2>Сессия устарела</h2><p>Обновите страницу и повторите действие. Если ошибка повторяется — '
             . 'разрешите cookies для этого сайта.</p><p><a href="' . $back . '">← Вернуться</a></p></div>');
     }
+}
+
+// Предзапрос CORS для API и MCP (браузерные клиенты, MCP Inspector)
+if ($method === 'OPTIONS' && $isWebhook && !str_starts_with($path, '/webhook/')) {
+    header('Access-Control-Allow-Origin: *');
+    header('Access-Control-Allow-Methods: GET, POST, OPTIONS');
+    header('Access-Control-Allow-Headers: Authorization, Content-Type, X-Api-Key, Mcp-Session-Id, Mcp-Protocol-Version');
+    http_response_code(204);
+    exit;
 }
 
 $r = new Router();
@@ -127,6 +138,16 @@ $r->post('/app/finance/settings', [FinanceController::class, 'settings']);
 // JSON для живой ленты
 $r->get('/api/feed', [ApiController::class, 'feed']);
 $r->get('/api/feed/updates', [ApiController::class, 'updates']);
+
+// Внешнее API по ключу (только чтение) и MCP-сервер для Claude
+$r->get('/api/v1', [ApiV1Controller::class, 'index']);
+$r->get('/api/v1/{name}', [ApiV1Controller::class, 'tool']);
+$r->post('/api/v1/{name}', [ApiV1Controller::class, 'tool']);
+$r->post('/mcp/{key}', [ApiV1Controller::class, 'mcp']);
+$r->get('/mcp/{key}', [ApiV1Controller::class, 'mcp']);
+$r->get('/app/api', [ApiKeysController::class, 'index']);
+$r->post('/app/api/keys', [ApiKeysController::class, 'create']);
+$r->post('/app/api/keys/{id}/delete', [ApiKeysController::class, 'delete']);
 
 // Админка
 $r->get('/admin', [AdminController::class, 'index']);

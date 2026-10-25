@@ -7,6 +7,9 @@ if (!$isMember) {
     $items[] = ['billing', '/app/billing', 'Тариф и оплата', 'Тариф', 'card'];
 }
 $items[] = ['settings', '/app/settings', 'Настройки', 'Настройки', 'settings'];
+if (!$isMember) {
+    $items[] = ['api', '/app/api', 'API и Claude', 'API', 'zap'];
+}
 if (($user['role'] ?? '') === 'admin') {
     $items[] = ['admin', '/admin', 'Админ-панель', 'Админ', 'shield'];
 }
@@ -65,7 +68,7 @@ if (!$isMember) {
     $mobile[] = ['stores', '/app/stores', 'Магазины', 'store'];
 }
 $mobile[] = ['profile', '/app/profile', 'Профиль', 'user'];
-$profileActive = in_array($nav, ['profile', 'settings', 'billing', 'admin'], true);
+$profileActive = in_array($nav, ['profile', 'settings', 'billing', 'admin', 'api'], true);
 ?>
 <nav class="mobile-nav">
   <?php foreach ($mobile as [$key, $href, $short, $ico]): ?>

@@ -31,6 +31,7 @@ $initial = mb_strtoupper(mb_substr($display, 0, 1));
     <?php if (!$isMember): ?>
       <a href="/app/billing"><?= icon('card') ?> Тариф и оплата <span class="chev"><?= icon('chevron', 18) ?></span></a>
       <a href="/app/stores"><?= icon('store') ?> Магазины WB <span class="chev"><?= icon('chevron', 18) ?></span></a>
+      <a href="/app/api"><?= icon('zap') ?> API и подключение к Claude <span class="chev"><?= icon('chevron', 18) ?></span></a>
     <?php endif; ?>
     <a href="/app/settings"><?= icon('settings') ?> Настройки, Telegram<?= $isMember ? '' : ', сотрудники' ?> <span class="chev"><?= icon('chevron', 18) ?></span></a>
     <?php if (($user['role'] ?? '') === 'admin'): ?>

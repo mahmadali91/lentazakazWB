@@ -364,3 +364,20 @@ CREATE TABLE IF NOT EXISTS fin_selfbuys (
   PRIMARY KEY (user_id, srid),
   CONSTRAINT fk_sb_user FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Ключи API (REST и MCP для Claude); хранится только SHA-256 ключа
+CREATE TABLE IF NOT EXISTS api_keys (
+  id           INT UNSIGNED NOT NULL AUTO_INCREMENT,
+  user_id      INT UNSIGNED NOT NULL,
+  name         VARCHAR(80) NOT NULL,
+  token_hash   CHAR(64) NOT NULL,
+  token_hint   VARCHAR(16) NOT NULL,
+  requests     INT UNSIGNED NOT NULL DEFAULT 0,
+  last_used_at DATETIME NULL,
+  last_ip      VARCHAR(45) NULL,
+  created_at   DATETIME NOT NULL,
+  PRIMARY KEY (id),
+  UNIQUE KEY uq_api_token (token_hash),
+  KEY idx_api_user (user_id),
+  CONSTRAINT fk_api_user FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
