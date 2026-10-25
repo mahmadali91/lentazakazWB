@@ -216,12 +216,14 @@ final class SyncService
             $snapshot = (string) $paging['snapshot'];
         } else {
             $minStart = time() - 30 * 86400;
-            $from = isset($state['high']) ? strtotime((string) $state['high']) - 15 * 60 : $this->historyStart();
+            $high = !empty($state['high']) ? strtotime((string) $state['high']) : false;
+            $from = $high ? $high - 15 * 60 : $this->historyStart();
             $start = date('c', max($minStart, min($from, time() - 60)));
             $offset = 0;
             $snapshot = null;
         }
 
+        $requestedAt = time();
         $data = $this->wb->orderFeed($start, $offset, self::FEED_LIMIT, $snapshot);
         $orders = $data['orders'] ?? [];
         $count = 0;
@@ -246,7 +248,13 @@ final class SyncService
             throw $e;
         }
 
-        $snapshot = $snapshot ?? ($data['snapshotTime'] ?? date('c'));
+        // WB может прислать snapshotTime пустым — тогда отсчитываем от момента запроса (иначе каждый раз грузилась бы вся история)
+        if ($snapshot === null || $snapshot === '' || strtotime($snapshot) === false) {
+            $snapshot = (string) ($data['snapshotTime'] ?? '');
+            if ($snapshot === '' || strtotime($snapshot) === false) {
+                $snapshot = date('c', $requestedAt);
+            }
+        }
         if (count($orders) >= self::FEED_LIMIT) {
             // Есть ещё страницы — продолжим через минуту (лимит WB) с тем же snapshotTime
             $state['paging'] = ['start' => $start, 'offset' => $offset + self::FEED_LIMIT, 'snapshot' => $snapshot];
