@@ -9,7 +9,7 @@ namespace App\Core;
  */
 final class Migrator
 {
-    public const VERSION = 4;
+    public const VERSION = 6;
 
     public static function ensure(): void
     {
@@ -31,6 +31,12 @@ final class Migrator
             }
             if ($version < 4) {
                 self::v4();
+            }
+            if ($version < 5) {
+                self::run(self::API_KEYS_DDL);
+            }
+            if ($version < 6) {
+                self::v6();
             }
             DB::setSetting('schema_version', (string) self::VERSION);
             @file_put_contents($cache, (string) self::VERSION);
@@ -235,6 +241,35 @@ final class Migrator
             CONSTRAINT fk_sb_user FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci',
     ];
+
+    /** v6: телефон клиента, индекс по дате статуса (выкупы за период), контакты поддержки и бот по умолчанию. */
+    private static function v6(): void
+    {
+        self::addColumn('users', 'phone', 'VARCHAR(20) NULL AFTER name');
+        self::run('ALTER TABLE orders ADD KEY idx_orders_store_status_at (store_id, status_at)');
+        foreach (['cfg.app.support_phone' => '+79913004737', 'cfg.app.support_email' => 'admin@linkoz.ru', 'cfg.telegram.bot_username' => 'WBLinkoz_bot'] as $k => $v) {
+            if (DB::setting($k) === null) {
+                DB::setSetting($k, $v);
+            }
+        }
+    }
+
+    /** v5: ключи API (REST и MCP-сервер для подключения к Claude). В базе — только SHA-256 ключа. */
+    public const API_KEYS_DDL = 'CREATE TABLE IF NOT EXISTS api_keys (
+        id           INT UNSIGNED NOT NULL AUTO_INCREMENT,
+        user_id      INT UNSIGNED NOT NULL,
+        name         VARCHAR(80) NOT NULL,
+        token_hash   CHAR(64) NOT NULL,
+        token_hint   VARCHAR(16) NOT NULL,
+        requests     INT UNSIGNED NOT NULL DEFAULT 0,
+        last_used_at DATETIME NULL,
+        last_ip      VARCHAR(45) NULL,
+        created_at   DATETIME NOT NULL,
+        PRIMARY KEY (id),
+        UNIQUE KEY uq_api_token (token_hash),
+        KEY idx_api_user (user_id),
+        CONSTRAINT fk_api_user FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci';
 
     public const COMMISSIONS_DDL = 'CREATE TABLE IF NOT EXISTS wb_commissions (
         store_id     INT UNSIGNED NOT NULL,

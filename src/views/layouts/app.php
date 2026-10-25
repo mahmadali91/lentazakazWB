@@ -20,7 +20,7 @@ if (($user['role'] ?? '') === 'admin') {
 <body>
 <div class="app">
   <aside class="sidebar">
-    <?= App\Core\View::partial('partials/logo', ['href' => ($user['role'] ?? '') === 'admin' ? '/admin' : '/app']) ?>
+    <?= App\Core\View::partial('partials/logo', ['href' => '/app']) ?>
     <nav class="side-nav">
       <?php foreach ($items as [$key, $href, $label, , $ico]): ?>
         <a href="<?= $href ?>" class="<?= $nav === $key ? 'active' : '' ?>"><?= icon($ico) ?> <?= e($label) ?></a>

@@ -22,6 +22,7 @@ if (!App\Core\Config::installed()) {
 }
 
 App\Core\Migrator::ensure();
+App\Core\Config::overlayFromDb();
 set_time_limit(58);
 $report = App\Services\Cron::run(50);
 if (in_array('-v', $argv, true)) {

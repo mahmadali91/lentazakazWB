@@ -123,7 +123,12 @@ final class SettingsController
     public function profile(): never
     {
         $user = Auth::require();
-        DB::exec('UPDATE users SET name = ? WHERE id = ?', [mb_substr((string) input('name', ''), 0, 120), $user['id']]);
+        $phone = normalize_phone((string) input('phone', ''));
+        if ($phone === null && (trim((string) input('phone', '')) !== '' || Auth::needsPhone($user))) {
+            flash('error', 'Укажите номер телефона, например +7 900 123-45-67.');
+            redirect('/app/settings#profile');
+        }
+        DB::exec('UPDATE users SET name = ?, phone = COALESCE(?, phone) WHERE id = ?', [mb_substr((string) input('name', ''), 0, 120), $phone, $user['id']]);
         flash('success', 'Профиль сохранён.');
         redirect('/app/settings');
     }

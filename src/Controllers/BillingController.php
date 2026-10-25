@@ -34,7 +34,7 @@ final class BillingController
             redirect('/app/billing');
         }
         if (!YooKassa::enabled()) {
-            flash('error', 'Онлайн-оплата пока не подключена. Напишите в поддержку: ' . config('app.support_email'));
+            flash('error', 'Онлайн-оплата пока не подключена. Свяжитесь с поддержкой: ' . trim(phone_ru(config('app.support_phone')) . ' ' . config('app.support_email')));
             redirect('/app/billing');
         }
         try {

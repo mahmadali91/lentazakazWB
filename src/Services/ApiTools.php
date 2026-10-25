@@ -1,0 +1,416 @@
+<?php
+declare(strict_types=1);
+
+namespace App\Services;
+
+use App\Core\DB;
+use App\Controllers\FeedController;
+
+/**
+ * Инструменты внешнего API — одни и те же для REST (/api/v1/<имя>) и MCP-сервера (/mcp/<ключ>) для Claude.
+ * Все инструменты только читают данные кабинета, которому принадлежит ключ.
+ */
+final class ApiTools
+{
+    private const PERIOD_ORDERS = ['type' => 'string', 'enum' => ['today', 'yesterday', '7d', '30d', 'custom'],
+        'description' => 'Период по дате заказа: today, yesterday, 7d, 30d или custom (тогда нужны from и to)'];
+    private const PERIOD_FIN = ['type' => 'string',
+        'description' => 'Период отчётов реализации: w4 (последние 4 недели, по умолчанию), w12, all, месяц ГГГГ-ММ или неделя week:ГГГГ-ММ-ДД. Вместо него можно передать from и to'];
+    private const DATE = ['type' => 'string', 'description' => 'Дата ГГГГ-ММ-ДД'];
+    private const STORE = ['type' => 'integer', 'description' => 'ID магазина (из account_info); не указан — все магазины'];
+
+    /** Описание инструментов (JSON Schema входных параметров). */
+    public static function definitions(array $account): array
+    {
+        $tools = [
+            'account_info' => [
+                'title' => 'Кабинет и магазины',
+                'description' => 'Кабинет, тариф и срок, подключённые магазины WB: категории токена, состояние загрузки, ошибки, число заказов. Начинайте с этого инструмента.',
+                'properties' => [],
+            ],
+            'orders_summary' => [
+                'title' => 'Сводка по заказам',
+                'description' => 'Сводка ленты заказов за период: заказы, выкупы, отмены, возвраты, суммы, средний чек, оценка прибыли, топ товаров и график по часам/дням.',
+                'properties' => ['period' => self::PERIOD_ORDERS, 'from' => self::DATE, 'to' => self::DATE, 'store_id' => self::STORE,
+                    'scheme' => ['type' => 'string', 'description' => 'Схема: FBO, SELLER (все со склада продавца), FBS, DBS, DBW, CC']],
+            ],
+            'list_orders' => [
+                'title' => 'Список заказов',
+                'description' => 'Заказы из ленты (новые сверху) с товаром, ценой, статусом, схемой, складом, городом и расчётом прибыли по каждому.',
+                'properties' => ['period' => self::PERIOD_ORDERS, 'from' => self::DATE, 'to' => self::DATE, 'store_id' => self::STORE,
+                    'status' => ['type' => 'string', 'enum' => ['created', 'buyout', 'cancel', 'return'], 'description' => 'Статус заказа'],
+                    'scheme' => ['type' => 'string', 'description' => 'FBO, SELLER, FBS, DBS, DBW, CC'],
+                    'q' => ['type' => 'string', 'description' => 'Поиск: артикул, WB ID, бренд, город'],
+                    'limit' => ['type' => 'integer', 'minimum' => 1, 'maximum' => 200, 'description' => 'Сколько заказов вернуть (по умолчанию 50)']],
+            ],
+            'products' => [
+                'title' => 'Товары',
+                'description' => 'Товары: себестоимость, комиссия WB категории, объём, остатки на складах WB, заказы за 30 дней и средняя цена.',
+                'properties' => ['q' => ['type' => 'string', 'description' => 'Поиск по артикулу, названию, бренду, предмету'], 'store_id' => self::STORE,
+                    'limit' => ['type' => 'integer', 'minimum' => 1, 'maximum' => 500, 'description' => 'По умолчанию 100']],
+            ],
+            'finance_summary' => [
+                'title' => 'Финансы: сводка',
+                'description' => 'Чистая прибыль по отчётам реализации WB за период: выручка, комиссия, логистика, удержания, себестоимость, налог, реклама, прочие расходы, прибыль, маржа, ROI, сверка «Итого к оплате»; разбивка по неделям.',
+                'properties' => ['period' => self::PERIOD_FIN, 'from' => self::DATE, 'to' => self::DATE, 'store_id' => self::STORE],
+            ],
+            'finance_opiu' => [
+                'title' => 'Финансы: ОПИУ',
+                'description' => 'Отчёт о прибылях и убытках по неделям или месяцам (все строки ОПИУ) и прочие расходы по статьям.',
+                'properties' => ['period' => self::PERIOD_FIN, 'from' => self::DATE, 'to' => self::DATE, 'store_id' => self::STORE,
+                    'group' => ['type' => 'string', 'enum' => ['week', 'month'], 'description' => 'Группировка (по умолчанию week)']],
+            ],
+            'finance_sku' => [
+                'title' => 'Финансы: прибыль по товарам',
+                'description' => 'Прибыль по каждому товару за период с ABC-классами по выручке и прибыли.',
+                'properties' => ['period' => self::PERIOD_FIN, 'from' => self::DATE, 'to' => self::DATE, 'store_id' => self::STORE,
+                    'sort' => ['type' => 'string', 'enum' => ['revenue', 'profit', 'sales_qty', 'margin'], 'description' => 'Сортировка (по умолчанию revenue)'],
+                    'limit' => ['type' => 'integer', 'minimum' => 1, 'maximum' => 500, 'description' => 'По умолчанию 100']],
+            ],
+            'finance_reports' => [
+                'title' => 'Финансы: отчёты WB',
+                'description' => 'Загруженные еженедельные отчёты реализации WB: суммы WB и наш расчёт «Итого к оплате» для сверки, состояние загрузки.',
+                'properties' => ['store_id' => self::STORE, 'limit' => ['type' => 'integer', 'minimum' => 1, 'maximum' => 200, 'description' => 'По умолчанию 30']],
+            ],
+            'finance_order' => [
+                'title' => 'Финансы: заказ по Srid',
+                'description' => 'Все строки отчётов реализации по одному заказу (Srid) и расчёт прибыли по нему.',
+                'properties' => ['srid' => ['type' => 'string', 'description' => 'Srid заказа']],
+                'required' => ['srid'],
+            ],
+            'sync_status' => [
+                'title' => 'Состояние синхронизации',
+                'description' => 'Проверка работы сервиса: последний запуск cron, по каждому магазину — когда обновлялся каждый источник WB, следующий запрос, ошибки и журнал последних запросов к WB.',
+                'properties' => ['store_id' => self::STORE, 'log_limit' => ['type' => 'integer', 'minimum' => 1, 'maximum' => 100, 'description' => 'Строк журнала на магазин (по умолчанию 15)']],
+            ],
+        ];
+        if (($account['role'] ?? '') === 'admin') {
+            $tools['admin_overview'] = [
+                'title' => 'Админ: обзор сервиса',
+                'description' => 'Только для администратора: клиенты и их тарифы/сроки, магазины всех клиентов с ошибками, платежи, cron.',
+                'properties' => ['limit' => ['type' => 'integer', 'minimum' => 1, 'maximum' => 500, 'description' => 'Клиентов в списке (по умолчанию 100)']],
+            ];
+        }
+        $out = [];
+        foreach ($tools as $name => $t) {
+            $schema = ['type' => 'object', 'properties' => (object) $t['properties']];
+            if (!empty($t['required'])) {
+                $schema['required'] = $t['required'];
+            }
+            $out[] = ['name' => $name, 'title' => $t['title'], 'description' => $t['description'], 'inputSchema' => $schema,
+                'annotations' => ['readOnlyHint' => true, 'openWorldHint' => false]];
+        }
+        return $out;
+    }
+
+    /** Выполнить инструмент. Исключение \InvalidArgumentException — ошибка в параметрах. */
+    public static function call(string $name, array $args, array $account): array
+    {
+        $names = array_column(self::definitions($account), 'name');
+        if (!in_array($name, $names, true)) {
+            throw new \InvalidArgumentException("Неизвестный инструмент: $name. Доступны: " . implode(', ', $names));
+        }
+        $plan = Plans::forUser($account);
+        $active = StoreService::activeIds((int) $account['id'], $plan);
+        $storeIds = $active;
+        if (!empty($args['store_id'])) {
+            if (!in_array((int) $args['store_id'], $active, true)) {
+                throw new \InvalidArgumentException('Магазин ' . (int) $args['store_id'] . ' не найден или на паузе. Список — в account_info.');
+            }
+            $storeIds = [(int) $args['store_id']];
+        }
+        $method = 'tool' . str_replace(' ', '', ucwords(str_replace('_', ' ', $name)));
+        return self::$method($args, $account, $plan, $storeIds);
+    }
+
+    // ------------------------------------------------------------------ кабинет и заказы
+
+    private static function toolAccountInfo(array $a, array $account, array $plan, array $storeIds): array
+    {
+        $stores = [];
+        foreach (StoreService::forUser((int) $account['id']) as $s) {
+            $scopes = json_decode((string) $s['scopes'], true) ?: [];
+            $stores[] = [
+                'id' => (int) $s['id'], 'name' => $s['name'], 'seller' => $s['seller_name'], 'inn' => $s['seller_tin'], 'country' => $s['seller_country'],
+                'active' => (int) $s['is_active'] === 1 && in_array((int) $s['id'], $storeIds, true),
+                'token_scopes' => array_filter($scopes, static fn($v) => is_bool($v)), 'token_expires_at' => $s['token_expires_at'],
+                'initial_load_done' => (bool) $s['initial_done'], 'last_error' => $s['last_error'],
+                'orders_in_db' => (int) DB::value('SELECT COUNT(*) FROM orders WHERE store_id = ?', [$s['id']]),
+            ];
+        }
+        return [
+            'account' => ['id' => (int) $account['id'], 'login' => $account['email'], 'name' => $account['name'], 'role' => $account['role']],
+            'plan' => ['code' => $plan['code'] ?? $account['plan_code'], 'name' => $plan['name'], 'expires_at' => $plan['expires_at'] ?? null,
+                'history_days' => $plan['history_days'], 'sync_minutes' => $plan['sync_minutes'], 'profit' => (bool) $plan['profit'], 'stores_limit' => $plan['stores']],
+            'profit_settings' => Profit::settings($account),
+            'stores' => $stores,
+            'server_time' => date('c'),
+        ];
+    }
+
+    /** Фильтры ленты из параметров — та же логика, что у страницы «Лента заказов». */
+    private static function orderFilters(array $a, array $account, array $plan, array $storeIds): array
+    {
+        $period = in_array($a['period'] ?? '', ['today', 'yesterday', '7d', '30d', 'custom'], true) ? $a['period'] : '7d';
+        $saved = $_GET;
+        $_GET = ['period' => $period, 'from' => $a['from'] ?? '', 'to' => $a['to'] ?? '', 'status' => $a['status'] ?? '',
+            'scheme' => $a['scheme'] ?? '', 'q' => $a['q'] ?? '', 'store' => count($storeIds) === 1 ? $storeIds[0] : 0];
+        try {
+            [$ids, $f] = FeedController::filters($account, $plan);
+        } finally {
+            $_GET = $saved;
+        }
+        return [$ids, $f, FeedController::profitSettings($account, $plan)];
+    }
+
+    private static function toolOrdersSummary(array $a, array $account, array $plan, array $storeIds): array
+    {
+        [$ids, $f, $profit] = self::orderFilters($a, $account, $plan, $storeIds);
+        return [
+            'period' => ['from' => $f['from'], 'to' => $f['to'], 'history_days_in_plan' => $plan['history_days']],
+            'kpi' => OrderRepository::kpi($ids, $f, $profit),
+            'top_products' => OrderRepository::topProducts($ids, $f, 10),
+            'chart' => OrderRepository::chart($ids, $f),
+        ];
+    }
+
+    private static function toolListOrders(array $a, array $account, array $plan, array $storeIds): array
+    {
+        [$ids, $f, $profit] = self::orderFilters($a, $account, $plan, $storeIds);
+        $limit = max(1, min(200, (int) ($a['limit'] ?? 50)));
+        $orders = OrderRepository::list($ids, $f, $limit, null, null, $profit);
+        return ['period' => ['from' => $f['from'], 'to' => $f['to']], 'count' => count($orders), 'has_more' => count($orders) === $limit, 'orders' => $orders];
+    }
+
+    private static function toolProducts(array $a, array $account, array $plan, array $storeIds): array
+    {
+        if (!$storeIds) {
+            return ['products' => []];
+        }
+        $in = implode(',', $storeIds);
+        $limit = max(1, min(500, (int) ($a['limit'] ?? 100)));
+        $where = "p.store_id IN ($in)";
+        $params = ['since' => date('Y-m-d H:i:s', strtotime('today') - 29 * 86400)];
+        if (($q = trim((string) ($a['q'] ?? ''))) !== '') {
+            $where .= ' AND (p.vendor_code LIKE :q1 OR p.title LIKE :q2 OR p.brand LIKE :q3 OR p.subject LIKE :q4 OR p.nm_id = :qn)';
+            $like = '%' . $q . '%';
+            $params += ['q1' => $like, 'q2' => $like, 'q3' => $like, 'q4' => $like, 'qn' => ctype_digit($q) ? (int) $q : -1];
+        }
+        $rows = DB::all("SELECT p.store_id, p.nm_id, p.vendor_code, p.title, p.brand, p.subject, p.subject_id, p.cost_price, p.commission_pct,
+                p.volume_l, p.volume_src, p.dims, p.stock_wb, p.stock_to_client, p.stock_from_client, p.stock_at, c.fbo comm_fbo, c.fbs comm_fbs, c.dbs comm_dbs,
+                (SELECT COUNT(*) FROM orders o WHERE o.store_id = p.store_id AND o.nm_id = p.nm_id AND o.order_created_at >= :since) orders_30d,
+                (SELECT ROUND(AVG(o.seller_price), 2) FROM orders o WHERE o.store_id = p.store_id AND o.nm_id = p.nm_id AND o.order_created_at >= :since2) avg_price_30d
+            FROM products p LEFT JOIN wb_commissions c ON c.store_id = p.store_id AND c.subject_id = p.subject_id
+            WHERE $where ORDER BY orders_30d DESC, p.nm_id DESC LIMIT $limit", $params + ['since2' => $params['since']]);
+        return ['count' => count($rows), 'products' => array_map([self::class, 'typed'], $rows)];
+    }
+
+    // ------------------------------------------------------------------ финансы
+
+    private static function finPeriod(array $a, array $storeIds): array
+    {
+        $from = (string) ($a['from'] ?? '');
+        $to = (string) ($a['to'] ?? '');
+        if (preg_match('/^\d{4}-\d{2}-\d{2}$/', $from) && preg_match('/^\d{4}-\d{2}-\d{2}$/', $to)) {
+            return [$from, $to];
+        }
+        $p = (string) ($a['period'] ?? 'w4');
+        $periods = Finance::availablePeriods($storeIds);
+        $max = $periods['max'] ? date('Y-m-d', strtotime($periods['max']) + 6 * 86400) : date('Y-m-d');
+        if (preg_match('/^\d{4}-\d{2}$/', $p)) {
+            return [$p . '-01', date('Y-m-t', strtotime($p . '-01'))];
+        }
+        if (preg_match('/^week:(\d{4}-\d{2}-\d{2})$/', $p, $m)) {
+            return [$m[1], date('Y-m-d', strtotime($m[1]) + 6 * 86400)];
+        }
+        if ($p === 'all') {
+            return [$periods['min'] ?? date('Y-m-d', time() - 90 * 86400), $max];
+        }
+        $n = $p === 'w12' ? 12 : 4;
+        return [$periods['weeks'][min($n, count($periods['weeks'])) - 1] ?? date('Y-m-d', time() - $n * 7 * 86400), $max];
+    }
+
+    private static function requireProfit(array $plan): void
+    {
+        if (empty($plan['profit'])) {
+            throw new \InvalidArgumentException('Раздел «Финансы» доступен на платных тарифах.');
+        }
+    }
+
+    private static function metrics(array $m): array
+    {
+        $out = [];
+        foreach (array_merge(Finance::METRICS, ['margin', 'roi']) as $k) {
+            if (array_key_exists($k, $m)) {
+                $out[$k] = $m[$k] === null ? null : round((float) $m[$k], 2);
+            }
+        }
+        return $out;
+    }
+
+    private static function toolFinanceSummary(array $a, array $account, array $plan, array $storeIds): array
+    {
+        self::requireProfit($plan);
+        [$from, $to] = self::finPeriod($a, $storeIds);
+        $res = Finance::compute($account, $storeIds, $from, $to, ['group' => 'week']);
+        $weeks = [];
+        foreach ($res['periods'] as $k => $p) {
+            $weeks[] = ['week' => Finance::periodLabel($k, 'week'), 'date_from' => $k] + self::metrics($p);
+        }
+        return [
+            'period' => ['from' => $from, 'to' => $to], 'report_rows' => $res['info']['rows'],
+            'products_without_cost' => array_keys($res['info']['no_cost']),
+            'labels' => Finance::LABELS, 'total' => self::metrics($res['total']), 'weeks' => $weeks,
+        ];
+    }
+
+    private static function toolFinanceOpiu(array $a, array $account, array $plan, array $storeIds): array
+    {
+        self::requireProfit($plan);
+        [$from, $to] = self::finPeriod($a, $storeIds);
+        $group = ($a['group'] ?? 'week') === 'month' ? 'month' : 'week';
+        $res = Finance::compute($account, $storeIds, $from, $to, ['group' => $group]);
+        $cols = [];
+        foreach ($res['periods'] as $k => $p) {
+            $cols[] = ['period' => Finance::periodLabel($k, $group), 'key' => $k] + self::metrics($p);
+        }
+        $exp = DB::all('SELECT category, SUM(amount) amount FROM fin_expenses WHERE user_id = ? AND day BETWEEN ? AND ? GROUP BY category ORDER BY amount DESC',
+            [(int) $account['id'], $from, $to]);
+        return ['period' => ['from' => $from, 'to' => $to], 'group' => $group, 'labels' => Finance::LABELS, 'columns' => $cols,
+            'total' => self::metrics($res['total']), 'expenses_by_category' => array_map([self::class, 'typed'], $exp)];
+    }
+
+    private static function toolFinanceSku(array $a, array $account, array $plan, array $storeIds): array
+    {
+        self::requireProfit($plan);
+        [$from, $to] = self::finPeriod($a, $storeIds);
+        $res = Finance::compute($account, $storeIds, $from, $to, ['group' => 'none', 'sku' => true]);
+        $skus = $res['bySku'];
+        Finance::abc($skus);
+        $sort = in_array($a['sort'] ?? '', ['revenue', 'profit', 'sales_qty', 'margin'], true) ? $a['sort'] : 'revenue';
+        uasort($skus, static fn($x, $y) => ($y[$sort] ?? -INF) <=> ($x[$sort] ?? -INF));
+        $list = [];
+        foreach (array_slice($skus, 0, max(1, min(500, (int) ($a['limit'] ?? 100))), true) as $nm => $s) {
+            $list[] = ['nm_id' => $nm, 'vendor_code' => $s['vendor_code'], 'subject' => $s['subject'], 'brand' => $s['brand'],
+                'abc_revenue' => $s['abc_rev'], 'abc_profit' => $s['abc_profit']] + self::metrics($s);
+        }
+        return ['period' => ['from' => $from, 'to' => $to], 'products_total' => count($skus), 'products' => $list,
+            'not_allocated_profit' => round($res['unallocated']['profit'], 2), 'total' => self::metrics($res['total'])];
+    }
+
+    private static function toolFinanceReports(array $a, array $account, array $plan, array $storeIds): array
+    {
+        self::requireProfit($plan);
+        if (!$storeIds) {
+            return ['reports' => []];
+        }
+        $limit = max(1, min(200, (int) ($a['limit'] ?? 30)));
+        $rows = DB::all('SELECT r.store_id, r.report_id, r.date_from, r.date_to, r.create_date, r.report_type, r.retail_amount, r.for_pay, r.delivery,
+                r.storage, r.acceptance, r.penalty, r.deduction, r.additional, r.bank_payment, r.rows_loaded, r.detail_done,
+                (SELECT ROUND(SUM(CASE WHEN rr.doc_type = \'Продажа\' THEN rr.for_pay WHEN rr.doc_type = \'Возврат\' THEN -rr.for_pay ELSE 0 END)
+                    - SUM(rr.delivery_service + rr.paid_storage + rr.paid_acceptance + rr.penalty + rr.deduction + rr.additional)
+                    - SUM(CASE WHEN rr.doc_type = \'Возврат\' THEN -1 ELSE 1 END * (rr.cashback_amount + rr.cashback_comm - rr.cashback_discount)), 2)
+                 FROM wb_report_rows rr WHERE rr.store_id = r.store_id AND rr.report_id = r.report_id) bank_payment_calc
+            FROM wb_reports r WHERE r.store_id IN (' . implode(',', $storeIds) . ") ORDER BY r.date_from DESC, r.report_id DESC LIMIT $limit");
+        foreach ($rows as &$r) {
+            $r = self::typed($r);
+            $r['source'] = $r['report_id'] > 0 ? 'wb_api' : 'xlsx_upload';
+            $r['matches_wb'] = $r['detail_done'] && $r['bank_payment_calc'] !== null ? abs($r['bank_payment_calc'] - $r['bank_payment']) < 1 : null;
+        }
+        unset($r);
+        return ['reports' => $rows];
+    }
+
+    private static function toolFinanceOrder(array $a, array $account, array $plan, array $storeIds): array
+    {
+        self::requireProfit($plan);
+        $srid = trim((string) ($a['srid'] ?? ''));
+        if ($srid === '' || !$storeIds) {
+            throw new \InvalidArgumentException('Укажите srid заказа.');
+        }
+        $rows = DB::all('SELECT * FROM wb_report_rows WHERE store_id IN (' . implode(',', $storeIds) . ') AND srid = ? ORDER BY rrd_id', [$srid]);
+        $res = Finance::compute($account, $storeIds, FinanceSync::WB_DATA_START, date('Y-m-d'), ['group' => 'none', 'srid' => true, 'srids' => [$srid]]);
+        $o = $res['bySrid'][$srid] ?? null;
+        return ['srid' => $srid, 'found' => (bool) $rows, 'self_buyout' => (bool) ($o['selfbuy'] ?? false),
+            'calc' => $o ? self::metrics($o) : null, 'rows' => array_map([self::class, 'typed'], $rows)];
+    }
+
+    // ------------------------------------------------------------------ проверка работы
+
+    private static function toolSyncStatus(array $a, array $account, array $plan, array $storeIds): array
+    {
+        $limit = max(1, min(100, (int) ($a['log_limit'] ?? 15)));
+        $stores = [];
+        foreach (StoreService::forUser((int) $account['id']) as $s) {
+            if (!empty($a['store_id']) && (int) $s['id'] !== (int) $a['store_id']) {
+                continue;
+            }
+            $stores[] = self::storeStatus($s, $limit);
+        }
+        $cron = DB::setting('cron_last_run');
+        return [
+            'cron_last_run' => $cron, 'cron_ok' => $cron !== null && strtotime($cron) > time() - 600,
+            'plan_sync_minutes' => $plan['sync_minutes'], 'server_time' => date('Y-m-d H:i:s'),
+            'stores' => $stores,
+        ];
+    }
+
+    private static function storeStatus(array $s, int $logLimit): array
+    {
+        $scopes = json_decode((string) $s['scopes'], true) ?: [];
+        $src = ['feed' => 'feed', 'marketplace' => 'mp', 'statistics' => 'stats', 'content' => 'cards', 'tariffs' => 'tariffs', 'remains' => 'remains',
+            'finance' => 'fin', 'storage' => 'storage', 'ads' => 'ads'];
+        $sources = [];
+        foreach ($src as $label => $prefix) {
+            $sources[$label] = ['last_ok' => $s[$prefix . '_ok_at'] ?? null, 'next' => $s[$prefix . '_next_at'] ?? null];
+        }
+        $fin = DB::one('SELECT COUNT(*) reports, COALESCE(SUM(detail_done), 0) loaded, COALESCE(SUM(rows_loaded), 0) row_count, MIN(date_from) since, MAX(date_to) till
+            FROM wb_reports WHERE store_id = ?', [$s['id']]);
+        return [
+            'id' => (int) $s['id'], 'name' => $s['name'], 'active' => (bool) $s['is_active'], 'initial_load_done' => (bool) $s['initial_done'],
+            'token_scopes' => $scopes, 'token_expires_at' => $s['token_expires_at'],
+            'last_error' => $s['last_error'], 'last_error_at' => $s['last_error_at'], 'sources' => $sources,
+            'feed_state' => json_decode((string) ($s['feed_state'] ?? ''), true),
+            'orders_in_db' => (int) DB::value('SELECT COUNT(*) FROM orders WHERE store_id = ?', [$s['id']]),
+            'orders_last_24h' => (int) DB::value('SELECT COUNT(*) FROM orders WHERE store_id = ? AND order_created_at >= ?', [$s['id'], date('Y-m-d H:i:s', time() - 86400)]),
+            'finance_reports' => self::typed($fin),
+            'recent_log' => array_map([self::class, 'typed'], DB::all('SELECT created_at, source, ok, rows_count, message FROM sync_log WHERE store_id = ? ORDER BY id DESC LIMIT ' . $logLimit, [$s['id']])),
+        ];
+    }
+
+    private static function toolAdminOverview(array $a, array $account, array $plan, array $storeIds): array
+    {
+        if (($account['role'] ?? '') !== 'admin') {
+            throw new \InvalidArgumentException('Только для администратора.');
+        }
+        $limit = max(1, min(500, (int) ($a['limit'] ?? 100)));
+        $clients = DB::all("SELECT u.id, u.email login, u.name, u.role, u.is_blocked, u.plan_code, u.plan_expires_at, u.created_at, u.last_login_at, u.note,
+                (SELECT COUNT(*) FROM stores s WHERE s.user_id = u.id) stores, (SELECT COUNT(*) FROM users m WHERE m.owner_id = u.id) team
+            FROM users u WHERE u.owner_id IS NULL ORDER BY u.created_at DESC LIMIT $limit");
+        $errors = DB::all('SELECT s.id, s.user_id, u.email owner, s.name, s.last_error, s.last_error_at FROM stores s JOIN users u ON u.id = s.user_id
+            WHERE s.last_error IS NOT NULL ORDER BY s.last_error_at DESC LIMIT 50');
+        $cron = DB::setting('cron_last_run');
+        return [
+            'cron_last_run' => $cron, 'cron_ok' => $cron !== null && strtotime($cron) > time() - 600,
+            'counts' => self::typed(DB::one('SELECT (SELECT COUNT(*) FROM users WHERE owner_id IS NULL) clients, (SELECT COUNT(*) FROM users WHERE owner_id IS NULL AND plan_code <> \'free\' AND plan_expires_at > NOW()) paid,
+                (SELECT COUNT(*) FROM stores) stores, (SELECT COUNT(*) FROM orders) orders, (SELECT COUNT(*) FROM wb_reports) finance_reports')),
+            'payments_30d' => self::typed(DB::one("SELECT COUNT(*) count, COALESCE(SUM(amount), 0) amount FROM payments WHERE status = 'succeeded' AND created_at >= ?", [date('Y-m-d H:i:s', time() - 30 * 86400)])),
+            'clients' => array_map([self::class, 'typed'], $clients),
+            'store_errors' => array_map([self::class, 'typed'], $errors),
+        ];
+    }
+
+    /** Числа из БД (строки) — в числа, чтобы JSON был удобен для разбора. */
+    private static function typed(?array $row): array
+    {
+        if (!$row) {
+            return [];
+        }
+        foreach ($row as $k => $v) {
+            if (is_string($v) && is_numeric($v) && !preg_match('/^0\d/', $v) && !in_array($k, ['srid', 'barcode', 'login', 'inn', 'vendor_code', 'ts_name'], true)) {
+                $row[$k] = str_contains($v, '.') || stripos($v, 'e') !== false ? (float) $v : (int) $v;
+            }
+        }
+        return $row;
+    }
+}

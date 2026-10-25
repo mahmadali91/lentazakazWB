@@ -57,10 +57,15 @@ final class AuthController
         $email = mb_strtolower((string) input('email', ''));
         $name = mb_substr((string) input('name', ''), 0, 120);
         $password = (string) ($_POST['password'] ?? '');
+        $phone = normalize_phone((string) input('phone', ''));
         remember_input($_POST);
 
         if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
             flash('error', 'Укажите корректный email.');
+            redirect('/register');
+        }
+        if ($phone === null) {
+            flash('error', 'Укажите номер телефона, например +7 900 123-45-67.');
             redirect('/register');
         }
         if (mb_strlen($password) < 8) {
@@ -86,6 +91,7 @@ final class AuthController
             'email'           => $email,
             'password_hash'   => password_hash($password, PASSWORD_DEFAULT),
             'name'            => $name,
+            'phone'           => $phone,
             'plan_code'       => $trialDays > 0 ? $trialPlan : 'free',
             'plan_expires_at' => $trialDays > 0 ? date('Y-m-d H:i:s', time() + $trialDays * 86400) : null,
             'created_at'      => now(),

@@ -9,6 +9,7 @@ CREATE TABLE IF NOT EXISTS users (
   email           VARCHAR(190) NOT NULL,
   password_hash   VARCHAR(255) NOT NULL,
   name            VARCHAR(120) NOT NULL DEFAULT '',
+  phone           VARCHAR(20) NULL,               -- телефон клиента (обязателен для владельцев кабинетов)
   role            ENUM('user','admin') NOT NULL DEFAULT 'user',
   is_blocked      TINYINT(1) NOT NULL DEFAULT 0,
   plan_code       VARCHAR(32) NOT NULL DEFAULT 'free',
@@ -110,6 +111,7 @@ CREATE TABLE IF NOT EXISTS orders (
   UNIQUE KEY uq_orders_store_srid (store_id, srid),
   KEY idx_orders_store_created (store_id, order_created_at),
   KEY idx_orders_store_updated (store_id, row_updated_at),
+  KEY idx_orders_store_status_at (store_id, status_at),
   KEY idx_orders_notify (notified_status, first_seen_at),
   CONSTRAINT fk_orders_store FOREIGN KEY (store_id) REFERENCES stores (id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
@@ -363,4 +365,21 @@ CREATE TABLE IF NOT EXISTS fin_selfbuys (
   created_at DATETIME NOT NULL,
   PRIMARY KEY (user_id, srid),
   CONSTRAINT fk_sb_user FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Ключи API (REST и MCP для Claude); хранится только SHA-256 ключа
+CREATE TABLE IF NOT EXISTS api_keys (
+  id           INT UNSIGNED NOT NULL AUTO_INCREMENT,
+  user_id      INT UNSIGNED NOT NULL,
+  name         VARCHAR(80) NOT NULL,
+  token_hash   CHAR(64) NOT NULL,
+  token_hint   VARCHAR(16) NOT NULL,
+  requests     INT UNSIGNED NOT NULL DEFAULT 0,
+  last_used_at DATETIME NULL,
+  last_ip      VARCHAR(45) NULL,
+  created_at   DATETIME NOT NULL,
+  PRIMARY KEY (id),
+  UNIQUE KEY uq_api_token (token_hash),
+  KEY idx_api_user (user_id),
+  CONSTRAINT fk_api_user FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

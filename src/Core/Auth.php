@@ -76,6 +76,12 @@ final class Auth
         return (int) (self::account()['id'] ?? 0);
     }
 
+    /** Владелец кабинета без телефона (сотрудникам и администратору телефон не обязателен). */
+    public static function needsPhone(?array $user): bool
+    {
+        return $user !== null && empty($user['owner_id']) && ($user['role'] ?? '') !== 'admin' && empty($user['phone']);
+    }
+
     public static function isMember(): bool
     {
         return !empty(self::user()['owner_id']);

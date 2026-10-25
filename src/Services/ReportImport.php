@@ -161,7 +161,7 @@ final class ReportImport
         }
         $strings = [];
         if (($xml = $zip->getFromName('xl/sharedStrings.xml')) !== false) {
-            $sx = simplexml_load_string($xml);
+            $sx = simplexml_load_string($xml, \SimpleXMLElement::class, LIBXML_NONET);
             foreach ($sx->si as $si) {
                 $text = isset($si->t) ? (string) $si->t : '';
                 foreach ($si->r as $run) {
@@ -172,14 +172,20 @@ final class ReportImport
         }
         $sheetPath = 'xl/worksheets/sheet1.xml';
         if (($rels = $zip->getFromName('xl/_rels/workbook.xml.rels')) !== false && ($wb = $zip->getFromName('xl/workbook.xml')) !== false) {
-            $wbx = simplexml_load_string($wb);
+            $wbx = simplexml_load_string($wb, \SimpleXMLElement::class, LIBXML_NONET);
             $rid = (string) ($wbx->sheets->sheet[0]->attributes('r', true)['id'] ?? '');
-            foreach (simplexml_load_string($rels)->Relationship as $rel) {
+            foreach (simplexml_load_string($rels, \SimpleXMLElement::class, LIBXML_NONET)->Relationship as $rel) {
                 if ((string) $rel['Id'] === $rid) {
                     $target = ltrim((string) $rel['Target'], '/');
                     $sheetPath = str_starts_with($target, 'xl/') ? $target : 'xl/' . $target;
                 }
             }
+        }
+        // Защита от «zip-бомбы»: лист с данными не больше 300 МБ в распакованном виде
+        $stat = $zip->statName($sheetPath);
+        if ($stat !== false && (int) $stat['size'] > 300 * 1024 * 1024) {
+            $zip->close();
+            throw new \RuntimeException('файл слишком большой');
         }
         $xml = $zip->getFromName($sheetPath);
         $zip->close();
@@ -187,7 +193,7 @@ final class ReportImport
             throw new \RuntimeException('в файле не найден лист с данными');
         }
         $out = [];
-        $sx = simplexml_load_string($xml);
+        $sx = simplexml_load_string($xml, \SimpleXMLElement::class, LIBXML_NONET);
         foreach ($sx->sheetData->row as $row) {
             $line = [];
             foreach ($row->c as $c) {

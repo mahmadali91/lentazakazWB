@@ -54,6 +54,8 @@ final class FeedController
             'status' => (string) input('status', ''),
             'scheme' => (string) input('scheme', ''),
             'q'      => mb_substr((string) input('q', ''), 0, 100),
+            // Фильтр «Выкупы / Отмены / Возвраты» — по дате события, а не по дате заказа
+            'date_by' => in_array((string) input('status', ''), ['buyout', 'cancel', 'return'], true) ? 'status' : '',
             'store'  => count($storeIds) === 1 && $storeId ? $storeId : 0,
         ];
         return [$storeIds, $f];

@@ -10,6 +10,8 @@ require dirname(__DIR__) . '/src/bootstrap.php';
 
 use App\Controllers\AdminController;
 use App\Controllers\ApiController;
+use App\Controllers\ApiKeysController;
+use App\Controllers\ApiV1Controller;
 use App\Controllers\AuthController;
 use App\Controllers\BillingController;
 use App\Controllers\FeedController;
@@ -28,6 +30,12 @@ use App\Core\Router;
 header('X-Frame-Options: SAMEORIGIN');
 header('X-Content-Type-Options: nosniff');
 header('Referrer-Policy: strict-origin-when-cross-origin');
+header('Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=()');
+header("Content-Security-Policy: frame-ancestors 'self'; base-uri 'self'; object-src 'none'");
+header_remove('X-Powered-By');
+if (($_SERVER['HTTPS'] ?? '') === 'on' || ($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '') === 'https') {
+    header('Strict-Transport-Security: max-age=31536000');
+}
 
 $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
 $uri = $_SERVER['REQUEST_URI'] ?? '/';
@@ -38,9 +46,10 @@ if (!Config::installed() && !str_starts_with($path, '/install')) {
 }
 if (Config::installed()) {
     App\Core\Migrator::ensure();
+    Config::overlayFromDb();
 }
 
-$isWebhook = str_starts_with($path, '/webhook/') || $path === '/cron-run';
+$isWebhook = str_starts_with($path, '/webhook/') || $path === '/cron-run' || str_starts_with($path, '/api/v1') || str_starts_with($path, '/mcp/') || $path === '/mcp';
 if (!$isWebhook) {
     Auth::startSession();
     if ($method === 'POST' && !Csrf::check()) {
@@ -52,6 +61,22 @@ if (!$isWebhook) {
             . '<h2>Сессия устарела</h2><p>Обновите страницу и повторите действие. Если ошибка повторяется — '
             . 'разрешите cookies для этого сайта.</p><p><a href="' . $back . '">← Вернуться</a></p></div>');
     }
+}
+
+// Телефон обязателен для владельцев кабинетов: без него отправляем в профиль (кроме режима администратора)
+if (!$isWebhook && $method === 'GET' && str_starts_with($path, '/app') && !str_starts_with($path, '/app/settings')
+    && Config::installed() && Auth::needsPhone(Auth::user()) && !Auth::impersonator()) {
+    flash('error', 'Укажите номер телефона в профиле — это обязательное поле.');
+    redirect('/app/settings#profile');
+}
+
+// Предзапрос CORS для API и MCP (браузерные клиенты, MCP Inspector)
+if ($method === 'OPTIONS' && $isWebhook && !str_starts_with($path, '/webhook/')) {
+    header('Access-Control-Allow-Origin: *');
+    header('Access-Control-Allow-Methods: GET, POST, OPTIONS');
+    header('Access-Control-Allow-Headers: Authorization, Content-Type, X-Api-Key, Mcp-Session-Id, Mcp-Protocol-Version');
+    http_response_code(204);
+    exit;
 }
 
 $r = new Router();
@@ -128,6 +153,19 @@ $r->post('/app/finance/settings', [FinanceController::class, 'settings']);
 $r->get('/api/feed', [ApiController::class, 'feed']);
 $r->get('/api/feed/updates', [ApiController::class, 'updates']);
 
+// Внешнее API по ключу (только чтение) и MCP-сервер для Claude
+$r->get('/api/v1', [ApiV1Controller::class, 'index']);
+$r->get('/api/v1/{name}', [ApiV1Controller::class, 'tool']);
+$r->post('/api/v1/{name}', [ApiV1Controller::class, 'tool']);
+$r->post('/mcp', [ApiV1Controller::class, 'mcpHeader']);
+$r->get('/mcp', [ApiV1Controller::class, 'mcpHeader']);
+$r->post('/mcp/{key}', [ApiV1Controller::class, 'mcp']);
+$r->get('/mcp/{key}', [ApiV1Controller::class, 'mcp']);
+$r->get('/app/settings/api', [ApiKeysController::class, 'index']);
+$r->post('/app/settings/api/keys', [ApiKeysController::class, 'create']);
+$r->post('/app/settings/api/keys/{id}/delete', [ApiKeysController::class, 'delete']);
+$r->get('/app/api', static fn() => redirect('/app/settings/api'));
+
 // Админка
 $r->get('/admin', [AdminController::class, 'index']);
 $r->get('/admin/users', [AdminController::class, 'users']);
@@ -140,6 +178,8 @@ $r->post('/admin/users/{id}/delete', [AdminController::class, 'delete']);
 $r->post('/admin/users/{id}/login', [AdminController::class, 'impersonate']);
 $r->post('/admin/impersonate/stop', [AdminController::class, 'stopImpersonate']);
 $r->get('/admin/payments', [AdminController::class, 'payments']);
+$r->get('/admin/settings', [AdminController::class, 'settings']);
+$r->post('/admin/settings', [AdminController::class, 'saveSettings']);
 $r->post('/admin/cron', [AdminController::class, 'runCron']);
 
 // Системное

@@ -31,12 +31,17 @@ $events = array_filter(explode(',', (string) $user['tg_events']));
         <form method="post" action="/app/settings/telegram/unlink"><?= csrf_field() ?><button class="btn btn-danger btn-sm">Отключить</button></form>
       </div>
     <?php else: ?>
-      <p>Нажмите кнопку — откроется бот. Нажмите в нём <span class="kbd">Запустить</span> (Start), и аккаунт привяжется автоматически в течение минуты.</p>
+      <p>Бот <b>@<?= e(config('telegram.bot_username')) ?></b> присылает сообщение о каждом новом заказе: товар, цена, склад, город. Можно включить выкупы, отмены и возвраты.</p>
+      <ol class="tg-steps">
+        <li>Нажмите <b>«Подключить Telegram»</b> — откроется бот <a href="https://t.me/<?= e(config('telegram.bot_username')) ?>" target="_blank" rel="noopener">t.me/<?= e(config('telegram.bot_username')) ?></a> (на компьютере — в Telegram Desktop или веб-версии).</li>
+        <li>В чате с ботом нажмите <span class="kbd">Запустить</span> (Start).</li>
+        <li>Подождите до минуты и нажмите «Проверить подключение» — здесь появится «Telegram подключён».</li>
+      </ol>
       <div class="row">
         <a class="btn" href="<?= e(Telegram::linkUrl((string) $user['tg_link_code'])) ?>" target="_blank" rel="noopener"><?= icon('send', 16) ?> Подключить Telegram</a>
-        <a class="btn btn-ghost" href="/app/settings">Я нажал «Запустить» — обновить</a>
+        <a class="btn btn-ghost" href="/app/settings">Проверить подключение</a>
       </div>
-      <p class="small muted" style="margin-top:12px">Если бот не открылся: найдите @<?= e(config('telegram.bot_username')) ?> и отправьте ему <code>/start <?= e($user['tg_link_code']) ?></code></p>
+      <p class="small muted" style="margin-top:12px">Не открылось? Найдите в Telegram <b>@<?= e(config('telegram.bot_username')) ?></b> и отправьте ему сообщение <code>/start <?= e($user['tg_link_code']) ?></code> — код привязывает бота именно к вашему кабинету, не передавайте его другим.</p>
     <?php endif; ?>
   </div>
 
@@ -90,12 +95,24 @@ $events = array_filter(explode(',', (string) $user['tg_events']));
   <div class="alert alert-info">Вы вошли как сотрудник кабинета <b><?= e($account['name'] ?: $account['email']) ?></b>.</div>
   <?php endif; ?>
 
-  <div class="card">
+  <?php if (empty($user['owner_id'])): ?>
+  <a class="card settings-link" href="/app/settings/api">
+    <span class="logo-mark" style="width:40px;height:40px"><?= icon('zap', 20) ?></span>
+    <span class="grow"><b>API и подключение к Claude</b><span class="muted small" style="display:block">Ключ доступа: Claude сам смотрит заказы, прибыль и состояние синхронизации. Только чтение.</span></span>
+    <?= icon('chevron', 18) ?>
+  </a>
+  <?php endif; ?>
+
+  <div class="card" id="profile">
     <div class="card-title">Профиль</div>
+    <?php if (App\Core\Auth::needsPhone($user)): ?>
+      <div class="alert alert-warn">Укажите номер телефона — он нужен для связи по тарифу и поддержке.</div>
+    <?php endif; ?>
     <form method="post" action="/app/settings/profile">
       <?= csrf_field() ?>
       <div class="field"><label>Логин</label><input type="text" value="<?= e($user['email']) ?>" disabled></div>
       <div class="field"><label for="name">Имя</label><input id="name" type="text" name="name" value="<?= e($user['name']) ?>"></div>
+      <div class="field"><label for="phone">Телефон</label><input id="phone" type="tel" name="phone" value="<?= e(phone_ru($user['phone'] ?? '')) ?>" inputmode="tel" autocomplete="tel" placeholder="+7 900 123-45-67" <?= empty($user['owner_id']) && ($user['role'] ?? '') !== 'admin' ? 'required' : '' ?>></div>
       <button class="btn btn-sm">Сохранить</button>
     </form>
   </div>

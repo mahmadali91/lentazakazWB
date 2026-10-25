@@ -104,6 +104,27 @@ function money(float|int|string|null $value): string
     return number_format((float) $value, 0, ',', ' ') . ' ₽';
 }
 
+/** Телефон в формате +7XXXXXXXXXX (или + и 10–15 цифр для других стран); null — некорректный. */
+function normalize_phone(string $value): ?string
+{
+    $d = preg_replace('/\D/', '', $value);
+    if (strlen($d) === 11 && $d[0] === '8') {
+        $d = '7' . substr($d, 1);
+    } elseif (strlen($d) === 10 && $d[0] === '9') {
+        $d = '7' . $d;
+    }
+    return strlen($d) >= 10 && strlen($d) <= 15 ? '+' . $d : null;
+}
+
+/** +79913004737 → +7 991 300-47-37 */
+function phone_ru(?string $phone): string
+{
+    if (!$phone) {
+        return '';
+    }
+    return preg_match('/^\+7(\d{3})(\d{3})(\d{2})(\d{2})$/', $phone, $m) ? "+7 $m[1] $m[2]-$m[3]-$m[4]" : $phone;
+}
+
 /** Число по-русски: 1 234,5. null — прочерк. */
 function num_ru(float|int|string|null $value, int $decimals = 0): string
 {

@@ -37,6 +37,51 @@ final class Config
         return $value;
     }
 
+    /** Значения, которые админ меняет в «Настройках сервиса», хранятся в таблице settings с префиксом cfg. */
+    public const DB_KEYS = [
+        'app.support_phone'     => false,
+        'app.support_email'     => false,
+        'telegram.bot_username' => false,
+        'telegram.bot_token'    => true,  // true — хранится зашифрованным
+    ];
+
+    public static function set(string $key, mixed $value): void
+    {
+        $ref = &self::$data;
+        foreach (explode('.', $key) as $part) {
+            if (!isset($ref[$part]) || !is_array($ref[$part])) {
+                $ref[$part] = $ref[$part] ?? [];
+            }
+            $ref = &$ref[$part];
+        }
+        $ref = $value;
+    }
+
+    /** Накладывает настройки из БД поверх config.php. Вызывается после подключения к БД. */
+    public static function overlayFromDb(): void
+    {
+        try {
+            $rows = DB::all("SELECT name, value FROM settings WHERE name LIKE 'cfg.%'");
+        } catch (\Throwable) {
+            return;
+        }
+        foreach ($rows as $r) {
+            $key = substr($r['name'], 4);
+            if (!array_key_exists($key, self::DB_KEYS) || $r['value'] === null || $r['value'] === '') {
+                continue;
+            }
+            $value = (string) $r['value'];
+            if (self::DB_KEYS[$key]) {
+                try {
+                    $value = Crypto::decrypt($value);
+                } catch (\Throwable) {
+                    continue;
+                }
+            }
+            self::set($key, $value);
+        }
+    }
+
     /** Записывает config/config.php (используется установщиком). */
     public static function write(array $data): void
     {

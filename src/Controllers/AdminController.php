@@ -4,9 +4,12 @@ declare(strict_types=1);
 namespace App\Controllers;
 
 use App\Core\Auth;
+use App\Core\Config;
+use App\Core\Crypto;
 use App\Core\DB;
 use App\Services\Cron;
 use App\Services\Plans;
+use App\Services\Telegram;
 
 /** Админ-панель: клиенты, сроки тарифов, ручная выдача доступа, платежи, состояние синхронизации. */
 final class AdminController
@@ -79,9 +82,9 @@ final class AdminController
         $where = 'u.owner_id IS NULL AND ' . self::FILTERS[$filter][1];
         $params = [];
         if ($q !== '') {
-            $where .= ' AND (u.email LIKE :q1 OR u.name LIKE :q2 OR u.note LIKE :q3 OR EXISTS (SELECT 1 FROM stores s2 WHERE s2.user_id = u.id AND (s2.name LIKE :q4 OR s2.seller_name LIKE :q5 OR s2.seller_tin = :q6)))';
+            $where .= ' AND (u.email LIKE :q1 OR u.name LIKE :q2 OR u.note LIKE :q3 OR u.phone LIKE :q7 OR EXISTS (SELECT 1 FROM stores s2 WHERE s2.user_id = u.id AND (s2.name LIKE :q4 OR s2.seller_name LIKE :q5 OR s2.seller_tin = :q6)))';
             $like = '%' . $q . '%';
-            $params = ['q1' => $like, 'q2' => $like, 'q3' => $like, 'q4' => $like, 'q5' => $like, 'q6' => $q];
+            $params = ['q1' => $like, 'q2' => $like, 'q3' => $like, 'q4' => $like, 'q5' => $like, 'q6' => $q, 'q7' => ($d = preg_replace('/\D/', '', $q)) !== '' ? '%' . $d . '%' : '-'];
         }
         $users = DB::all("SELECT u.*,
                 (SELECT COUNT(*) FROM stores s WHERE s.user_id = u.id) AS stores_count,
@@ -142,8 +145,13 @@ final class AdminController
         $password = (string) ($_POST['password'] ?? '');
         $planCode = (string) input('plan_code', 'free');
         $days = max(0, min(3650, (int) input('days', 30)));
+        $phone = normalize_phone((string) input('phone', ''));
         if ($login === null || mb_strlen($password) < 8) {
             flash('error', 'Укажите логин (email или латиница/цифры, от 3 символов) и пароль не короче 8 символов.');
+            redirect('/admin/users');
+        }
+        if ($phone === null) {
+            flash('error', 'Укажите телефон клиента, например +7 900 123-45-67.');
             redirect('/admin/users');
         }
         if (DB::value('SELECT id FROM users WHERE email = ?', [$login])) {
@@ -157,6 +165,7 @@ final class AdminController
             'email'           => $login,
             'password_hash'   => password_hash($password, PASSWORD_DEFAULT),
             'name'            => mb_substr((string) input('name', ''), 0, 120),
+            'phone'           => $phone,
             'note'            => mb_substr((string) input('note', ''), 0, 500) ?: null,
             'plan_code'       => $planCode,
             'plan_expires_at' => $planCode !== 'free' && $days > 0 ? date('Y-m-d 23:59:59', strtotime("+$days day")) : null,
@@ -187,6 +196,7 @@ final class AdminController
             'is_blocked'      => $self ? 0 : (int) !empty($_POST['is_blocked']),
             'role'            => $self ? 'admin' : (!empty($_POST['is_admin']) ? 'admin' : 'user'),
             'note'            => array_key_exists('note', $_POST) ? (mb_substr((string) input('note', ''), 0, 500) ?: null) : $target['note'],
+            'phone'           => array_key_exists('phone', $_POST) ? (normalize_phone((string) input('phone', '')) ?? $target['phone']) : $target['phone'],
         ], 'id = :id', ['id' => $target['id']]);
         if ($plan !== 'free' && $expiresAt && ($target['plan_code'] !== $plan || $target['plan_expires_at'] !== $expiresAt)) {
             $this->manualPayment((int) $target['id'], $plan, 0, (float) str_replace(',', '.', (string) input('amount', '0')));
@@ -297,6 +307,74 @@ final class AdminController
             'title'    => 'Платежи',
             'payments' => DB::all('SELECT p.*, u.email FROM payments p JOIN users u ON u.id = p.user_id ORDER BY p.id DESC LIMIT 300'),
         ], 'app');
+    }
+
+    /** Настройки сервиса: контакты поддержки и Telegram-бот (хранятся в БД поверх config.php, токен — зашифрованным). */
+    public function settings(): string
+    {
+        $admin = Auth::requireAdmin();
+        $bot = null;
+        if (Telegram::enabled()) {
+            $me = Telegram::api('getMe');
+            $hook = Telegram::api('getWebhookInfo');
+            $bot = ['ok' => $me !== null, 'username' => $me['result']['username'] ?? null, 'name' => $me['result']['first_name'] ?? null,
+                'webhook' => $hook['result']['url'] ?? '', 'linked' => (int) DB::value('SELECT COUNT(*) FROM users WHERE tg_chat_id IS NOT NULL')];
+        }
+        return view('admin/settings', $this->base($admin) + [
+            'title'    => 'Настройки сервиса',
+            'tab'      => 'settings',
+            'phone'    => (string) config('app.support_phone', ''),
+            'email'    => (string) config('app.support_email', ''),
+            'botUser'  => (string) config('telegram.bot_username', ''),
+            'hasToken' => (string) config('telegram.bot_token', '') !== '',
+            'bot'      => $bot,
+        ], 'app');
+    }
+
+    public function saveSettings(): never
+    {
+        Auth::requireAdmin();
+        $phone = trim((string) input('support_phone', ''));
+        $email = trim((string) input('support_email', ''));
+        if ($phone !== '' && normalize_phone($phone) === null) {
+            flash('error', 'Телефон поддержки указан неверно.');
+            redirect('/admin/settings');
+        }
+        if ($email !== '' && !filter_var($email, FILTER_VALIDATE_EMAIL)) {
+            flash('error', 'Email поддержки указан неверно.');
+            redirect('/admin/settings');
+        }
+        DB::setSetting('cfg.app.support_phone', $phone !== '' ? normalize_phone($phone) : '');
+        DB::setSetting('cfg.app.support_email', $email);
+        $username = ltrim(trim((string) input('bot_username', '')), '@');
+        $username = preg_replace('~^(https?://)?t\.me/~i', '', $username);
+        $token = trim((string) input('bot_token', ''));
+        if ($token !== '' && !preg_match('/^\d{5,15}:[A-Za-z0-9_-]{30,50}$/', $token)) {
+            flash('error', 'Токен бота выглядит неверно. Скопируйте его из @BotFather целиком: 123456789:AA…');
+            redirect('/admin/settings');
+        }
+        if ($token !== '') {
+            Config::set('telegram.bot_token', $token);
+            $me = Telegram::api('getMe');
+            if ($me === null) {
+                flash('error', 'Telegram не принял токен (getMe). Проверьте токен в @BotFather.');
+                redirect('/admin/settings');
+            }
+            $username = (string) ($me['result']['username'] ?? $username);
+            // Привязка аккаунтов работает через getUpdates — снимаем вебхук, если он был установлен
+            Telegram::api('deleteWebhook', ['drop_pending_updates' => false]);
+            DB::setSetting('cfg.telegram.bot_token', Crypto::encrypt($token));
+        }
+        if ($username !== '' && !preg_match('/^[A-Za-z0-9_]{5,32}$/', $username)) {
+            flash('error', 'Имя бота — латиница, цифры и _, например WBLinkoz_bot.');
+            redirect('/admin/settings');
+        }
+        DB::setSetting('cfg.telegram.bot_username', $username);
+        if (!empty($_POST['bot_remove'])) {
+            DB::setSetting('cfg.telegram.bot_token', '');
+        }
+        flash('success', 'Настройки сохранены.' . ($token !== '' ? ' Бот @' . $username . ' подключён.' : ''));
+        redirect('/admin/settings');
     }
 
     public function runCron(): never
