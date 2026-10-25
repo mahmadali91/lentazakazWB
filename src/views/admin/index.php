@@ -3,11 +3,32 @@
 <?= App\Core\View::partial('admin/_nav', ['tab' => 'index']) ?>
 
 <div class="kpis">
-  <div class="card kpi"><div class="k-label">Пользователей</div><div class="k-value"><?= $stats['users'] ?></div><div class="k-sub">+<?= $stats['users_today'] ?> сегодня</div></div>
-  <div class="card kpi"><div class="k-label">Платящих</div><div class="k-value"><?= $stats['paying'] ?></div><div class="k-sub">активный платный тариф</div></div>
+  <div class="card kpi"><div class="k-label">Клиентов</div><div class="k-value"><?= $stats['users'] ?></div><div class="k-sub">+<?= $stats['users_today'] ?> сегодня</div></div>
+  <div class="card kpi"><div class="k-label">Платящих</div><div class="k-value"><a href="/admin/users?f=active" style="color:inherit"><?= $stats['paying'] ?></a></div><div class="k-sub">активный оплаченный тариф</div></div>
+  <div class="card kpi"><div class="k-label">На пробном</div><div class="k-value"><a href="/admin/users?f=trial" style="color:inherit"><?= $stats['trial'] ?></a></div><div class="k-sub">ещё не платили</div></div>
   <div class="card kpi"><div class="k-label">Магазинов</div><div class="k-value"><?= $stats['stores'] ?></div><div class="k-sub">&nbsp;</div></div>
   <div class="card kpi"><div class="k-label">Заказов сегодня</div><div class="k-value"><?= number_format($stats['orders_today'], 0, ',', ' ') ?></div><div class="k-sub">по всем магазинам</div></div>
   <div class="card kpi k-accent"><div class="k-label">Выручка 30 дней</div><div class="k-value"><?= money($stats['revenue_30']) ?></div><div class="k-sub">ЮKassa</div></div>
+</div>
+
+<div class="card" style="margin-bottom:16px">
+  <div class="card-title">Истекает в ближайшие 7 дней <a class="small" style="font-weight:500;margin-left:8px" href="/admin/users?f=expiring">все →</a></div>
+  <?php if (!$expiring): ?>
+    <p class="muted small">Нет клиентов с истекающим сроком.</p>
+  <?php else: ?>
+    <div class="table-wrap"><table class="table">
+      <thead><tr><th>Клиент</th><th>Тариф</th><th>До</th><th>Магазинов</th><th></th></tr></thead>
+      <tbody><?php foreach ($expiring as $u): ?>
+        <tr>
+          <td><a href="/admin/users/<?= (int) $u['id'] ?>"><?= e($u['email']) ?></a><div class="small muted"><?= e($u['name']) ?></div></td>
+          <td><?= e(App\Services\Plans::get($u['plan_code'])['name']) ?></td>
+          <td class="nowrap"><?= date_ru($u['plan_expires_at'], false) ?> <span class="small muted">(<?= max(0, (int) ceil((strtotime($u['plan_expires_at']) - time()) / 86400)) ?> дн.)</span></td>
+          <td><?= (int) $u['stores_count'] ?></td>
+          <td><form method="post" action="/admin/users/<?= (int) $u['id'] ?>/extend"><?= csrf_field() ?><input type="hidden" name="period" value="1m"><input type="hidden" name="back" value="/admin"><button class="btn btn-ghost btn-sm">+1 мес</button></form></td>
+        </tr>
+      <?php endforeach; ?></tbody>
+    </table></div>
+  <?php endif; ?>
 </div>
 
 <div class="card" style="margin-bottom:16px">
@@ -35,7 +56,7 @@
     <div class="table-wrap"><table class="table">
       <thead><tr><th>Магазин</th><th>Пользователь</th><th>Ошибка</th><th>Когда</th></tr></thead>
       <tbody><?php foreach ($errors as $er): ?>
-        <tr><td><?= e($er['name']) ?></td><td><?= e($er['email']) ?></td><td class="small"><?= e($er['last_error']) ?></td><td class="nowrap small"><?= date_ru($er['last_error_at']) ?></td></tr>
+        <tr><td><?= e($er['name']) ?></td><td><a href="/admin/users/<?= (int) $er['user_id'] ?>"><?= e($er['email']) ?></a></td><td class="small"><?= e($er['last_error']) ?></td><td class="nowrap small"><?= date_ru($er['last_error_at']) ?></td></tr>
       <?php endforeach; ?></tbody>
     </table></div>
   </div>

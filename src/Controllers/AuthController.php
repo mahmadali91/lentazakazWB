@@ -29,7 +29,7 @@ final class AuthController
         $user = DB::one('SELECT * FROM users WHERE email = ?', [$email]);
         if (!$user || !password_verify($password, $user['password_hash'])) {
             Auth::recordAttempt();
-            flash('error', 'Неверный email или пароль.');
+            flash('error', 'Неверный логин или пароль.');
             redirect('/login');
         }
         if ((int) $user['is_blocked']) {

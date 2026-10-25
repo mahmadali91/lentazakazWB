@@ -18,8 +18,8 @@ return [
     'db' => [
         'host'    => 'localhost',
         'port'    => 3306,
-        'name'    => '',
-        'user'    => '',
+        'name'    => 'mahmadgv_wblenta',
+        'user'    => 'mahmadgv_wblenta',   // на Beget имя пользователя БД = имя базы
         'pass'    => '',
         'charset' => 'utf8mb4',
     ],

@@ -160,6 +160,7 @@ final class SyncService
         $data = $this->wb->orderFeed($start, $offset, self::FEED_LIMIT, $snapshot);
         $orders = $data['orders'] ?? [];
         $count = 0;
+        $seenNm = [];
         $pdo = DB::pdo();
         $pdo->beginTransaction();
         try {
@@ -168,6 +169,10 @@ final class SyncService
                     continue;
                 }
                 OrderRepository::upsertFromFeed((int) $this->store['id'], $o, $this->silent);
+                if (!empty($o['nmId']) && !isset($seenNm[$o['nmId']])) {
+                    $seenNm[$o['nmId']] = true;
+                    OrderRepository::rememberProduct((int) $this->store['id'], (int) $o['nmId'], null);
+                }
                 $count++;
             }
             $pdo->commit();

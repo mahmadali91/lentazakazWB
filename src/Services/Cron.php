@@ -4,6 +4,7 @@ declare(strict_types=1);
 namespace App\Services;
 
 use App\Core\DB;
+use App\Core\Mailer;
 
 /** Один проход фоновой синхронизации (вызывается раз в минуту из cron). */
 final class Cron
@@ -48,6 +49,7 @@ final class Cron
 
             Telegram::processUpdates();
             Telegram::notifyOrders();
+            self::remindExpiring();
             self::cleanup();
         } finally {
             flock($lock, LOCK_UN);
@@ -55,6 +57,30 @@ final class Cron
         }
         $report['seconds'] = round(microtime(true) - $started, 2);
         return $report;
+    }
+
+    /** За 3 дня до окончания тарифа напоминаем клиенту (email + Telegram) — один раз на каждый срок. */
+    private static function remindExpiring(): void
+    {
+        $users = DB::all("SELECT * FROM users
+            WHERE owner_id IS NULL AND is_blocked = 0 AND plan_code <> 'free'
+              AND plan_expires_at > NOW() AND plan_expires_at <= NOW() + INTERVAL 3 DAY
+              AND (remind_sent_for IS NULL OR remind_sent_for <> plan_expires_at)
+            LIMIT 50");
+        foreach ($users as $u) {
+            $plan = Plans::get($u['plan_code']);
+            $date = date_ru($u['plan_expires_at']);
+            $text = "Здравствуйте!\n\nТариф «{$plan['name']}» в сервисе " . config('app.name') . " действует до $date.\n"
+                . "Чтобы лента заказов и уведомления продолжили работать без ограничений, продлите тариф:\n" . url('/app/billing')
+                . "\n\nЕсли тариф уже продлён — просто проигнорируйте это письмо.";
+            if (filter_var($u['email'], FILTER_VALIDATE_EMAIL)) {
+                Mailer::send($u['email'], 'Тариф заканчивается ' . date_ru($u['plan_expires_at'], false), $text);
+            }
+            if ($u['tg_chat_id'] && Telegram::enabled()) {
+                Telegram::send($u['tg_chat_id'], "⏳ Тариф «" . e($plan['name']) . "» действует до <b>$date</b>.\nПродлить: " . e(url('/app/billing')));
+            }
+            DB::exec('UPDATE users SET remind_sent_for = plan_expires_at WHERE id = ?', [$u['id']]);
+        }
     }
 
     private static function cleanup(): void

@@ -13,14 +13,16 @@ final class ApiController
 {
     public function feed(): never
     {
-        $user = Auth::require();
-        $plan = Plans::forUser($user);
-        [$storeIds, $f] = FeedController::filters($user, $plan);
+        Auth::require();
+        $account = Auth::account();
+        $plan = Plans::forUser($account);
+        [$storeIds, $f] = FeedController::filters($account, $plan);
+        $profit = FeedController::profitSettings($account, $plan);
         session_write_close();
 
         $beforeId = input('before_id') !== null ? (int) input('before_id') : null;
         $beforeDate = input('before_date') !== null ? (string) input('before_date') : null;
-        $orders = OrderRepository::list($storeIds, $f, 50, $beforeId, $beforeDate);
+        $orders = OrderRepository::list($storeIds, $f, 50, $beforeId, $beforeDate, $profit);
 
         $payload = [
             'orders'      => $orders,
@@ -28,7 +30,7 @@ final class ApiController
             'server_time' => $this->serverMark(),
         ];
         if ($beforeId === null) {
-            $payload['kpi'] = OrderRepository::kpi($storeIds, $f);
+            $payload['kpi'] = OrderRepository::kpi($storeIds, $f, $profit);
             $payload['chart'] = OrderRepository::chart($storeIds, $f);
             $payload['top'] = OrderRepository::topProducts($storeIds, $f);
             $payload['sync'] = $this->syncInfo($storeIds);
@@ -38,18 +40,20 @@ final class ApiController
 
     public function updates(): never
     {
-        $user = Auth::require();
-        $plan = Plans::forUser($user);
-        [$storeIds, $f] = FeedController::filters($user, $plan);
+        Auth::require();
+        $account = Auth::account();
+        $plan = Plans::forUser($account);
+        [$storeIds, $f] = FeedController::filters($account, $plan);
+        $profit = FeedController::profitSettings($account, $plan);
         session_write_close();
         $since = (string) input('since', '');
         if (!preg_match('/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}(\.\d+)?$/', $since)) {
             $since = date('Y-m-d H:i:s', time() - 60);
         }
-        $changed = OrderRepository::changedSince($storeIds, $f, $since);
+        $changed = OrderRepository::changedSince($storeIds, $f, $since, $profit);
         json_response([
             'orders'      => $changed,
-            'kpi'         => $changed ? OrderRepository::kpi($storeIds, $f) : null,
+            'kpi'         => $changed ? OrderRepository::kpi($storeIds, $f, $profit) : null,
             'server_time' => $this->serverMark(),
             'sync'        => $this->syncInfo($storeIds),
         ]);

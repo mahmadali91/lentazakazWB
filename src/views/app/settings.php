@@ -40,11 +40,61 @@ $events = array_filter(explode(',', (string) $user['tg_events']));
     <?php endif; ?>
   </div>
 
+  <?php if (empty($user['owner_id'])): $teamLimit = (int) ($plan['team'] ?? 0); ?>
+  <div class="card" id="team">
+    <div class="card-title"><?= icon('users', 18) ?> Сотрудники — доступ к кабинету по логину и паролю</div>
+    <p class="muted small">Сотрудник видит ленту заказов, сводку и товары вашего кабинета, но не может менять магазины, токены, тариф и себестоимость.
+      Доступно на тарифе: <b><?= $teamLimit ?></b> <?= plural($teamLimit, 'сотрудник', 'сотрудника', 'сотрудников') ?>.</p>
+    <?php if ($members): ?>
+      <div class="table-wrap" style="margin-bottom:16px"><table class="table">
+        <thead><tr><th>Логин</th><th>Имя</th><th>Последний вход</th><th></th></tr></thead>
+        <tbody>
+        <?php foreach ($members as $m): ?>
+          <tr>
+            <td><b><?= e($m['email']) ?></b></td>
+            <td><?= e($m['name']) ?></td>
+            <td class="small muted nowrap"><?= date_ru($m['last_login_at']) ?></td>
+            <td>
+              <div class="row" style="gap:6px;justify-content:flex-end">
+                <form method="post" action="/app/team/<?= (int) $m['id'] ?>/password" class="row" style="gap:6px">
+                  <?= csrf_field() ?>
+                  <input type="text" name="password" placeholder="Новый пароль" minlength="8" required style="width:150px;padding:6px 10px" autocomplete="new-password">
+                  <button class="btn btn-ghost btn-sm">Сменить</button>
+                </form>
+                <form method="post" action="/app/team/<?= (int) $m['id'] ?>/delete" data-confirm="Удалить доступ сотрудника <?= e($m['email']) ?>?"><?= csrf_field() ?><button class="btn btn-danger btn-sm">Удалить</button></form>
+              </div>
+            </td>
+          </tr>
+        <?php endforeach; ?>
+        </tbody>
+      </table></div>
+    <?php endif; ?>
+    <?php if (count($members) < $teamLimit): ?>
+      <form method="post" action="/app/team">
+        <?= csrf_field() ?>
+        <div class="row" style="align-items:flex-start">
+          <div class="field grow" style="min-width:180px"><label for="tlogin">Логин</label><input id="tlogin" type="text" name="login" required placeholder="manager1 или email" autocapitalize="none"></div>
+          <div class="field grow" style="min-width:160px"><label for="tname">Имя</label><input id="tname" type="text" name="name" placeholder="Анна, менеджер"></div>
+          <div class="field grow" style="min-width:160px"><label for="tpass">Пароль</label><input id="tpass" type="text" name="password" minlength="8" required autocomplete="new-password"></div>
+        </div>
+        <button class="btn btn-sm"><?= icon('plus', 14) ?> Добавить сотрудника</button>
+        <div class="hint small muted" style="margin-top:8px">Вход: <?= e(url('/login')) ?> — логин и пароль, которые вы задали.</div>
+      </form>
+    <?php elseif ($teamLimit === 0): ?>
+      <a class="btn btn-sm" href="/app/billing">Доступно на платных тарифах</a>
+    <?php else: ?>
+      <p class="small muted">Лимит сотрудников по тарифу исчерпан. <a href="/app/billing">Увеличить</a></p>
+    <?php endif; ?>
+  </div>
+  <?php else: ?>
+  <div class="alert alert-info">Вы вошли как сотрудник кабинета <b><?= e($account['name'] ?: $account['email']) ?></b>.</div>
+  <?php endif; ?>
+
   <div class="card">
     <div class="card-title">Профиль</div>
     <form method="post" action="/app/settings/profile">
       <?= csrf_field() ?>
-      <div class="field"><label>Email</label><input type="email" value="<?= e($user['email']) ?>" disabled></div>
+      <div class="field"><label>Логин</label><input type="text" value="<?= e($user['email']) ?>" disabled></div>
       <div class="field"><label for="name">Имя</label><input id="name" type="text" name="name" value="<?= e($user['name']) ?>"></div>
       <button class="btn btn-sm">Сохранить</button>
     </form>

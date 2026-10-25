@@ -21,6 +21,7 @@ if (!App\Core\Config::installed()) {
     exit(1);
 }
 
+App\Core\Migrator::ensure();
 set_time_limit(58);
 $report = App\Services\Cron::run(50);
 if (in_array('-v', $argv, true)) {

@@ -93,7 +93,7 @@ final class Telegram
     /** Рассылает уведомления о новых заказах и смене статусов. */
     public static function notifyOrders(): void
     {
-        $rows = DB::all("SELECT o.*, s.name AS store_name, s.user_id, u.tg_chat_id, u.tg_events, u.plan_code, u.plan_expires_at,
+        $rows = DB::all("SELECT o.*, s.name AS store_name, s.user_id, u.plan_code, u.plan_expires_at,
                 p.title AS p_title
             FROM orders o
             JOIN stores s ON s.id = o.store_id
@@ -106,45 +106,57 @@ final class Telegram
         if (!$rows) {
             return;
         }
-        $byUser = [];
+        $byOwner = [];
         foreach ($rows as $r) {
-            $byUser[$r['user_id']][] = $r;
+            $byOwner[$r['user_id']][] = $r;
         }
-        foreach ($byUser as $list) {
-            $u = $list[0];
-            $plan = Plans::forUser($u);
-            $events = array_filter(explode(',', (string) $u['tg_events']));
-            $canSend = self::enabled() && $u['tg_chat_id'] && !empty($plan['telegram']);
-            $messages = [];
+        foreach ($byOwner as $ownerId => $list) {
+            $plan = Plans::forUser($list[0]);
+            // Получатели: владелец кабинета и его сотрудники с подключённым Telegram
+            $recipients = self::enabled() && !empty($plan['telegram'])
+                ? DB::all('SELECT tg_chat_id, tg_events FROM users WHERE (id = ? OR owner_id = ?) AND tg_chat_id IS NOT NULL AND is_blocked = 0', [$ownerId, $ownerId])
+                : [];
+            $messages = array_fill(0, count($recipients), []);
             foreach ($list as $o) {
                 $event = $o['status'] === 'returnDefective' ? 'return' : $o['status'];
                 // Старые заказы (старше суток) не присылаем — только отмечаем
                 $fresh = strtotime((string) $o['order_created_at']) > time() - 86400 || $o['status'] !== 'created';
-                if ($canSend && $fresh && in_array($event, $events, true)) {
-                    $messages[] = self::format($o);
+                if ($fresh) {
+                    foreach ($recipients as $i => $rcp) {
+                        if (in_array($event, array_filter(explode(',', (string) $rcp['tg_events'])), true)) {
+                            $messages[$i][] = self::format($o);
+                        }
+                    }
                 }
                 DB::exec('UPDATE orders SET notified_status = ? WHERE id = ?', [$o['status'], $o['id']]);
             }
-            if (!$messages) {
-                continue;
+            foreach ($recipients as $i => $rcp) {
+                self::sendBatch($rcp['tg_chat_id'], $messages[$i]);
             }
-            if (count($messages) > 15) {
-                $extra = count($messages) - 15;
-                $messages = array_slice($messages, 0, 15);
-                $messages[] = "…и ещё $extra " . plural($extra, 'событие', 'события', 'событий') . ' — смотрите ленту на сайте.';
+        }
+    }
+
+    /** Отправляет пачку уведомлений, укладываясь в лимит Telegram (4096 символов на сообщение). */
+    private static function sendBatch(int|string $chatId, array $messages): void
+    {
+        if (!$messages) {
+            return;
+        }
+        if (count($messages) > 15) {
+            $extra = count($messages) - 15;
+            $messages = array_slice($messages, 0, 15);
+            $messages[] = "…и ещё $extra " . plural($extra, 'событие', 'события', 'событий') . ' — смотрите ленту на сайте.';
+        }
+        $chunk = '';
+        foreach ($messages as $m) {
+            if (mb_strlen($chunk) + mb_strlen($m) > 3800) {
+                self::send($chatId, $chunk);
+                $chunk = '';
             }
-            // Telegram ограничивает сообщение 4096 символами — режем на части
-            $chunk = '';
-            foreach ($messages as $m) {
-                if (mb_strlen($chunk) + mb_strlen($m) > 3800) {
-                    self::send($u['tg_chat_id'], $chunk);
-                    $chunk = '';
-                }
-                $chunk .= ($chunk === '' ? '' : "\n\n") . $m;
-            }
-            if ($chunk !== '') {
-                self::send($u['tg_chat_id'], $chunk);
-            }
+            $chunk .= ($chunk === '' ? '' : "\n\n") . $m;
+        }
+        if ($chunk !== '') {
+            self::send($chatId, $chunk);
         }
     }
 

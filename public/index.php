@@ -15,6 +15,7 @@ use App\Controllers\BillingController;
 use App\Controllers\FeedController;
 use App\Controllers\HomeController;
 use App\Controllers\InstallController;
+use App\Controllers\ProductsController;
 use App\Controllers\SettingsController;
 use App\Controllers\StoreController;
 use App\Controllers\SystemController;
@@ -34,13 +35,21 @@ $path = '/' . trim((string) parse_url($uri, PHP_URL_PATH), '/');
 if (!Config::installed() && !str_starts_with($path, '/install')) {
     redirect('/install');
 }
+if (Config::installed()) {
+    App\Core\Migrator::ensure();
+}
 
 $isWebhook = str_starts_with($path, '/webhook/') || $path === '/cron-run';
 if (!$isWebhook) {
     Auth::startSession();
     if ($method === 'POST' && !Csrf::check()) {
-        http_response_code(419);
-        exit('Сессия устарела. Обновите страницу и повторите действие.');
+        http_response_code(403);
+        header('Content-Type: text/html; charset=utf-8');
+        $back = e((string) parse_url($_SERVER['HTTP_REFERER'] ?? $path, PHP_URL_PATH) ?: '/');
+        exit('<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width">'
+            . '<div style="font:16px system-ui;max-width:520px;margin:15vh auto;padding:0 16px">'
+            . '<h2>Сессия устарела</h2><p>Обновите страницу и повторите действие. Если ошибка повторяется — '
+            . 'разрешите cookies для этого сайта.</p><p><a href="' . $back . '">← Вернуться</a></p></div>');
     }
 }
 
@@ -81,6 +90,14 @@ $r->post('/app/settings/password', [SettingsController::class, 'password']);
 $r->post('/app/settings/telegram', [SettingsController::class, 'telegram']);
 $r->post('/app/settings/telegram/unlink', [SettingsController::class, 'telegramUnlink']);
 $r->post('/app/settings/telegram/test', [SettingsController::class, 'telegramTest']);
+$r->post('/app/team', [SettingsController::class, 'teamAdd']);
+$r->post('/app/team/{id}/password', [SettingsController::class, 'teamPassword']);
+$r->post('/app/team/{id}/delete', [SettingsController::class, 'teamDelete']);
+$r->get('/app/products', [ProductsController::class, 'index']);
+$r->post('/app/products', [ProductsController::class, 'save']);
+$r->post('/app/products/settings', [ProductsController::class, 'settings']);
+$r->get('/app/products/export', [ProductsController::class, 'export']);
+$r->post('/app/products/import', [ProductsController::class, 'import']);
 
 // JSON для живой ленты
 $r->get('/api/feed', [ApiController::class, 'feed']);
@@ -89,7 +106,14 @@ $r->get('/api/feed/updates', [ApiController::class, 'updates']);
 // Админка
 $r->get('/admin', [AdminController::class, 'index']);
 $r->get('/admin/users', [AdminController::class, 'users']);
-$r->post('/admin/users/{id}', [AdminController::class, 'updateUser']);
+$r->post('/admin/users/create', [AdminController::class, 'create']);
+$r->get('/admin/users/{id}', [AdminController::class, 'show']);
+$r->post('/admin/users/{id}', [AdminController::class, 'update']);
+$r->post('/admin/users/{id}/extend', [AdminController::class, 'extend']);
+$r->post('/admin/users/{id}/password', [AdminController::class, 'password']);
+$r->post('/admin/users/{id}/delete', [AdminController::class, 'delete']);
+$r->post('/admin/users/{id}/login', [AdminController::class, 'impersonate']);
+$r->post('/admin/impersonate/stop', [AdminController::class, 'stopImpersonate']);
 $r->get('/admin/payments', [AdminController::class, 'payments']);
 $r->post('/admin/cron', [AdminController::class, 'runCron']);
 

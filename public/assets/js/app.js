@@ -142,6 +142,10 @@
         '<div class="o-badges">' + badges + '</div>' +
       '</div>' +
       '<div class="o-right"><div class="o-price" title="' + esc(priceTitle) + '">' + money(o.price) + '</div>' +
+        (o.profit !== null && o.profit !== undefined
+          ? '<div class="o-profit ' + (o.profit < 0 ? 'neg' : '') + '" title="Прибыль (оценка), себестоимость ' + money(o.cost) + '">' +
+            (o.profit < 0 ? '−' : '+') + money(Math.abs(o.profit)) + '</div>'
+          : '') +
         '<div class="o-time" data-time="' + esc(o.created_iso) + '" title="Заказ: ' + esc(fmtFull(o.created_iso)) +
         (o.status_iso && o.status_at !== o.created_at ? '\n' + esc(o.status_label) + ': ' + esc(fmtFull(o.status_iso)) : '') + '">' + ago(o.created_iso) + '</div></div>';
     return el;
@@ -163,6 +167,16 @@
     set('cancel_pct', k.orders ? Math.round(k.cancel * 100 / k.orders) + '% от заказов' : ' ');
     set('returns', k.returns.toLocaleString('ru-RU'));
     set('avg', money(k.avg));
+    if (k.profit) {
+      var p = k.profit, el = document.querySelector('[data-k="profit"]');
+      if (el) {
+        el.textContent = (p.orders < 0 ? '−' : '') + money(Math.abs(p.orders));
+        el.style.color = p.orders < 0 ? 'var(--bad)' : '';
+      }
+      set('profit_sub', p.no_cost_items
+        ? 'нет себестоимости у ' + p.no_cost_items + ' тов. →'
+        : 'по выкупам ' + money(p.buyout));
+    }
   }
 
   function renderChart(c) {
