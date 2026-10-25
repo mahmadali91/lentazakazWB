@@ -25,7 +25,7 @@
 </main>
 <footer class="site-footer">
   <div class="container">
-    <div>© <?= date('Y') ?> <?= e(config('app.name')) ?>. Сервис не является официальным продуктом Wildberries. <span class="app-version">v<?= e(app_version()) ?></span></div>
+    <div>© <?= date('Y') ?> <?= e(config('app.name')) ?><?= company_line() !== '' ? ' · ' . e(company_line()) : '' ?>. Сервис не является официальным продуктом Wildberries. <span class="app-version">v<?= e(app_version()) ?></span></div>
     <div class="row">
       <a href="/oferta">Оферта</a>
       <a href="/privacy">Конфиденциальность</a>

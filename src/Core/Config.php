@@ -47,6 +47,11 @@ final class Config
         'yookassa.secret_key'   => true,
         'yookassa.send_receipt' => false,
         'yookassa.vat_code'     => false,
+        'company.name'          => false,  // реквизиты исполнителя — подставляются в оферту и политику
+        'company.inn'           => false,
+        'company.ogrn'          => false,
+        'company.address'       => false,
+        'company.bank'          => false,
     ];
 
     public static function set(string $key, mixed $value): void

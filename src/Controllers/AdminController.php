@@ -334,6 +334,8 @@ final class AdminController
             'ykReceipt' => (bool) config('yookassa.send_receipt', false),
             'ykVat'    => (int) config('yookassa.vat_code', 1),
             'ykOk'     => YooKassa::enabled() ? $this->yookassaCheck() : null,
+            'company'  => ['name' => (string) config('company.name', ''), 'inn' => (string) config('company.inn', ''), 'ogrn' => (string) config('company.ogrn', ''),
+                'address' => (string) config('company.address', ''), 'bank' => (string) config('company.bank', '')],
         ], 'app');
     }
 
@@ -361,6 +363,23 @@ final class AdminController
             flash('error', 'Email поддержки указан неверно.');
             redirect('/admin/settings');
         }
+        // Реквизиты исполнителя (оферта, политика конфиденциальности, подвал сайта)
+        $inn = preg_replace('/\D/', '', (string) input('company_inn', ''));
+        $ogrn = preg_replace('/\D/', '', (string) input('company_ogrn', ''));
+        if ($inn !== '' && !inn_valid($inn)) {
+            flash('error', 'ИНН указан неверно: 10 цифр для организации или 12 — для ИП, контрольные цифры не сходятся.');
+            redirect('/admin/settings');
+        }
+        if ($ogrn !== '' && !in_array(strlen($ogrn), [13, 15], true)) {
+            flash('error', 'ОГРН — 13 цифр, ОГРНИП — 15 цифр.');
+            redirect('/admin/settings');
+        }
+        DB::setSetting('cfg.company.name', mb_substr(trim((string) input('company_name', '')), 0, 200));
+        DB::setSetting('cfg.company.inn', $inn);
+        DB::setSetting('cfg.company.ogrn', $ogrn);
+        DB::setSetting('cfg.company.address', mb_substr(trim((string) input('company_address', '')), 0, 300));
+        DB::setSetting('cfg.company.bank', mb_substr(trim((string) input('company_bank', '')), 0, 500));
+
         DB::setSetting('cfg.app.support_phone', $phone !== '' ? normalize_phone($phone) : '');
         DB::setSetting('cfg.app.support_email', $email);
         $username = ltrim(trim((string) input('bot_username', '')), '@');

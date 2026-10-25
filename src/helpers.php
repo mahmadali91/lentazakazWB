@@ -155,6 +155,31 @@ function phone_ru(?string $phone): string
     return preg_match('/^\+7(\d{3})(\d{3})(\d{2})(\d{2})$/', $phone, $m) ? "+7 $m[1] $m[2]-$m[3]-$m[4]" : $phone;
 }
 
+/** Проверка ИНН по контрольным числам (10 цифр — организация, 12 — ИП/физлицо). */
+function inn_valid(string $inn): bool
+{
+    if (!preg_match('/^(\d{10}|\d{12})$/', $inn)) {
+        return false;
+    }
+    $d = array_map('intval', str_split($inn));
+    $sum = static fn(array $w, int $n) => array_sum(array_map(static fn($k, $i) => $k * $d[$i], $w, array_keys($w))) % 11 % 10;
+    if (strlen($inn) === 10) {
+        return $sum([2, 4, 10, 3, 5, 9, 4, 6, 8], 9) === $d[9];
+    }
+    return $sum([7, 2, 4, 10, 3, 5, 9, 4, 6, 8], 10) === $d[10] && $sum([3, 7, 2, 4, 10, 3, 5, 9, 4, 6, 8], 11) === $d[11];
+}
+
+/** Реквизиты исполнителя одной строкой: «ИП Иванов И. И., ИНН 123…, ОГРНИП …». Пусто — не заполнены. */
+function company_line(): string
+{
+    $parts = array_filter([
+        (string) config('company.name', ''),
+        config('company.inn') ? 'ИНН ' . config('company.inn') : '',
+        config('company.ogrn') ? (strlen((string) config('company.ogrn')) === 15 ? 'ОГРНИП ' : 'ОГРН ') . config('company.ogrn') : '',
+    ]);
+    return implode(', ', $parts);
+}
+
 /** Число по-русски: 1 234,5. null — прочерк. */
 function num_ru(float|int|string|null $value, int $decimals = 0): string
 {

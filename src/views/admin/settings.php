@@ -4,6 +4,18 @@
 <form method="post" action="/admin/settings" class="stack page-narrow">
   <?= csrf_field() ?>
   <div class="card">
+    <div class="card-title"><?= icon('shield', 18) ?> Реквизиты исполнителя</div>
+    <p class="muted small">Подставляются автоматически в <a href="/oferta" target="_blank">оферту</a>, <a href="/privacy" target="_blank">политику конфиденциальности</a> и подвал сайта.</p>
+    <div class="field"><label for="cn">ФИО или наименование</label><input id="cn" type="text" name="company_name" value="<?= e($company['name']) ?>" placeholder="ИП Иванов Иван Иванович или ООО «Линкоз»" maxlength="200"></div>
+    <div class="row" style="align-items:flex-start">
+      <div class="field grow"><label for="ci">ИНН</label><input id="ci" type="text" inputmode="numeric" name="company_inn" value="<?= e($company['inn']) ?>" placeholder="12 цифр для ИП, 10 — для ООО" maxlength="12"></div>
+      <div class="field grow"><label for="co">ОГРНИП / ОГРН <span class="muted small">(необязательно; самозанятым не нужно)</span></label><input id="co" type="text" inputmode="numeric" name="company_ogrn" value="<?= e($company['ogrn']) ?>" placeholder="15 или 13 цифр" maxlength="15"></div>
+    </div>
+    <div class="field"><label for="ca">Адрес <span class="muted small">(для ИП можно указать город)</span></label><input id="ca" type="text" name="company_address" value="<?= e($company['address']) ?>" maxlength="300"></div>
+    <div class="field"><label for="cb">Банковские реквизиты <span class="muted small">(необязательно)</span></label><textarea id="cb" name="company_bank" maxlength="500" style="font-family:inherit;font-size:14px;min-height:64px" placeholder="Р/с, банк, БИК, к/с"><?= e($company['bank']) ?></textarea></div>
+  </div>
+
+  <div class="card">
     <div class="card-title"><?= icon('mail', 18) ?> Контакты для клиентов</div>
     <p class="muted small">Показываются в подвале сайта, в профиле клиента («Написать в поддержку»), на странице тарифов и в документах.</p>
     <div class="row" style="align-items:flex-start">
