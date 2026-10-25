@@ -177,7 +177,7 @@
 
     var order = '<h4>Заказ</h4>' +
       row('Оформлен', esc(fmtFull(o.created_iso))) +
-      (o.status_iso && o.status_at !== o.created_at ? row(esc(o.status_label), esc(fmtFull(o.status_iso))) : '') +
+      (o.status !== 'created' && o.status_iso ? row(esc(o.status_label), esc(fmtFull(o.status_iso))) : '') +
       row('Схема', esc(o.scheme_label || '—')) +
       row('Склад → город', esc([o.warehouse, o.city].filter(Boolean).join(' → ') || '—'), o.district ? esc(o.district) : '') +
       (o.mp_order_id ? row('Сборочное задание', '№ ' + o.mp_order_id) : '') +
@@ -222,7 +222,10 @@
     }
 
     var box = document.getElementById('orderModal');
-    box.querySelector('.modal-body').innerHTML = head + '<div class="m-grid"><div>' + order + prices + '</div><div>' + goods + '</div></div>' + '<div class="m-calc">' + calc + '</div>';
+    // Сначала расчёт прибыли, затем информация о заказе и товаре
+    box.querySelector('.modal-body').innerHTML = head + '<div class="m-calc">' + calc + '</div>' +
+      '<div class="m-grid"><div>' + order + prices + '</div><div>' + goods + '</div></div>';
+    box.querySelector('.modal-card').scrollTop = 0;
     box.classList.add('open');
     document.body.classList.add('modal-open');
   }
