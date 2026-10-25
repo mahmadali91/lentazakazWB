@@ -53,7 +53,8 @@ $names = ['pending' => 'Ожидает', 'succeeded' => 'Оплачен (ЮKassa
           <div class="field"><label>Тариф</label><select name="plan_code"><?php foreach ($plans as $code => $p): ?><option value="<?= e($code) ?>" <?= $client['plan_code'] === $code ? 'selected' : '' ?>><?= e($p['name']) ?></option><?php endforeach; ?></select></div>
           <div class="field"><label>Действует до</label><input type="date" name="plan_expires_at" value="<?= $client['plan_expires_at'] ? e(substr($client['plan_expires_at'], 0, 10)) : '' ?>"></div>
         </div>
-        <div class="field"><label>Заметка о клиенте</label><textarea name="note" style="font-family:inherit;font-size:14px;min-height:70px" placeholder="Телефон, договорённости, откуда пришёл"><?= e($client['note']) ?></textarea></div>
+        <div class="field"><label>Телефон</label><input type="tel" name="phone" value="<?= e(phone_ru($client['phone'] ?? '')) ?>" inputmode="tel" placeholder="+7 900 123-45-67"></div>
+        <div class="field"><label>Заметка о клиенте</label><textarea name="note" style="font-family:inherit;font-size:14px;min-height:70px" placeholder="Договорённости, откуда пришёл"><?= e($client['note']) ?></textarea></div>
         <div class="row" style="margin-bottom:14px">
           <label class="check" style="margin:0"><input type="checkbox" name="is_admin" value="1" <?= $client['role'] === 'admin' ? 'checked' : '' ?>> администратор</label>
           <label class="check" style="margin:0"><input type="checkbox" name="is_blocked" value="1" <?= $client['is_blocked'] ? 'checked' : '' ?>> заблокировать доступ</label>

@@ -226,12 +226,14 @@ final class OrderRepository
             $params['s' . $i] = $id;
         }
         $where[] = $in ? 'o.store_id IN (' . implode(',', $in) . ')' : '1 = 0';
+        // Выкупы, отмены и возвраты считаем по дате события (как в кабинете WB), заказы — по дате оформления
+        $dateCol = ($f['date_by'] ?? '') === 'status' ? 'COALESCE(o.status_at, o.order_created_at)' : 'o.order_created_at';
         if (!empty($f['from'])) {
-            $where[] = 'o.order_created_at >= :from';
+            $where[] = "$dateCol >= :from";
             $params['from'] = $f['from'];
         }
         if (!empty($f['to'])) {
-            $where[] = 'o.order_created_at <= :to';
+            $where[] = "$dateCol <= :to";
             $params['to'] = $f['to'];
         }
         if (!empty($f['status'])) {
@@ -310,17 +312,20 @@ final class OrderRepository
     public static function kpi(array $storeIds, array $f, ?array $profit = null): array
     {
         $f2 = $f;
-        unset($f2['status']);
+        unset($f2['status'], $f2['date_by']);
         [$where, $params] = self::buildWhere($storeIds, $f2);
-        $r = DB::one("SELECT
-                COUNT(*) AS orders_count,
-                COALESCE(SUM(o.seller_price),0) AS orders_sum,
+        $r = DB::one("SELECT COUNT(*) AS orders_count, COALESCE(SUM(o.seller_price),0) AS orders_sum
+            FROM orders o LEFT JOIN products p ON p.store_id = o.store_id AND p.nm_id = o.nm_id
+            WHERE $where", $params) ?? [];
+        // Выкупы, отмены, возвраты — произошедшие в этом периоде (по дате статуса), даже если заказ оформлен раньше
+        [$whereS, $paramsS] = self::buildWhere($storeIds, $f2 + ['date_by' => 'status']);
+        $r += DB::one("SELECT
                 SUM(o.status = 'buyout') AS buyout_count,
                 COALESCE(SUM(CASE WHEN o.status = 'buyout' THEN o.seller_price END),0) AS buyout_sum,
                 SUM(o.status = 'cancel') AS cancel_count,
                 SUM(o.status IN ('return','returnDefective')) AS return_count
             FROM orders o LEFT JOIN products p ON p.store_id = o.store_id AND p.nm_id = o.nm_id
-            WHERE $where", $params) ?? [];
+            WHERE $whereS AND o.status <> 'created'", $paramsS) ?? [];
         $count = (int) ($r['orders_count'] ?? 0);
         $out = [
             'orders'      => $count,
@@ -333,6 +338,7 @@ final class OrderRepository
         ];
         if ($profit !== null) {
             $out['profit'] = self::profitTotals($storeIds, $f2, $profit);
+            $out['profit']['buyout'] = self::profitTotals($storeIds, $f2 + ['date_by' => 'status', 'status' => 'buyout'], $profit)['buyout'];
         }
         return $out;
     }

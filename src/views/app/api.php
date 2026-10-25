@@ -1,7 +1,7 @@
 <?php
 $mcpUrl = static fn(string $key) => $baseUrl . '/mcp/' . $key;
 ?>
-<div class="topbar"><h1>API и Claude</h1></div>
+<div class="topbar"><a href="/app/settings" class="btn btn-ghost btn-sm">← Настройки</a><h1>API и Claude</h1></div>
 
 <div class="stack page-narrow">
   <div class="card">
@@ -37,7 +37,7 @@ $mcpUrl = static fn(string $key) => $baseUrl . '/mcp/' . $key;
               <td class="mono">lz_<?= e($k['token_hint']) ?></td>
               <td class="small"><?= $k['last_used_at'] ? date_ru($k['last_used_at']) : '<span class="muted">ещё нет</span>' ?></td>
               <td><?= number_format((int) $k['requests'], 0, ',', ' ') ?></td>
-              <td><form method="post" action="/app/api/keys/<?= (int) $k['id'] ?>/delete" data-confirm="Отозвать ключ? Подключения с ним перестанут работать."><?= csrf_field() ?><button class="btn btn-danger btn-sm">Отозвать</button></form></td>
+              <td><form method="post" action="/app/settings/api/keys/<?= (int) $k['id'] ?>/delete" data-confirm="Отозвать ключ? Подключения с ним перестанут работать."><?= csrf_field() ?><button class="btn btn-danger btn-sm">Отозвать</button></form></td>
             </tr>
           <?php endforeach; ?>
           </tbody>
@@ -46,7 +46,7 @@ $mcpUrl = static fn(string $key) => $baseUrl . '/mcp/' . $key;
     <?php else: ?>
       <p class="muted">Ключей пока нет.</p>
     <?php endif; ?>
-    <form method="post" action="/app/api/keys" class="row" style="margin-top:12px;gap:8px">
+    <form method="post" action="/app/settings/api/keys" class="row" style="margin-top:12px;gap:8px">
       <?= csrf_field() ?>
       <input type="text" name="name" placeholder="Название, например Claude" maxlength="80" style="max-width:260px">
       <button class="btn btn-sm"><?= icon('plus', 16) ?> Создать ключ</button>

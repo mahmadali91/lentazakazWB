@@ -7,9 +7,6 @@ if (!$isMember) {
     $items[] = ['billing', '/app/billing', 'Тариф и оплата', 'Тариф', 'card'];
 }
 $items[] = ['settings', '/app/settings', 'Настройки', 'Настройки', 'settings'];
-if (!$isMember) {
-    $items[] = ['api', '/app/api', 'API и Claude', 'API', 'zap'];
-}
 if (($user['role'] ?? '') === 'admin') {
     $items[] = ['admin', '/admin', 'Админ-панель', 'Админ', 'shield'];
 }
@@ -23,7 +20,7 @@ if (($user['role'] ?? '') === 'admin') {
 <body>
 <div class="app">
   <aside class="sidebar">
-    <?= App\Core\View::partial('partials/logo', ['href' => ($user['role'] ?? '') === 'admin' ? '/admin' : '/app']) ?>
+    <?= App\Core\View::partial('partials/logo', ['href' => '/app']) ?>
     <nav class="side-nav">
       <?php foreach ($items as [$key, $href, $label, , $ico]): ?>
         <a href="<?= $href ?>" class="<?= $nav === $key ? 'active' : '' ?>"><?= icon($ico) ?> <?= e($label) ?></a>
@@ -68,7 +65,7 @@ if (!$isMember) {
     $mobile[] = ['stores', '/app/stores', 'Магазины', 'store'];
 }
 $mobile[] = ['profile', '/app/profile', 'Профиль', 'user'];
-$profileActive = in_array($nav, ['profile', 'settings', 'billing', 'admin', 'api'], true);
+$profileActive = in_array($nav, ['profile', 'settings', 'billing', 'admin'], true);
 ?>
 <nav class="mobile-nav">
   <?php foreach ($mobile as [$key, $href, $short, $ico]): ?>

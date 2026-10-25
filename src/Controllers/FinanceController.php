@@ -359,8 +359,12 @@ final class FinanceController
             $storeId = $ctx['activeIds'][0] ?? 0;
         }
         $file = $_FILES['file'] ?? null;
-        if (!$storeId || !$file || ($file['error'] ?? 1) !== UPLOAD_ERR_OK) {
+        if (!$storeId || !$file || ($file['error'] ?? 1) !== UPLOAD_ERR_OK || !is_uploaded_file((string) $file['tmp_name'])) {
             flash('error', 'Выберите файл детализации отчёта (.xlsx), скачанный в кабинете WB.');
+            redirect('/app/finance/reports');
+        }
+        if ((int) $file['size'] > 30 * 1024 * 1024) {
+            flash('error', 'Файл больше 30 МБ. Загрузите детализацию за одну неделю.');
             redirect('/app/finance/reports');
         }
         try {

@@ -9,7 +9,7 @@ namespace App\Core;
  */
 final class Migrator
 {
-    public const VERSION = 5;
+    public const VERSION = 6;
 
     public static function ensure(): void
     {
@@ -34,6 +34,9 @@ final class Migrator
             }
             if ($version < 5) {
                 self::run(self::API_KEYS_DDL);
+            }
+            if ($version < 6) {
+                self::v6();
             }
             DB::setSetting('schema_version', (string) self::VERSION);
             @file_put_contents($cache, (string) self::VERSION);
@@ -238,6 +241,18 @@ final class Migrator
             CONSTRAINT fk_sb_user FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci',
     ];
+
+    /** v6: телефон клиента, индекс по дате статуса (выкупы за период), контакты поддержки и бот по умолчанию. */
+    private static function v6(): void
+    {
+        self::addColumn('users', 'phone', 'VARCHAR(20) NULL AFTER name');
+        self::run('ALTER TABLE orders ADD KEY idx_orders_store_status_at (store_id, status_at)');
+        foreach (['cfg.app.support_phone' => '+79913004737', 'cfg.app.support_email' => 'admin@linkoz.ru', 'cfg.telegram.bot_username' => 'WBLinkoz_bot'] as $k => $v) {
+            if (DB::setting($k) === null) {
+                DB::setSetting($k, $v);
+            }
+        }
+    }
 
     /** v5: ключи API (REST и MCP-сервер для подключения к Claude). В базе — только SHA-256 ключа. */
     public const API_KEYS_DDL = 'CREATE TABLE IF NOT EXISTS api_keys (

@@ -26,7 +26,7 @@ $statusNames = ['pending' => 'Ожидает оплаты', 'succeeded' => 'Оп
 </div>
 
 <?php if (!$payEnabled): ?>
-  <div class="alert alert-info">Онлайн-оплата скоро появится. Чтобы подключить тариф сейчас, напишите нам: <a href="mailto:<?= e(config('app.support_email')) ?>"><?= e(config('app.support_email')) ?></a></div>
+  <div class="alert alert-info">Онлайн-оплата скоро появится. Чтобы подключить тариф сейчас, свяжитесь с нами: <?php if (config('app.support_phone')): ?><a href="tel:<?= e(config('app.support_phone')) ?>"><?= e(phone_ru(config('app.support_phone'))) ?></a> · <?php endif; ?><a href="mailto:<?= e(config('app.support_email')) ?>"><?= e(config('app.support_email')) ?></a></div>
 <?php endif; ?>
 
 <div class="row" style="margin-bottom:14px">

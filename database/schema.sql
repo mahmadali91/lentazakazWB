@@ -9,6 +9,7 @@ CREATE TABLE IF NOT EXISTS users (
   email           VARCHAR(190) NOT NULL,
   password_hash   VARCHAR(255) NOT NULL,
   name            VARCHAR(120) NOT NULL DEFAULT '',
+  phone           VARCHAR(20) NULL,               -- телефон клиента (обязателен для владельцев кабинетов)
   role            ENUM('user','admin') NOT NULL DEFAULT 'user',
   is_blocked      TINYINT(1) NOT NULL DEFAULT 0,
   plan_code       VARCHAR(32) NOT NULL DEFAULT 'free',
@@ -110,6 +111,7 @@ CREATE TABLE IF NOT EXISTS orders (
   UNIQUE KEY uq_orders_store_srid (store_id, srid),
   KEY idx_orders_store_created (store_id, order_created_at),
   KEY idx_orders_store_updated (store_id, row_updated_at),
+  KEY idx_orders_store_status_at (store_id, status_at),
   KEY idx_orders_notify (notified_status, first_seen_at),
   CONSTRAINT fk_orders_store FOREIGN KEY (store_id) REFERENCES stores (id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

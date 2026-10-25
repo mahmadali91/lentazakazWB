@@ -6,6 +6,7 @@
   <form method="post" action="/register">
     <?= csrf_field() ?>
     <div class="field"><label for="name">Имя</label><input id="name" type="text" name="name" value="<?= e(old('name')) ?>" autocomplete="name"></div>
+    <div class="field"><label for="phone">Телефон</label><input id="phone" type="tel" name="phone" value="<?= e(old('phone')) ?>" required autocomplete="tel" inputmode="tel" placeholder="+7 900 123-45-67"><div class="hint">Для связи по вопросам тарифа и поддержки</div></div>
     <div class="field"><label for="email">Email</label><input id="email" type="email" name="email" value="<?= e(old('email')) ?>" required autocomplete="email"></div>
     <div class="field"><label for="password">Пароль</label><input id="password" type="password" name="password" minlength="8" required autocomplete="new-password"><div class="hint">Не короче 8 символов</div></div>
     <div class="field"><label class="check"><input type="checkbox" name="agree" value="1" required> <span>Принимаю <a href="/oferta" target="_blank">оферту</a> и <a href="/privacy" target="_blank">политику конфиденциальности</a></span></label></div>

@@ -28,7 +28,7 @@ final class ApiKeysController
             'tools'   => ApiTools::definitions($account),
             'baseUrl' => rtrim((string) config('app.url'), '/'),
             'isMember' => Auth::isMember(),
-            'nav'     => 'api',
+            'nav'     => 'settings',
         ], 'app');
     }
 
@@ -37,7 +37,7 @@ final class ApiKeysController
         $owner = Auth::requireOwner();
         if ((int) DB::value('SELECT COUNT(*) FROM api_keys WHERE user_id = ?', [(int) $owner['id']]) >= self::MAX_KEYS) {
             flash('error', 'Можно создать не больше ' . self::MAX_KEYS . ' ключей. Удалите ненужные.');
-            redirect('/app/api');
+            redirect('/app/settings/api');
         }
         $key = 'lz_' . bin2hex(random_bytes(20));
         $name = mb_substr(trim((string) input('name', '')), 0, 80) ?: 'Claude';
@@ -46,7 +46,7 @@ final class ApiKeysController
             'token_hint' => '…' . substr($key, -6), 'created_at' => now(),
         ]);
         $_SESSION['new_api_key'] = ['key' => $key, 'name' => $name];
-        redirect('/app/api');
+        redirect('/app/settings/api');
     }
 
     public function delete(string $id): never
@@ -54,6 +54,6 @@ final class ApiKeysController
         $owner = Auth::requireOwner();
         DB::exec('DELETE FROM api_keys WHERE id = ? AND user_id = ?', [(int) $id, (int) $owner['id']]);
         flash('success', 'Ключ отозван — подключения с ним больше не работают.');
-        redirect('/app/api');
+        redirect('/app/settings/api');
     }
 }

@@ -244,7 +244,9 @@
   function signed(v) { return (v < 0 ? '−' : '+') + money(Math.abs(v)); }
 
   function renderOrder(o) {
-    var photo = o.photo ? '<img src="' + esc(o.photo) + '" alt="" loading="lazy" referrerpolicy="no-referrer">' : PHOTO_PH;
+    // Крупное фото: для экранов с высокой плотностью берём версию 516×688
+    var big = o.photo && o.photo.indexOf('c246x328') !== -1 ? o.photo.replace('c246x328', 'c516x688') : '';
+    var photo = o.photo ? '<img src="' + esc(o.photo) + '"' + (big ? ' srcset="' + esc(o.photo) + ' 1x, ' + esc(big) + ' 2x"' : '') + ' alt="" loading="lazy" referrerpolicy="no-referrer">' : PHOTO_PH;
     var meta = [];
     if (o.article) meta.push('<span class="o-k">Арт.</span> ' + esc(o.article));
     if (o.nm_id) meta.push('<span class="o-k">WB</span> <a href="https://www.wildberries.ru/catalog/' + o.nm_id + '/detail.aspx" target="_blank" rel="noopener">' + o.nm_id + '</a>');
@@ -279,13 +281,13 @@
     el.innerHTML =
       '<div class="thumb">' + photo + '</div>' +
       '<div class="o-info">' +
+        '<div class="o-top"><div class="o-badges">' + badges + '</div>' +
+          '<div class="o-time" data-time="' + esc(o.created_iso) + '" title="Заказ: ' + esc(fmtFull(o.created_iso)) + '">' + ago(o.created_iso) + '</div></div>' +
         '<div class="o-title" title="' + esc(o.title) + '">' + esc(o.title) + '</div>' +
         '<div class="o-meta">' + meta.map(function (m) { return '<span>' + m + '</span>'; }).join('') + '</div>' +
-        (route.length ? '<div class="o-meta"><span><span class="o-k">Склад → город</span> ' + route.join(' → ') + '</span></div>' : '') +
-        '<div class="o-badges">' + badges + '</div>' +
-      '</div>' +
-      '<div class="o-right"><div class="o-stats">' + stats + '</div>' +
-        '<div class="o-time" data-time="' + esc(o.created_iso) + '" title="Заказ: ' + esc(fmtFull(o.created_iso)) + '">' + ago(o.created_iso) + '</div></div>';
+        (route.length ? '<div class="o-meta o-route"><span>' + route.join(' → ') + '</span></div>' : '') +
+        '<div class="o-stats">' + stats + '</div>' +
+      '</div>';
     return el;
   }
 

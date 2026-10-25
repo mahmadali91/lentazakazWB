@@ -18,12 +18,13 @@ $back = '/admin/users?' . http_build_query(['f' => $filter, 'q' => $q]);
       <div class="field grow" style="min-width:200px"><label>Логин</label><input type="text" name="login" required placeholder="email или client01" autocapitalize="none"></div>
       <div class="field grow" style="min-width:160px"><label>Пароль</label><input type="text" name="password" minlength="8" required value="<?= e(substr(bin2hex(random_bytes(6)), 0, 10)) ?>"></div>
       <div class="field grow" style="min-width:160px"><label>Имя / компания</label><input type="text" name="name"></div>
+      <div class="field grow" style="min-width:160px"><label>Телефон</label><input type="tel" name="phone" required inputmode="tel" placeholder="+7 900 123-45-67"></div>
     </div>
     <div class="row" style="align-items:flex-start">
       <div class="field"><label>Тариф</label><select name="plan_code"><?php foreach ($plans as $code => $p): ?><option value="<?= e($code) ?>" <?= $code === 'start' ? 'selected' : '' ?>><?= e($p['name']) ?></option><?php endforeach; ?></select></div>
       <div class="field" style="width:120px"><label>Дней</label><input type="number" name="days" value="30" min="0" max="3650"></div>
       <div class="field" style="width:140px"><label>Оплачено, ₽</label><input type="text" name="amount" value="0" inputmode="decimal"></div>
-      <div class="field grow" style="min-width:200px"><label>Заметка</label><input type="text" name="note" placeholder="Телефон, откуда пришёл, договорённости"></div>
+      <div class="field grow" style="min-width:200px"><label>Заметка</label><input type="text" name="note" placeholder="Откуда пришёл, договорённости"></div>
     </div>
     <button class="btn">Создать</button>
   </form>
@@ -52,6 +53,7 @@ $back = '/admin/users?' . http_build_query(['f' => $filter, 'q' => $q]);
             <a href="/admin/users/<?= (int) $u['id'] ?>"><b><?= e($u['email']) ?></b></a>
             <?= $u['role'] === 'admin' ? '<span class="badge badge-accent">админ</span>' : '' ?>
             <div class="small muted"><?= e($u['name']) ?><?= $u['name'] ? ' · ' : '' ?>с <?= date_ru($u['created_at'], false) ?> · вход <?= $u['last_login_at'] ? date_ru($u['last_login_at']) : '—' ?></div>
+            <?php if (!empty($u['phone'])): ?><div class="small"><a href="tel:<?= e($u['phone']) ?>"><?= e(phone_ru($u['phone'])) ?></a></div><?php elseif (!$u['owner_id'] && $u['role'] !== 'admin'): ?><div class="small" style="color:var(--warn)">телефон не указан</div><?php endif; ?>
             <?php if ($u['note']): ?><div class="small" style="max-width:320px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="<?= e($u['note']) ?>">📝 <?= e($u['note']) ?></div><?php endif; ?>
           </td>
           <td class="nowrap"><?= e(App\Services\Plans::get($u['plan_code'])['name']) ?><div class="small muted"><?= $u['plan_expires_at'] ? 'до ' . date_ru($u['plan_expires_at'], false) : '' ?></div></td>

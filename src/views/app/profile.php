@@ -31,11 +31,13 @@ $initial = mb_strtoupper(mb_substr($display, 0, 1));
     <?php if (!$isMember): ?>
       <a href="/app/billing"><?= icon('card') ?> Тариф и оплата <span class="chev"><?= icon('chevron', 18) ?></span></a>
       <a href="/app/stores"><?= icon('store') ?> Магазины WB <span class="chev"><?= icon('chevron', 18) ?></span></a>
-      <a href="/app/api"><?= icon('zap') ?> API и подключение к Claude <span class="chev"><?= icon('chevron', 18) ?></span></a>
     <?php endif; ?>
-    <a href="/app/settings"><?= icon('settings') ?> Настройки, Telegram<?= $isMember ? '' : ', сотрудники' ?> <span class="chev"><?= icon('chevron', 18) ?></span></a>
+    <a href="/app/settings"><?= icon('settings') ?> Настройки, Telegram<?= $isMember ? '' : ', сотрудники, API для Claude' ?> <span class="chev"><?= icon('chevron', 18) ?></span></a>
     <?php if (($user['role'] ?? '') === 'admin'): ?>
       <a href="/admin"><?= icon('shield') ?> Админ-панель <span class="chev"><?= icon('chevron', 18) ?></span></a>
+    <?php endif; ?>
+    <?php if (config('app.support_phone')): ?>
+      <a href="tel:<?= e(config('app.support_phone')) ?>"><?= icon('user') ?> Поддержка: <?= e(phone_ru(config('app.support_phone'))) ?> <span class="chev"><?= icon('chevron', 18) ?></span></a>
     <?php endif; ?>
     <?php if (config('app.support_email')): ?>
       <a href="mailto:<?= e(config('app.support_email')) ?>"><?= icon('mail') ?> Написать в поддержку <span class="chev"><?= icon('chevron', 18) ?></span></a>

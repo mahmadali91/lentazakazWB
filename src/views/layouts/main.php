@@ -29,7 +29,8 @@
     <div class="row">
       <a href="/oferta">Оферта</a>
       <a href="/privacy">Конфиденциальность</a>
-      <?php if (config('app.support_email')): ?><a href="mailto:<?= e(config('app.support_email')) ?>">Поддержка</a><?php endif; ?>
+      <?php if (config('app.support_phone')): ?><a href="tel:<?= e(config('app.support_phone')) ?>"><?= e(phone_ru(config('app.support_phone'))) ?></a><?php endif; ?>
+      <?php if (config('app.support_email')): ?><a href="mailto:<?= e(config('app.support_email')) ?>"><?= e(config('app.support_email')) ?></a><?php endif; ?>
     </div>
   </div>
 </footer>

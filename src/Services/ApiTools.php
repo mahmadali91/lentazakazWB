@@ -370,6 +370,7 @@ final class ApiTools
             'id' => (int) $s['id'], 'name' => $s['name'], 'active' => (bool) $s['is_active'], 'initial_load_done' => (bool) $s['initial_done'],
             'token_scopes' => $scopes, 'token_expires_at' => $s['token_expires_at'],
             'last_error' => $s['last_error'], 'last_error_at' => $s['last_error_at'], 'sources' => $sources,
+            'feed_state' => json_decode((string) ($s['feed_state'] ?? ''), true),
             'orders_in_db' => (int) DB::value('SELECT COUNT(*) FROM orders WHERE store_id = ?', [$s['id']]),
             'orders_last_24h' => (int) DB::value('SELECT COUNT(*) FROM orders WHERE store_id = ? AND order_created_at >= ?', [$s['id'], date('Y-m-d H:i:s', time() - 86400)]),
             'finance_reports' => self::typed($fin),

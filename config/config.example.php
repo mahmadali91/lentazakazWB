@@ -10,7 +10,8 @@ return [
         'key'           => '',                            // base64 от 32 случайных байт; шифрует токены WB — не меняйте после запуска!
         'debug'         => false,
         'timezone'      => 'Europe/Moscow',
-        'support_email' => 'support@linkoz.ru',
+        'support_email' => 'admin@linkoz.ru',
+        'support_phone' => '+79913004737',
         'trial_plan'    => 'pro',                         // какой тариф выдаётся на пробный период
         'trial_days'    => 7,
     ],
