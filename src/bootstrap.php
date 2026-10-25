@@ -19,6 +19,7 @@ require BASE_PATH . '/src/helpers.php';
 App\Core\Config::load();
 date_default_timezone_set((string) config('app.timezone', 'Europe/Moscow'));
 mb_internal_encoding('UTF-8');
+ini_set('serialize_precision', '-1');
 
 if (config('app.debug')) {
     error_reporting(E_ALL);
