@@ -24,17 +24,17 @@ $lines = [
     ['deduction', 'Удержания', 'sub'],
     ['additional', 'Доплаты (корректировка ВВ)', 'sub'],
     ['wb_other', 'Хранение и прочие удержания WB', 'total'],
+    ['pay_calc', 'Итого к оплате (как в отчётах WB)', 'total'],
     ['cost', 'Себестоимость проданного товара', 'sub'],
     ['tax_base', 'Налоговая база', 'money'],
     ['tax', 'Налог', 'sub'],
     ['vat', 'НДС', 'sub'],
-    ['ads', 'Реклама', 'sub'],
+    ['ads', 'Реклама (без удержанной WB в отчётах)', 'sub'],
     ['exp_sku', 'Доп. затраты на товары', 'sub'],
     ['exp_period', 'Прочие расходы за период', 'sub'],
     ['profit', 'Чистая прибыль', 'profit'],
     ['margin', 'Маржинальность, % от выручки', 'pct'],
     ['roi', 'ROI, % от себестоимости', 'pct'],
-    ['pay_calc', 'Сверка: итого к оплате от WB', 'money'],
 ];
 $fmt = static function ($v, string $type): string {
     return match ($type) {

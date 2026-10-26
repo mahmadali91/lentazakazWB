@@ -1,5 +1,6 @@
 <?php
 $total = array_sum(array_map(static fn($c) => (float) $c['amount'], $camps));
+$inReport = array_sum(array_map(static fn($c) => in_array(mb_strtolower((string) $c['payment_type']), ['счёт', 'счет'], true) ? (float) $c['amount'] : 0.0, $camps));
 $advertOff = array_filter($status, static fn($s) => $s['advert'] === false);
 ?>
 <?php if ($advertOff): ?>
@@ -7,6 +8,9 @@ $advertOff = array_filter($status, static fn($s) => $s['advert'] === false);
 <?php endif; ?>
 <div class="kpis">
   <div class="card kpi"><div class="k-label">Реклама WB за период</div><div class="k-value"><?= money($total) ?></div><div class="k-sub"><?= count($camps) ?> <?= plural(count($camps), 'кампания', 'кампании', 'кампаний') ?></div></div>
+  <?php if ($inReport > 0): ?>
+    <div class="card kpi" title="Кампании с оплатой «Счёт» WB удерживает в отчёте реализации — эти суммы уже входят в «Удержания» и второй раз в строку «Реклама» не попадают"><div class="k-label">Из них удержано WB в отчётах</div><div class="k-value"><?= money($inReport) ?></div><div class="k-sub">оплата «Счёт» — в «Удержаниях»</div></div>
+  <?php endif; ?>
   <div class="card kpi"><div class="k-label">Разнесено по товарам</div><div class="k-value"><?= money(array_sum($bySku)) ?></div><div class="k-sub"><?= count($bySku) ?> <?= plural(count($bySku), 'товар', 'товара', 'товаров') ?></div></div>
 </div>
 <?php if (!$camps): ?>

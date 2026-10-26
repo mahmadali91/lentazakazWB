@@ -20,10 +20,10 @@ $cls = static fn(float $v) => $v < 0 ? 'neg' : 'pos';
 
 <div class="kpis">
   <div class="card kpi" title="Как графа «Продажа» в отчётах реализации WB: продажи минус возвраты по цене продажи"><div class="k-label">Выручка</div><div class="k-value"><?= money($rev) ?></div><div class="k-sub"><?= num_ru($t['sales_qty']) ?> продаж · <?= num_ru($t['returns_qty']) ?> возвр.</div></div>
-  <div class="card kpi"><div class="k-label">Придёт от WB за товар</div><div class="k-value"><?= money($t['turnover']) ?></div><div class="k-sub">как «К перечислению за товар» − логистика в отчётах WB</div></div>
+  <div class="card kpi" title="Как «Итого к оплате» в отчётах реализации WB: к перечислению за товар − логистика − хранение, приёмка, штрафы и прочие удержания"><div class="k-label">Итого к оплате от WB</div><div class="k-value"><?= money($t['pay_calc']) ?></div><div class="k-sub">за товар <?= money($t['turnover']) ?> − удержания <?= money($t['turnover'] - $t['pay_calc']) ?></div></div>
   <div class="card kpi"><div class="k-label">Себестоимость</div><div class="k-value"><?= money($t['cost']) ?></div><div class="k-sub"><?= $pct($t['cost']) ?> выручки</div></div>
   <div class="card kpi"><div class="k-label">Налог<?= $t['vat'] ? ' и НДС' : '' ?></div><div class="k-value"><?= money($t['tax'] + $t['vat']) ?></div><div class="k-sub"><?= num_ru($settings['tax'], 1) ?>%<?= $settings['vat'] ? ' + НДС ' . num_ru($settings['vat'], 0) . '%' : '' ?></div></div>
-  <div class="card kpi"><div class="k-label">Реклама</div><div class="k-value"><?= money($t['ads']) ?></div><div class="k-sub">ДРР <?= $pct($t['ads']) ?></div></div>
+  <div class="card kpi" title="Реклама, оплаченная с баланса и бонусами. Оплаченную со «Счёта» WB удерживает в отчёте — она в «Хранение и прочие удержания»"><div class="k-label">Реклама</div><div class="k-value"><?= money($t['ads']) ?></div><div class="k-sub">ДРР <?= $pct($t['ads']) ?></div></div>
   <div class="card kpi k-accent"><div class="k-label">Чистая прибыль</div><div class="k-value"><?= money($t['profit']) ?></div><div class="k-sub">маржа <?= $t['margin'] !== null ? num_ru($t['margin'], 1) . '%' : '—' ?><?= $t['roi'] !== null ? ' · ROI ' . num_ru($t['roi'], 0) . '%' : '' ?></div></div>
 </div>
 

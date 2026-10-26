@@ -79,6 +79,11 @@ final class ApiTools
                 'properties' => ['srid' => ['type' => 'string', 'description' => 'Srid заказа']],
                 'required' => ['srid'],
             ],
+            'finance_deductions' => [
+                'title' => 'Финансы: удержания и реклама',
+                'description' => 'Из чего состоят удержания WB в отчётах реализации (по видам, по неделям) и расходы на рекламу по способу оплаты — для сверки, что реклама не учтена дважды.',
+                'properties' => ['period' => self::PERIOD_FIN, 'from' => self::DATE, 'to' => self::DATE, 'store_id' => self::STORE],
+            ],
             'orders_check' => [
                 'title' => 'Сверка заказов с WB',
                 'description' => 'Сверка по дням для сравнения с кабинетом WB: заказы (всего, из Ленты заказов, из Статистики, только из одного источника), суммы по цене продавца и по цене для покупателя (после СПП), выкупы/отмены/возвраты по дате события и по дате заказа, по схемам.',
@@ -336,6 +341,25 @@ final class ApiTools
         }
         unset($r);
         return ['reports' => $rows];
+    }
+
+    private static function toolFinanceDeductions(array $a, array $account, array $plan, array $storeIds): array
+    {
+        self::requireProfit($plan);
+        if (!$storeIds) {
+            return ['deductions' => [], 'ads' => []];
+        }
+        $in = implode(',', $storeIds);
+        [$from, $to] = self::finPeriod($a, $storeIds);
+        $deductions = DB::all("SELECT r.date_from week, rr.oper, rr.bonus_type, COUNT(*) n, ROUND(SUM(rr.deduction), 2) deduction, ROUND(SUM(rr.additional), 2) additional
+            FROM wb_report_rows rr JOIN wb_reports r ON r.store_id = rr.store_id AND r.report_id = rr.report_id
+            WHERE rr.store_id IN ($in) AND r.date_from BETWEEN ? AND ? AND (rr.deduction <> 0 OR rr.additional <> 0)
+            GROUP BY r.date_from, rr.oper, rr.bonus_type ORDER BY r.date_from DESC, deduction DESC", [$from, $to]);
+        $ads = DB::all("SELECT DATE_SUB(day, INTERVAL WEEKDAY(day) DAY) week, payment_type, COUNT(*) n, ROUND(SUM(amount), 2) amount
+            FROM wb_ad_costs WHERE store_id IN ($in) AND day BETWEEN ? AND ? GROUP BY week, payment_type ORDER BY week DESC, amount DESC", [$from, $to]);
+        return ['period' => ['from' => $from, 'to' => $to], 'deductions' => array_map([self::class, 'typed'], $deductions),
+            'ads' => array_map([self::class, 'typed'], $ads),
+            'note' => 'Реклама с payment_type «Счёт» удерживается WB в отчёте реализации и уже входит в удержания — в строку «Реклама» не включается.'];
     }
 
     private static function toolFinanceOrder(array $a, array $account, array $plan, array $storeIds): array

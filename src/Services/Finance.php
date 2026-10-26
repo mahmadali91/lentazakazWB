@@ -41,6 +41,9 @@ final class Finance
     private const SALE_QTY_PLUS = ['продажа', 'корректная продажа', 'сторно возвратов'];
     private const SALE_QTY_MINUS = ['сторно продажи', 'возврат', 'сторно продаж', 'корректный возврат'];
 
+    /** Реклама, которую WB не удерживает в отчёте реализации (оплата с баланса, бонусами, кэшбэком). */
+    public const ADS_NOT_IN_REPORT = "LOWER(COALESCE(payment_type, '')) NOT IN ('счёт', 'счет')";
+
     /** Показатели (порядок — как в ОПИУ). */
     public const METRICS = ['sales', 'returns', 'revenue', 'sales_qty', 'deliveries', 'back_deliveries', 'returns_qty', 'defect_qty', 'lost_qty',
         'defect_comp', 'lost_comp', 'spp_comp', 'commission', 'acquiring', 'logistics', 'loyalty', 'turnover', 'storage', 'acceptance', 'penalty', 'deduction',
@@ -304,12 +307,13 @@ final class Finance
     /** Реклама, платное хранение по товарам и прочие расходы за период. */
     private static function addAdsStorageExpenses(array &$res, array $account, string $in, string $from, string $to, string $group, bool $withSku): void
     {
-        // Реклама: списание кампании делим поровну между её товарами; без товаров — общий расход
+        // Реклама: списание кампании делим поровну между её товарами; без товаров — общий расход.
+        // Оплату со «Счёта» WB удерживает в отчёте реализации (входит в «Удержания») — её не считаем второй раз.
         $nms = [];
         foreach (DB::all("SELECT store_id, advert_id, nm_id FROM wb_ad_nms WHERE store_id IN ($in) AND nm_id > 0") as $n) {
             $nms[$n['store_id'] . ':' . $n['advert_id']][] = (int) $n['nm_id'];
         }
-        foreach (DB::all("SELECT store_id, advert_id, day, amount FROM wb_ad_costs WHERE store_id IN ($in) AND day BETWEEN ? AND ?", [$from, $to]) as $a) {
+        foreach (DB::all("SELECT store_id, advert_id, day, amount FROM wb_ad_costs WHERE store_id IN ($in) AND day BETWEEN ? AND ? AND " . self::ADS_NOT_IN_REPORT, [$from, $to]) as $a) {
             $amount = (float) $a['amount'];
             $pk = self::periodKey(self::weekStart((string) $a['day']), $group);
             $res['periods'][$pk] ??= self::empty();
