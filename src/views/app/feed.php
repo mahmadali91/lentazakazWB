@@ -27,7 +27,7 @@ $cronStale = !$cronLast || strtotime($cronLast) < time() - 600;
     <div class="alert alert-warn">Фоновая синхронизация не запускалась больше 10 минут<?= $cronLast ? ' (последний запуск ' . date_ru($cronLast) . ')' : '' ?>. Проверьте задание CRON на хостинге — см. <a href="/admin">админ-панель</a>.</div>
   <?php endif; ?>
   <div id="syncAlerts"></div>
-  <?= App\Core\View::partial('partials/currency_note', ['storeIds' => $activeIds]) ?>
+  <?= App\Core\View::partial('partials/currency_note', ['storeIds' => $activeIds, 'fxOn' => $fxOn]) ?>
 
   <div class="toolbar" id="filters">
     <div class="seg" data-filter="period">
@@ -114,6 +114,6 @@ $cronStale = !$cronLast || strtotime($cronLast) < time() - 600;
       'enabled'  => $hasStores,
       'filters'  => $filters,
       'syncMin'  => (int) $plan['sync_minutes'],
-      'storeCur' => (object) array_column(array_map(static fn($s) => ['id' => (int) $s['id'], 'cur' => currency_sign((string) ($s['currency'] ?? '') ?: 'RUB')], $stores), 'cur', 'id'),
+      'storeCur' => (object) array_column(array_map(static fn($s) => ['id' => (int) $s['id'], 'cur' => $fxOn ? '₽' : currency_sign((string) ($s['currency'] ?? '') ?: 'RUB')], $stores), 'cur', 'id'),
   ], JSON_UNESCAPED_UNICODE) ?>;
 </script>

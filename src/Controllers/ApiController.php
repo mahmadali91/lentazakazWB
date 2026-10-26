@@ -18,6 +18,7 @@ final class ApiController
         $plan = Plans::forUser($account);
         [$storeIds, $f] = FeedController::filters($account, $plan);
         $profit = FeedController::profitSettings($account, $plan);
+        fx_feed($account, $storeIds);
         session_write_close();
 
         $beforeId = input('before_id') !== null ? (int) input('before_id') : null;
@@ -45,6 +46,7 @@ final class ApiController
         $plan = Plans::forUser($account);
         [$storeIds, $f] = FeedController::filters($account, $plan);
         $profit = FeedController::profitSettings($account, $plan);
+        fx_feed($account, $storeIds);
         session_write_close();
         $since = (string) input('since', '');
         if (!preg_match('/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}(\.\d+)?$/', $since)) {

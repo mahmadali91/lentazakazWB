@@ -19,6 +19,27 @@ final class OrderRepository
      * Цена продавца — из Ленты заказов: она в валюте кабинета WB (как кабинет и отчёты реализации).
      * Статистика отдаёт цены в рублях — для продавцов из других стран они хранятся отдельно (stats_price).
      */
+    /** Пересчёт в рубли по курсу ЦБ: [store_id => рублей за единицу валюты магазина]; null — суммы в валюте магазинов. */
+    public static ?array $fx = null;
+
+    /** SQL-выражение суммы с пересчётом в рубли (если включён). */
+    private static function px(string $col, string $storeCol = 'o.store_id'): string
+    {
+        if (!self::$fx) {
+            return $col;
+        }
+        $case = '';
+        foreach (self::$fx as $id => $rate) {
+            $case .= ' WHEN ' . (int) $id . ' THEN ' . sprintf('%.8F', $rate);
+        }
+        return "($col * CASE $storeCol$case ELSE 1 END)";
+    }
+
+    private static function f(int $storeId): float
+    {
+        return self::$fx[$storeId] ?? 1.0;
+    }
+
     public static function upsertFromFeed(int $storeId, array $o, bool $silent): int
     {
         $isMp = !empty($o['isMp']);
@@ -362,17 +383,17 @@ final class OrderRepository
         // заказы из сборочных заданий без Ленты пока считаем — они появятся в Ленте в течение минуты
         $counted = "(o.in_feed = 1 OR o.finished_price IS NULL OR o.mp_order_id IS NOT NULL)";
         $r = DB::one("SELECT COUNT(*) AS orders_all, SUM($counted) AS orders_count,
-                COALESCE(SUM(CASE WHEN $counted THEN o.seller_price END),0) AS orders_sum
+                COALESCE(SUM(CASE WHEN $counted THEN " . self::px('o.seller_price') . " END),0) AS orders_sum
             FROM orders o LEFT JOIN products p ON p.store_id = o.store_id AND p.nm_id = o.nm_id
             WHERE $where", $params) ?? [];
         // Выкупы, отмены, возвраты — произошедшие в этом периоде (по дате статуса), даже если заказ оформлен раньше
         [$whereS, $paramsS] = self::buildWhere($storeIds, $f2 + ['date_by' => 'status']);
         $r += DB::one("SELECT
                 SUM(o.status = 'buyout') AS buyout_count,
-                COALESCE(SUM(CASE WHEN o.status = 'buyout' THEN o.seller_price END),0) AS buyout_sum,
+                COALESCE(SUM(CASE WHEN o.status = 'buyout' THEN " . self::px('o.seller_price') . " END),0) AS buyout_sum,
                 SUM(o.status = 'cancel') AS cancel_count,
                 SUM(o.status IN ('return','returnDefective')) AS return_count,
-                COALESCE(SUM(CASE WHEN o.status IN ('return','returnDefective') THEN o.seller_price END),0) AS return_sum
+                COALESCE(SUM(CASE WHEN o.status IN ('return','returnDefective') THEN " . self::px('o.seller_price') . " END),0) AS return_sum
             FROM orders o LEFT JOIN products p ON p.store_id = o.store_id AND p.nm_id = o.nm_id
             WHERE $whereS AND o.status <> 'created'", $paramsS) ?? [];
         $count = (int) ($r['orders_count'] ?? 0);
@@ -415,7 +436,7 @@ final class OrderRepository
         $mpO = ($f['scheme'] ?? '') === 'FBO' ? ' AND o.is_mp = 0' : (($f['scheme'] ?? '') === 'SELLER' ? ' AND o.is_mp = 1' : '');
         $range = [$f['from'], $f['to']];
         // Суммы — в валюте кабинета: цена заказа из Ленты, иначе цена Статистики (рубли) × курс магазина
-        $price = "COALESCE(o.seller_price, s.price_with_disc * CASE WHEN st.currency IS NOT NULL AND st.currency <> 'RUB' AND st.stats_rate > 0 THEN st.stats_rate ELSE 1 END)";
+        $price = self::px("COALESCE(o.seller_price, s.price_with_disc * CASE WHEN st.currency IS NOT NULL AND st.currency <> 'RUB' AND st.stats_rate > 0 THEN st.stats_rate ELSE 1 END)", 's.store_id');
         $s = DB::one("SELECT SUM(s.is_return = 0) buy, SUM(s.is_return = 1) ret,
                 COALESCE(SUM(CASE WHEN s.is_return = 0 THEN $price END), 0) buy_sum,
                 COALESCE(SUM(CASE WHEN s.is_return = 1 THEN $price END), 0) ret_sum
@@ -424,8 +445,8 @@ final class OrderRepository
             WHERE s.store_id IN ($in) AND s.sale_dt BETWEEN ? AND ?$mp", $range);
         // Свежее, чем последний отчёт продаж: события из Ленты заказов
         $fresh = DB::one("SELECT SUM(o.status = 'buyout') buy, SUM(o.status IN ('return','returnDefective')) ret,
-                COALESCE(SUM(CASE WHEN o.status = 'buyout' THEN o.seller_price END), 0) buy_sum,
-                COALESCE(SUM(CASE WHEN o.status IN ('return','returnDefective') THEN o.seller_price END), 0) ret_sum
+                COALESCE(SUM(CASE WHEN o.status = 'buyout' THEN " . self::px('o.seller_price') . " END), 0) buy_sum,
+                COALESCE(SUM(CASE WHEN o.status IN ('return','returnDefective') THEN " . self::px('o.seller_price') . " END), 0) ret_sum
             FROM orders o WHERE o.store_id IN ($in) AND o.status IN ('buyout','return','returnDefective')
               AND o.status_at BETWEEN ? AND ?$mpO
               AND o.status_at > COALESCE((SELECT MAX(x.sale_dt) FROM wb_sales x WHERE x.store_id = o.store_id), '1970-01-01')", $range);
@@ -456,6 +477,12 @@ final class OrderRepository
             $b = Profit::breakdown($r, $profit, $ctx);
             if (!$b) {
                 continue;
+            }
+            $k = self::f((int) $r['store_id']);
+            foreach (['profit', 'commission', 'logistics'] as $key) {
+                if ($b[$key] !== null) {
+                    $b[$key] *= $k;
+                }
             }
             if ($b['kind'] === 'loss') {
                 $t['loss'] += -$b['profit'];
@@ -491,7 +518,7 @@ final class OrderRepository
         $to = strtotime((string) ($f['to'] ?? now()));
         $hourly = ($to - $from) <= 2 * 86400;
         $fmt = $hourly ? '%Y-%m-%d %H:00' : '%Y-%m-%d';
-        $rows = DB::all("SELECT DATE_FORMAT(o.order_created_at, '$fmt') AS bucket, COUNT(*) AS cnt, COALESCE(SUM(o.seller_price),0) AS total
+        $rows = DB::all("SELECT DATE_FORMAT(o.order_created_at, '$fmt') AS bucket, COUNT(*) AS cnt, COALESCE(SUM(" . self::px('o.seller_price') . "),0) AS total
             FROM orders o LEFT JOIN products p ON p.store_id = o.store_id AND p.nm_id = o.nm_id
             WHERE $where GROUP BY bucket ORDER BY bucket", $params);
         $map = [];
@@ -519,7 +546,7 @@ final class OrderRepository
         unset($f2['status']);
         [$where, $params] = self::buildWhere($storeIds, $f2);
         return DB::all("SELECT o.nm_id, MAX(COALESCE(p.title, o.subject)) AS title, MAX(COALESCE(o.article, p.vendor_code)) AS article,
-                MAX(p.photo) AS photo, COUNT(*) AS cnt, COALESCE(SUM(o.seller_price),0) AS total
+                MAX(p.photo) AS photo, COUNT(*) AS cnt, COALESCE(SUM(" . self::px('o.seller_price') . "),0) AS total
             FROM orders o LEFT JOIN products p ON p.store_id = o.store_id AND p.nm_id = o.nm_id
             WHERE $where AND o.nm_id IS NOT NULL
             GROUP BY o.nm_id ORDER BY cnt DESC LIMIT " . (int) $limit, $params);
@@ -529,6 +556,14 @@ final class OrderRepository
     public static function present(array $r, ?array $profit = null): array
     {
         $calc = $profit !== null ? Profit::breakdown($r, $profit, Profit::context([(int) $r['store_id']])) : null;
+        $k = self::f((int) $r['store_id']);
+        if ($calc && $k !== 1.0) {
+            foreach (['price', 'commission', 'logistics', 'reverse', 'tax', 'other', 'cost', 'profit'] as $key) {
+                if (isset($calc[$key])) {
+                    $calc[$key] = round($calc[$key] * $k, 2);
+                }
+            }
+        }
         $title = $r['p_title'] ?: trim(($r['subject'] ?: $r['p_subject'] ?: '') . ' ' . ($r['brand'] ?: $r['p_brand'] ?: ''));
         return [
             'id'          => (int) $r['id'],
@@ -551,14 +586,14 @@ final class OrderRepository
             'warehouse'   => $r['warehouse'],
             'city'        => $r['dest_city'] ?: $r['region'],
             'district'    => $r['dest_district'],
-            'price'       => $r['seller_price'] !== null ? (float) $r['seller_price'] : null,
-            'finished_price' => $r['finished_price'] !== null ? round((float) $r['finished_price'] * self::statsRate((int) $r['store_id']), 2) : null,
+            'price'       => $r['seller_price'] !== null ? round((float) $r['seller_price'] * $k, 2) : null,
+            'finished_price' => $r['finished_price'] !== null ? round((float) $r['finished_price'] * self::statsRate((int) $r['store_id']) * $k, 2) : null,
             'spp'         => $r['spp'] !== null ? (float) $r['spp'] : null,
             'is_b2b'      => (bool) $r['is_b2b'],
             'created_at'  => $r['order_created_at'],
             'created_iso' => date('c', strtotime($r['order_created_at'])),
             'status_at'   => $r['status_at'],
-            'cur'         => currency_sign((string) ($r['store_currency'] ?? '') ?: 'RUB'),
+            'cur'         => self::$fx ? '₽' : currency_sign((string) ($r['store_currency'] ?? '') ?: 'RUB'),
             'status_iso'  => $r['status_at'] ? date('c', strtotime($r['status_at'])) : null,
             'updated'     => $r['row_updated_at'],
             'cost'        => $calc['cost'] ?? null,

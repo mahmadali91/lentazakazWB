@@ -131,6 +131,18 @@ $events = array_filter(explode(',', (string) $user['tg_events']));
     </form>
   </div>
 
+  <?php if (empty($user['owner_id'])): ?>
+  <div class="card" id="currency">
+    <div class="card-title">Валюта сумм</div>
+    <form method="post" action="/app/settings/currency" class="stack">
+      <?= csrf_field() ?><input type="hidden" name="back" value="/app/settings#currency">
+      <label class="check"><input type="radio" name="show_rub" value="0" <?= empty($user['show_rub']) ? 'checked' : '' ?>> В валюте магазина — как в кабинете WB (₽, сомы, тенге…)</label>
+      <label class="check"><input type="radio" name="show_rub" value="1" <?= !empty($user['show_rub']) ? 'checked' : '' ?>> В рублях по курсу ЦБ РФ — лента по курсу на сегодня, финансы — по курсу на конец каждой недели или месяца</label>
+      <div><button class="btn btn-sm">Сохранить</button></div>
+    </form>
+  </div>
+  <?php endif; ?>
+
   <div class="card">
     <div class="card-title">Оформление</div>
     <button class="btn btn-ghost" id="themeBtn" type="button"><?= icon('moon', 16) ?> Переключить светлую / тёмную тему</button>

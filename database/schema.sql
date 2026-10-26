@@ -20,6 +20,7 @@ CREATE TABLE IF NOT EXISTS users (
   owner_id        INT UNSIGNED NULL,          -- сотрудник: id владельца кабинета
   note            VARCHAR(500) NULL,          -- заметка администратора о клиенте
   profit_settings TEXT NULL,                  -- JSON: комиссия, логистика, налог, прочие расходы
+  show_rub        TINYINT(1) NOT NULL DEFAULT 0, -- показывать суммы в рублях по курсу ЦБ
   remind_sent_for DATETIME NULL,              -- для какого срока тарифа уже отправлено напоминание
   created_at      DATETIME NOT NULL,
   last_login_at   DATETIME NULL,
@@ -393,4 +394,12 @@ CREATE TABLE IF NOT EXISTS api_keys (
   UNIQUE KEY uq_api_token (token_hash),
   KEY idx_api_user (user_id),
   CONSTRAINT fk_api_user FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Курсы ЦБ РФ (рублей за 1 единицу валюты) для пересчёта сумм в рубли
+CREATE TABLE IF NOT EXISTS fx_rates (
+  code  CHAR(3) NOT NULL,
+  day   DATE NOT NULL,
+  rate  DECIMAL(16,8) NOT NULL,
+  PRIMARY KEY (code, day)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

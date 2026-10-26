@@ -6,6 +6,7 @@ namespace App\Controllers;
 use App\Core\Auth;
 use App\Core\DB;
 use App\Services\Finance;
+use App\Services\Fx;
 use App\Services\FinanceSync;
 use App\Services\Plans;
 use App\Services\Profit;
@@ -49,6 +50,15 @@ final class FinanceController
         if ($cur) {
             currency_use($cur);
         }
+        // «Показывать в рублях»: все валюты пересчитываются по курсу ЦБ и складываются
+        $fxOn = Fx::enabled($account) && $currencies && $currencies !== ['RUB'];
+        if ($fxOn) {
+            Finance::$toRub = true;
+            Finance::$currency = null;
+            currency_use('RUB');
+            $currencies = [];
+            $cur = 'RUB';
+        }
         $periods = Finance::availablePeriods($ids);
         [$from, $to, $preset] = $this->period($periods);
         return [
@@ -56,7 +66,7 @@ final class FinanceController
             'stores' => $active ? DB::all('SELECT * FROM stores WHERE id IN (' . implode(',', $active) . ') ORDER BY id') : [],
             'periods' => $periods, 'from' => $from, 'to' => $to, 'preset' => $preset,
             'canEdit' => !Auth::isMember(), 'settings' => Profit::settings($account),
-            'currencies' => $currencies, 'currency' => $cur,
+            'currencies' => $currencies, 'currency' => $cur, 'fxOn' => $fxOn,
         ];
     }
 

@@ -25,6 +25,16 @@ App\Core\Migrator::ensure();
 App\Core\Config::overlayFromDb();
 set_time_limit(58);
 $report = App\Services\Cron::run(50);
+// Курсы ЦБ на сегодня — заранее, для пересчёта в рубли (раз в день, у кабинетов с магазинами не в рублях)
+if (App\Core\DB::setting('fx_warm') !== date('Y-m-d')) {
+    try {
+        foreach (App\Core\DB::all("SELECT DISTINCT UPPER(currency) c FROM stores WHERE currency IS NOT NULL AND currency NOT IN ('', 'RUB')") as $row) {
+            App\Services\Fx::rate((string) $row['c']);
+        }
+        App\Core\DB::setSetting('fx_warm', date('Y-m-d'));
+    } catch (\Throwable) {
+    }
+}
 if (in_array('-v', $argv, true)) {
     // Диагностика: что включено у каждого магазина и когда следующий запрос к WB
     $report['diagnostics'] = array_map(static function (array $s): array {

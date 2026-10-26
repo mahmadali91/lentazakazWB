@@ -74,12 +74,15 @@ final class FeedController
         $plan = Plans::forUser($account);
         $stores = StoreService::forUser((int) $account['id']);
         [$storeIds, $f] = self::filters($account, $plan);
+        $activeIds = StoreService::activeIds((int) $account['id'], $plan);
+        $fxOn = fx_feed($account, $activeIds);
         return view('app/feed', [
+            'fxOn'     => $fxOn,
             'title'    => 'Лента заказов',
             'user'     => $user,
             'plan'     => $plan,
             'stores'   => $stores,
-            'activeIds'=> StoreService::activeIds((int) $account['id'], $plan),
+            'activeIds'=> $activeIds,
             'filters'  => $f,
             'cronLast' => DB::setting('cron_last_run'),
             'nav'      => 'feed',

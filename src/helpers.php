@@ -133,6 +133,28 @@ function currency_use(?string $set = null): ?string
     return $current;
 }
 
+/**
+ * Пересчёт ленты в рубли по курсу ЦБ, если клиент включил «Показывать в рублях» и среди магазинов есть не рублёвые.
+ * Возвращает true, если суммы пересчитываются.
+ */
+function fx_feed(?array $account, array $storeIds): bool
+{
+    if (!App\Services\Fx::enabled($account) || !$storeIds) {
+        return false;
+    }
+    $cc = currency_of_stores($storeIds);
+    if (!$cc['all'] || $cc['all'] === ['RUB']) {
+        return false;
+    }
+    $factors = App\Services\Fx::storeFactors($storeIds);
+    if ($factors === null) {
+        return false;
+    }
+    App\Services\OrderRepository::$fx = $factors;
+    currency_use('RUB');
+    return true;
+}
+
 /** Валюта набора магазинов: ['code' => 'KGS'|null, 'mixed' => bool, 'all' => ['RUB', 'KGS']]. */
 function currency_of_stores(array $storeIds): array
 {

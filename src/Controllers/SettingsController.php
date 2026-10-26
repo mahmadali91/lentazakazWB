@@ -149,6 +149,17 @@ final class SettingsController
         redirect('/app/settings');
     }
 
+    /** Показывать суммы в рублях по курсу ЦБ (для магазинов не в рублях). */
+    public function currency(): never
+    {
+        $owner = Auth::requireOwner();
+        $on = isset($_POST['show_rub']) ? (int) (bool) $_POST['show_rub'] : 1 - (int) ($owner['show_rub'] ?? 0);
+        DB::exec('UPDATE users SET show_rub = ? WHERE id = ?', [$on, $owner['id']]);
+        flash('success', $on ? 'Суммы показываются в рублях по курсу ЦБ РФ.' : 'Суммы показываются в валюте магазинов.');
+        $back = (string) input('back', '/app/settings');
+        redirect(str_starts_with($back, '/app') ? $back : '/app/settings');
+    }
+
     public function telegram(): never
     {
         $user = Auth::require();

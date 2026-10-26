@@ -89,6 +89,13 @@ final class Finance
 
     /** Валюта отчётов для расчёта (если у магазинов отчёты в разных валютах). null — все отчёты. */
     public static ?string $currency = null;
+    /** Пересчитать суммы в рубли по курсу ЦБ (настройка кабинета «Показывать в рублях»). */
+    public static bool $toRub = false;
+    /** Курс ЦБ был недоступен — показаны суммы без пересчёта. */
+    public static bool $fxFailed = false;
+    /** Валюта, в которой учитываются общие «Прочие расходы» без магазина при расчёте по валютам. */
+    private static ?string $nullExpCurrency = null;
+    private const QTY = ['sales_qty', 'deliveries', 'back_deliveries', 'returns_qty', 'defect_qty', 'lost_qty'];
 
     public static function empty(): array
     {
@@ -245,6 +252,12 @@ final class Finance
 
     public static function compute(array $account, array $storeIds, string $from, string $to, array $opt = []): array
     {
+        if (self::$toRub && self::$currency === null && empty($opt['_fx']) && $storeIds) {
+            $rub = self::computeRub($account, $storeIds, $from, $to, $opt);
+            if ($rub !== null) {
+                return $rub;
+            }
+        }
         $group = $opt['group'] ?? 'week';
         $withSku = !empty($opt['sku']);
         $withSrid = !empty($opt['srid']);
@@ -341,9 +354,129 @@ final class Finance
         return $res;
     }
 
+    /**
+     * Расчёт в рублях: отчёты каждой валюты считаются отдельно, каждый период переводится по курсу ЦБ на его последний день,
+     * товары и заказы — по среднему курсу периода. null — пересчёт не нужен (всё в рублях) или курс недоступен.
+     */
+    private static function computeRub(array $account, array $storeIds, string $from, string $to, array $opt): ?array
+    {
+        $in = implode(',', array_map('intval', $storeIds));
+        $codes = array_map('strtoupper', array_column(DB::all("SELECT DISTINCT currency FROM wb_reports WHERE store_id IN ($in) AND date_from BETWEEN ? AND ?", [$from, $to]), 'currency'));
+        $codes = array_values(array_filter($codes));
+        if (!$codes || $codes === ['RUB']) {
+            return null;
+        }
+        $group = $opt['group'] ?? 'week';
+        $parts = [];
+        self::$nullExpCurrency = in_array('RUB', $codes, true) ? 'RUB' : $codes[0];
+        foreach ($codes as $code) {
+            Fx::preload($code, $from, $to);
+            self::$currency = $code;
+            try {
+                $r = self::compute($account, $storeIds, $from, $to, ['_fx' => 1] + $opt);
+            } finally {
+                self::$currency = null;
+            }
+            if ($code === end($codes)) {
+                self::$nullExpCurrency = null;
+            }
+            if ($code !== 'RUB') {
+                $rates = [];
+                foreach (array_keys($r['periods']) as $pk) {
+                    $end = match ($group) { 'month' => date('Y-m-t', strtotime($pk . '-01')), 'none' => $to, default => date('Y-m-d', strtotime($pk) + 6 * 86400) };
+                    $rates[$pk] = Fx::rate($code, min($end, $to));
+                    if ($rates[$pk] === null) {
+                        self::$fxFailed = true;
+                        self::$nullExpCurrency = null;
+                        return null;
+                    }
+                }
+                $rev = $r['total']['revenue'];
+                $total = self::empty();
+                foreach ($r['periods'] as $pk => &$p) {
+                    self::scale($p, $rates[$pk]);
+                    self::add($total, $p);
+                }
+                unset($p);
+                $avg = $rev != 0.0 ? $total['revenue'] / $rev : (Fx::rate($code, $to) ?? 1.0);
+                $r['total'] = $total;
+                foreach (['bySku', 'bySrid'] as $k) {
+                    foreach ($r[$k] as &$x) {
+                        self::scale($x, $avg);
+                        if (isset($x['storage_sku'])) {
+                            $x['storage_sku'] *= $avg;
+                        }
+                    }
+                    unset($x);
+                }
+            }
+            $parts[] = $r;
+        }
+        // Сложение валют
+        $res = ['total' => self::empty(), 'periods' => [], 'bySku' => [], 'bySrid' => [], 'info' => ['rows' => 0, 'no_cost' => []]];
+        foreach ($parts as $r) {
+            self::add($res['total'], $r['total']);
+            foreach ($r['periods'] as $pk => $p) {
+                $res['periods'][$pk] ??= self::empty();
+                self::add($res['periods'][$pk], $p);
+            }
+            foreach (['bySku', 'bySrid'] as $k) {
+                foreach ($r[$k] as $id => $x) {
+                    if (!isset($res[$k][$id])) {
+                        $res[$k][$id] = $x;
+                    } else {
+                        self::add($res[$k][$id], $x);
+                        if (isset($x['storage_sku'])) {
+                            $res[$k][$id]['storage_sku'] = ($res[$k][$id]['storage_sku'] ?? 0) + $x['storage_sku'];
+                        }
+                    }
+                }
+            }
+            $res['info']['rows'] += $r['info']['rows'];
+            $res['info']['no_cost'] += $r['info']['no_cost'];
+        }
+        ksort($res['periods']);
+        foreach ($res['periods'] as &$p) {
+            self::finalize($p);
+        }
+        unset($p);
+        self::finalize($res['total']);
+        $skuProfit = 0.0;
+        foreach ($res['bySku'] as &$x) {
+            self::finalize($x, true);
+            $skuProfit += $x['profit'];
+        }
+        unset($x);
+        foreach ($res['bySrid'] as &$x) {
+            self::finalize($x, true);
+        }
+        unset($x);
+        $res['unallocated'] = ['profit' => $res['total']['profit'] - $skuProfit];
+        $res['info']['rub'] = $codes;
+        return $res;
+    }
+
+    /** Умножает денежные показатели на курс (количества — без изменений). */
+    private static function scale(array &$m, float $rate): void
+    {
+        foreach (self::METRICS as $k) {
+            if (isset($m[$k]) && !in_array($k, self::QTY, true)) {
+                $m[$k] *= $rate;
+            }
+        }
+    }
+
     /** Реклама, платное хранение по товарам и прочие расходы за период. */
     private static function addAdsStorageExpenses(array &$res, array $account, string $in, string $from, string $to, string $group, bool $withSku): void
     {
+        // Расчёт по одной валюте: реклама, хранение и расходы — только магазинов в этой валюте,
+        // общие расходы без магазина — в одной валюте (рубли, если есть), чтобы не учесть их дважды
+        $nullExp = true;
+        if (self::$currency !== null) {
+            $ids = array_column(DB::all("SELECT id FROM stores WHERE id IN ($in) AND UPPER(COALESCE(NULLIF(currency, ''), 'RUB')) = ?", [self::$currency]), 'id');
+            $in = $ids ? implode(',', array_map('intval', $ids)) : '0';
+            $nullExp = self::$nullExpCurrency === null || self::$nullExpCurrency === self::$currency;
+        }
         // Реклама: списание кампании делим поровну между её товарами; без товаров — общий расход.
         // Удержания WB за продвижение (оплата со счёта, пополнение рекламного баланса) в прибыль не идут — см. ads_deducted.
         $nms = [];
@@ -391,7 +524,7 @@ final class Finance
         }
 
         // Прочие расходы: с артикулом — на товар, без — на период
-        $exp = DB::all("SELECT * FROM fin_expenses WHERE user_id = ? AND day BETWEEN ? AND ? AND (store_id IS NULL OR store_id IN ($in))",
+        $exp = DB::all("SELECT * FROM fin_expenses WHERE user_id = ? AND day BETWEEN ? AND ? AND (" . ($nullExp ? 'store_id IS NULL OR ' : '') . "store_id IN ($in))",
             [(int) $account['id'], $from, $to]);
         foreach ($exp as $e) {
             $amount = (float) $e['amount'];

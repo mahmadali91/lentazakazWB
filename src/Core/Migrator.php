@@ -9,7 +9,7 @@ namespace App\Core;
  */
 final class Migrator
 {
-    public const VERSION = 13;
+    public const VERSION = 14;
 
     public static function ensure(): void
     {
@@ -40,6 +40,11 @@ final class Migrator
             }
             if ($version < 13) {
                 self::v13();
+            }
+            if ($version < 14) {
+                // Пересчёт сумм в рубли по курсу ЦБ: настройка кабинета и кэш курсов
+                self::addColumn('users', 'show_rub', 'TINYINT(1) NOT NULL DEFAULT 0');
+                self::run(self::FX_DDL);
             }
             if ($version < 12 && DB::setting('cfg.app.support_telegram') === null) {
                 // Telegram-канал с новостями и поддержкой
@@ -279,6 +284,13 @@ final class Migrator
             CONSTRAINT fk_sb_user FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci',
     ];
+
+    public const FX_DDL = 'CREATE TABLE IF NOT EXISTS fx_rates (
+        code  CHAR(3) NOT NULL,
+        day   DATE NOT NULL,
+        rate  DECIMAL(16,8) NOT NULL,
+        PRIMARY KEY (code, day)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci';
 
     /** v13: налог, НДС и фиксированные расходы в неделю — у каждого магазина (раньше налог был общим на аккаунт). */
     private static function v13(): void
