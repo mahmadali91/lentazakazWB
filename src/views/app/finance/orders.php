@@ -28,19 +28,19 @@ $cls = static fn($v) => $v < 0 ? 'neg' : '';
   <div class="card empty"><h3>Заказов не найдено</h3><p>Измените период или запрос.</p></div>
 <?php return; endif; ?>
 
-<p class="muted small">Расчёт прибыли по каждому заказу (Srid) из строк отчётов — как лист «детализация по исходнику». Показаны <?= count($orders) ?> из <?= $total ?>, новые сверху. Нажмите на заказ, чтобы увидеть строки отчёта.</p>
+<p class="muted small">Расчёт прибыли по каждому заказу (Srid) из строк отчётов — как лист «детализация по исходнику». Показаны <?= num_ru(($page - 1) * $perPage + 1) ?>–<?= num_ru(($page - 1) * $perPage + count($orders)) ?> из <?= num_ru($total) ?>, новые сверху. Нажмите на заказ, чтобы увидеть строки отчёта.</p>
 <div class="card" style="padding:0">
   <div class="table-wrap">
     <table class="table fin-table">
-      <thead><tr><th>Дата</th><th>Заказ / товар</th><th class="num">Выручка</th><th class="num">Комиссия</th><th class="num">Логистика</th><th class="num">Налог</th><th class="num">Себест.</th><th class="num">Прибыль</th></tr></thead>
+      <thead><tr><th>Дата</th><th>Заказ / товар</th><th class="num">Выручка</th><th class="num" title="Комиссия WB и эквайринг за вычетом компенсации скидки WB (СПП)">Комиссия</th><th class="num">Логистика</th><th class="num">Налог</th><th class="num">Себест.</th><th class="num">Прибыль</th></tr></thead>
       <tbody>
       <?php foreach ($orders as $o): ?>
-        <tr class="row-link" onclick="location.href='/app/finance/orders<?= e($qs(['srid' => $o['srid'], 'q' => $q ?: null])) ?>'">
+        <tr class="row-link" onclick="location.href='/app/finance/orders<?= e($qs(['srid' => $o['srid'], 'q' => $q ?: null, 'page' => $page > 1 ? $page : null])) ?>'">
           <td class="nowrap"><?= date_ru($o['date'], false) ?></td>
-          <td><a href="/app/finance/orders<?= $qs(['srid' => $o['srid'], 'q' => $q ?: null]) ?>"><b><?= e($o['vendor_code'] ?: '—') ?></b></a> <span class="muted small"><?= e($o['subject']) ?></span>
+          <td><a href="/app/finance/orders<?= $qs(['srid' => $o['srid'], 'q' => $q ?: null, 'page' => $page > 1 ? $page : null]) ?>"><b><?= e($o['vendor_code'] ?: '—') ?></b></a> <span class="muted small"><?= e($o['subject']) ?></span>
             <div class="muted small mono"><?= e($o['srid']) ?></div></td>
           <td class="num"><?= num_ru($o['revenue']) ?></td>
-          <td class="num"><?= num_ru($o['commission'] + $o['acquiring']) ?></td>
+          <td class="num"><?= num_ru($o['commission'] + $o['acquiring'] - $o['spp_comp']) ?></td>
           <td class="num"><?= num_ru($o['logistics']) ?></td>
           <td class="num"><?= num_ru($o['tax'] + $o['vat']) ?></td>
           <td class="num"><?= num_ru($o['cost']) ?></td>
@@ -51,3 +51,10 @@ $cls = static fn($v) => $v < 0 ? 'neg' : '';
     </table>
   </div>
 </div>
+<?php if ($total > $perPage): $pages = (int) ceil($total / $perPage); ?>
+  <div class="pager">
+    <?php if ($page > 1): ?><a class="btn btn-ghost btn-sm" href="/app/finance/orders<?= $qs(['q' => $q ?: null, 'page' => $page > 2 ? $page - 1 : null]) ?>">← Назад</a><?php endif; ?>
+    <span class="muted small">Страница <?= $page ?> из <?= $pages ?></span>
+    <?php if ($page < $pages): ?><a class="btn btn-ghost btn-sm" href="/app/finance/orders<?= $qs(['q' => $q ?: null, 'page' => $page + 1]) ?>">Ещё <?= $perPage ?> →</a><?php endif; ?>
+  </div>
+<?php endif; ?>

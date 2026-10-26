@@ -255,15 +255,24 @@ final class FinanceController
             return $html;
         }
         $q = mb_substr((string) input('q', ''), 0, 80);
-        $res = Finance::compute($ctx['account'], $ctx['storeIds'], $ctx['from'], $ctx['to'], ['group' => 'none', 'srid' => true, 'q' => $q !== '' ? $q : null]);
-        $orders = $res['bySrid'];
-        uasort($orders, static fn($a, $b) => strcmp((string) $b['date'], (string) $a['date']));
+        // Сначала страница заказов из базы, потом расчёт только по ним — за «всё время» строк сотни тысяч
+        $perPage = 300;
+        $page = max(1, (int) input('page', 1));
+        [$srids, $total] = Finance::sridPage($ctx['storeIds'], $ctx['from'], $ctx['to'], $q !== '' ? $q : null, $perPage, ($page - 1) * $perPage);
+        $res = $srids ? Finance::compute($ctx['account'], $ctx['storeIds'], $ctx['from'], $ctx['to'], ['group' => 'none', 'srid' => true, 'srids' => $srids, 'srids_in_period' => true])
+            : ['bySrid' => []];
+        $orders = [];
+        foreach ($srids as $sr) {
+            if (isset($res['bySrid'][$sr])) {
+                $orders[$sr] = $res['bySrid'][$sr];
+            }
+        }
         $rows = [];
         $srid = mb_substr((string) input('srid', ''), 0, 80);
         if ($srid !== '' && $ctx['storeIds']) {
             $rows = DB::all('SELECT * FROM wb_report_rows WHERE store_id IN (' . implode(',', $ctx['storeIds']) . ') AND srid = ? ORDER BY rrd_id', [$srid]);
         }
-        return $this->render('orders', $ctx, ['res' => $res, 'orders' => array_slice($orders, 0, 300, true), 'total' => count($orders), 'q' => $q, 'srid' => $srid, 'rows' => $rows]);
+        return $this->render('orders', $ctx, ['res' => $res, 'orders' => $orders, 'total' => $total, 'page' => $page, 'perPage' => $perPage, 'q' => $q, 'srid' => $srid, 'rows' => $rows]);
     }
 
     // ------------------------------------------------------------------ Отчёты WB (Исходник)

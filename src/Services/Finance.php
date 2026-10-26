@@ -192,20 +192,9 @@ final class Finance
      * @param array $opt group: week|month|none; sku: bool; srid: bool; nm: ?int; q: ?string (поиск по srid/артикулу)
      * @return array{total: array, periods: array, bySku: array, bySrid: array, unallocated: array, info: array}
      */
-    public static function compute(array $account, array $storeIds, string $from, string $to, array $opt = []): array
+    /** Условие отбора строк отчётов: магазины, период, валюта, товар, заказы (Srid), поиск. */
+    private static function filter(string $in, string $from, string $to, array $opt): array
     {
-        $group = $opt['group'] ?? 'week';
-        $withSku = !empty($opt['sku']);
-        $withSrid = !empty($opt['srid']);
-        $settings = Profit::settings($account);
-        $taxRate = (float) $settings['tax'];
-        $vatRate = (float) ($settings['vat'] ?? 0);
-        $res = ['total' => self::empty(), 'periods' => [], 'bySku' => [], 'bySrid' => [], 'info' => ['rows' => 0, 'no_cost' => []]];
-        if (!$storeIds) {
-            $res['unallocated'] = self::empty();
-            return $res;
-        }
-        $in = implode(',', array_map('intval', $storeIds));
         $where = "r.store_id IN ($in) AND r.date_from BETWEEN :f AND :t";
         $params = ['f' => $from, 't' => $to];
         if (self::$currency !== null) {
@@ -222,13 +211,52 @@ final class Finance
                 $list[] = ':sr' . $i;
                 $params['sr' . $i] = (string) $sr;
             }
-            $where = "r.store_id IN ($in) AND r.srid IN (" . implode(',', $list) . ')';
-            unset($params['f'], $params['t']);
+            if (!empty($opt['srids_in_period'])) {
+                $where .= ' AND r.srid IN (' . implode(',', $list) . ')';
+            } else {
+                $where = "r.store_id IN ($in) AND r.srid IN (" . implode(',', $list) . ')';
+                unset($params['f'], $params['t']);
+            }
         }
         if (!empty($opt['q'])) {
             $where .= ' AND (r.srid = :q1 OR r.vendor_code LIKE :q2 OR r.nm_id = :q3)';
             $params += ['q1' => $opt['q'], 'q2' => '%' . $opt['q'] . '%', 'q3' => ctype_digit((string) $opt['q']) ? (int) $opt['q'] : -1];
         }
+        return [$where, $params];
+    }
+
+    /**
+     * Страница заказов (Srid) за период — новые сверху, без расчёта всех строк в памяти.
+     * @return array{0: string[], 1: int} список Srid и общее число заказов
+     */
+    public static function sridPage(array $storeIds, string $from, string $to, ?string $q, int $limit, int $offset): array
+    {
+        if (!$storeIds) {
+            return [[], 0];
+        }
+        $in = implode(',', array_map('intval', $storeIds));
+        [$where, $params] = self::filter($in, $from, $to, ['q' => $q]);
+        $total = (int) DB::value("SELECT COUNT(DISTINCT r.srid) FROM wb_report_rows r WHERE $where AND r.srid <> ''", $params);
+        $srids = array_column(DB::all("SELECT r.srid, MAX(COALESCE(r.sale_dt, r.order_dt)) d FROM wb_report_rows r WHERE $where AND r.srid <> ''
+            GROUP BY r.srid ORDER BY d DESC, r.srid LIMIT " . max(1, $limit) . ' OFFSET ' . max(0, $offset), $params), 'srid');
+        return [$srids, $total];
+    }
+
+    public static function compute(array $account, array $storeIds, string $from, string $to, array $opt = []): array
+    {
+        $group = $opt['group'] ?? 'week';
+        $withSku = !empty($opt['sku']);
+        $withSrid = !empty($opt['srid']);
+        $settings = Profit::settings($account);
+        $taxRate = (float) $settings['tax'];
+        $vatRate = (float) ($settings['vat'] ?? 0);
+        $res = ['total' => self::empty(), 'periods' => [], 'bySku' => [], 'bySrid' => [], 'info' => ['rows' => 0, 'no_cost' => []]];
+        if (!$storeIds) {
+            $res['unallocated'] = self::empty();
+            return $res;
+        }
+        $in = implode(',', array_map('intval', $storeIds));
+        [$where, $params] = self::filter($in, $from, $to, $opt);
 
         // Справочники: себестоимость, дубли ШК в компенсациях брака
         $costs = [];
