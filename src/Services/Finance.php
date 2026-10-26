@@ -149,10 +149,12 @@ final class Finance
         $m['loyalty'] = ($doc === 'возврат' ? -1 : 1) * ((float) $r['cashback_amount'] + (float) $r['cashback_comm'] - (float) $r['cashback_discount']);
 
         // Количества (DD, CV, DO, DF, CX, CY)
-        $m['sales_qty'] = ($doc === 'возврат' && in_array($op, self::SALE_QTY_MINUS, true)) ? -1 : (in_array($op, self::SALE_QTY_PLUS, true) ? 1 : 0);
+        // Строка может быть суммой однотипных строк отчёта (_n — сколько их, _qty — сумма max(1, |quantity|))
+        $n = (int) ($r['_n'] ?? 1);
+        $m['sales_qty'] = $n * (($doc === 'возврат' && in_array($op, self::SALE_QTY_MINUS, true)) ? -1 : (in_array($op, self::SALE_QTY_PLUS, true) ? 1 : 0));
         $m['deliveries'] = in_array($bonus, ['к клиенту при продаже', 'к клиенту при отмене'], true) ? (int) $r['delivery_amount'] : 0;
         $m['back_deliveries'] = in_array($bonus, ['от клиента при отмене', 'от клиента при возврате'], true) ? (int) $r['return_amount'] : 0;
-        $m['returns_qty'] = ($doc === 'возврат' && $op === 'возврат') ? 1 : 0;
+        $m['returns_qty'] = ($doc === 'возврат' && $op === 'возврат') ? $n : 0;
         $m['defect_qty'] = in_array($op, self::DEFECT, true) ? $sign / $dup : 0.0;
         $m['lost_qty'] = in_array($op, self::LOST, true) ? (float) $sign : 0.0;
         $m['defect_comp'] = $m['defect_qty'] > 0 ? $sellerSale : 0.0;
@@ -176,7 +178,7 @@ final class Finance
         $m['tax'] = ($base - $m['vat']) * $taxRate / 100;
 
         // Себестоимость (CQ)
-        $qty = max(1, abs((int) $r['quantity']));
+        $qty = isset($r['_qty']) ? (float) $r['_qty'] : max(1, abs((int) $r['quantity']));
         if ($op === 'коррекция продаж') {
             $m['cost'] = 0.0;
         } elseif (in_array($op, self::DEFECT, true)) {
@@ -206,8 +208,9 @@ final class Finance
         $where = "r.store_id IN ($in) AND r.date_from BETWEEN :f AND :t";
         $params = ['f' => $from, 't' => $to];
         if (self::$currency !== null) {
-            $where .= ' AND r.report_id IN (SELECT wr.report_id FROM wb_reports wr WHERE wr.store_id = r.store_id AND wr.currency = :cur)';
-            $params['cur'] = self::$currency;
+            // Отчёты нужной валюты — списком (подзапрос на каждую строку отчёта работал десятки секунд)
+            $ids = array_map('intval', array_column(DB::all("SELECT report_id FROM wb_reports WHERE store_id IN ($in) AND currency = ?", [self::$currency]), 'report_id'));
+            $where .= ' AND r.report_id IN (' . ($ids ? implode(',', $ids) : '0') . ')';
         }
         if (!empty($opt['nm'])) {
             $where .= ' AND r.nm_id = :nm';
@@ -250,7 +253,56 @@ final class Finance
         return [$srids, $total];
     }
 
+    /**
+     * Расчёт с кэшем: готовый результат хранится в storage/cache/fin, пока не изменились данные
+     * (отчёты WB, себестоимость, расходы, реклама, хранение, налог магазинов, курсы). За «всё время» расчёт тяжёлый.
+     */
     public static function compute(array $account, array $storeIds, string $from, string $to, array $opt = []): array
+    {
+        if (!$storeIds || !empty($opt['srids']) || !empty($opt['q']) || !empty($opt['nm'])) {
+            return self::computeRaw($account, $storeIds, $from, $to, $opt);
+        }
+        $ids = array_map('intval', $storeIds);
+        sort($ids);
+        $key = sha1(json_encode([APP_VERSION, filemtime(__FILE__), (int) $account['id'], $ids, $from, $to, $opt, self::$currency, self::$toRub,
+            $account['profit_settings'] ?? '', self::dataVersion((int) $account['id'], implode(',', $ids))]));
+        $dir = BASE_PATH . '/storage/cache/fin';
+        $file = "$dir/$key.ser";
+        if (is_file($file) && filemtime($file) > time() - 86400 && ($cached = @unserialize((string) file_get_contents($file))) !== false) {
+            return $cached;
+        }
+        $res = self::computeRaw($account, $storeIds, $from, $to, $opt);
+        if (!self::$fxFailed && (is_dir($dir) || @mkdir($dir, 0775, true))) {
+            @file_put_contents($file, serialize($res), LOCK_EX);
+            if (random_int(1, 50) === 1) {
+                foreach (glob("$dir/*.ser") ?: [] as $f) {
+                    if (filemtime($f) < time() - 86400) {
+                        @unlink($f);
+                    }
+                }
+            }
+        }
+        return $res;
+    }
+
+    /** Отпечаток данных, от которых зависит расчёт: изменился — кэш недействителен. */
+    private static function dataVersion(int $accountId, string $in): string
+    {
+        $parts = [
+            DB::one("SELECT COUNT(*) c, COALESCE(SUM(rows_loaded), 0) r, MAX(loaded_at) l, COALESCE(SUM(bank_payment), 0) b FROM wb_reports WHERE store_id IN ($in)"),
+            DB::one("SELECT COUNT(cost_price) c, COALESCE(SUM(cost_price), 0) s FROM products WHERE store_id IN ($in)"),
+            DB::one('SELECT COUNT(*) c, COALESCE(SUM(amount), 0) s, MAX(id) m FROM fin_expenses WHERE user_id = ?', [$accountId]),
+            DB::all("SELECT id, currency, tax_rate, vat_rate, weekly_expense FROM stores WHERE id IN ($in) ORDER BY id"),
+            DB::one("SELECT COUNT(*) c, COALESCE(SUM(amount), 0) s FROM wb_ad_costs WHERE store_id IN ($in)"),
+            DB::one("SELECT COUNT(*) c FROM wb_ad_nms WHERE store_id IN ($in)"),
+            DB::one("SELECT COUNT(*) c, COALESCE(SUM(amount), 0) s FROM wb_storage WHERE store_id IN ($in)"),
+            // В рублях: курс текущего периода меняется раз в день; расчёт по одной валюте от курса не зависит
+            self::$toRub && self::$currency === null ? date('Y-m-d') : 0,
+        ];
+        return sha1(json_encode($parts));
+    }
+
+    private static function computeRaw(array $account, array $storeIds, string $from, string $to, array $opt = []): array
     {
         if (self::$toRub && self::$currency === null && empty($opt['_fx']) && $storeIds) {
             $rub = self::computeRub($account, $storeIds, $from, $to, $opt);
@@ -289,10 +341,8 @@ final class Finance
             $storeRates[(int) $st['id']] = [$st['tax_rate'] !== null ? (float) $st['tax_rate'] : $taxRate, $st['vat_rate'] !== null ? (float) $st['vat_rate'] : $vatRate];
         }
         $adStores = array_flip(array_map('intval', array_column(DB::all("SELECT DISTINCT store_id FROM wb_ad_costs WHERE store_id IN ($in)"), 'store_id')));
-        $stmt = DB::pdo()->prepare("SELECT r.* FROM wb_report_rows r WHERE $where ORDER BY r.date_from, r.rrd_id");
-        $stmt->execute($params);
-        while ($r = $stmt->fetch(\PDO::FETCH_ASSOC)) {
-            $res['info']['rows']++;
+        $consume = function (array $r) use (&$res, $group, $costs, $storeRates, $taxRate, $vatRate, $dups, $adStores, $withSku, $withSrid): void {
+            $res['info']['rows'] += (int) ($r['_n'] ?? 1);
             $pk = self::periodKey((string) $r['date_from'], $group);
             $nm = (int) $r['nm_id'];
             $srid = (string) $r['srid'];
@@ -326,8 +376,31 @@ final class Finance
                 $o['date'] = $r['sale_dt'] ?: ($r['order_dt'] ?: $o['date']);
                 unset($o);
             }
+        };
+        // Компенсации брака и потерь считаются построчно (важен каждый ШК), остальное — суммами однотипных строк:
+        // неделя × товар × тип документа × обоснование × вид услуги. Итог тот же, а строк в PHP в десятки раз меньше.
+        $perRow = "'" . implode("','", array_unique(array_merge(self::DEFECT, self::LOST))) . "'";
+        $queries = $withSrid ? ["SELECT r.* FROM wb_report_rows r WHERE $where ORDER BY r.date_from, r.rrd_id"] : [
+            "SELECT r.* FROM wb_report_rows r WHERE $where AND LOWER(COALESCE(r.oper, '')) IN ($perRow) ORDER BY r.date_from, r.rrd_id",
+            "SELECT r.store_id, r.date_from, r.nm_id, r.doc_type, r.oper, r.bonus_type, NULL AS shk_id, NULL AS srid,
+                MAX(r.vendor_code) vendor_code, MAX(r.subject) subject, MAX(r.brand) brand, MAX(r.title) title,
+                COUNT(*) _n, SUM(GREATEST(1, ABS(COALESCE(r.quantity, 0)))) _qty, SUM(r.quantity) quantity,
+                SUM(r.retail_price_disc) retail_price_disc, SUM(r.for_pay) for_pay, SUM(r.acquiring_fee) acquiring_fee, SUM(r.retail_amount) retail_amount,
+                SUM(r.delivery_service) delivery_service, SUM(r.cashback_amount) cashback_amount, SUM(r.cashback_comm) cashback_comm,
+                SUM(r.cashback_discount) cashback_discount, SUM(r.delivery_amount) delivery_amount, SUM(r.return_amount) return_amount,
+                SUM(r.paid_storage) paid_storage, SUM(r.paid_acceptance) paid_acceptance, SUM(r.penalty) penalty, SUM(r.deduction) deduction, SUM(r.additional) additional
+            FROM wb_report_rows r WHERE $where AND LOWER(COALESCE(r.oper, '')) NOT IN ($perRow)
+            GROUP BY r.store_id, r.date_from, r.nm_id, r.doc_type, r.oper, r.bonus_type, r.retail_price_disc > 0, r.for_pay > 0
+            ORDER BY r.date_from",
+        ];
+        foreach ($queries as $sql) {
+            $stmt = DB::pdo()->prepare($sql);
+            $stmt->execute($params);
+            while ($r = $stmt->fetch(\PDO::FETCH_ASSOC)) {
+                $consume($r);
+            }
+            $stmt->closeCursor();
         }
-        $stmt->closeCursor();
 
         if (empty($opt['nm']) && empty($opt['q']) && empty($opt['srids'])) {
             self::addAdsStorageExpenses($res, $account, $in, $from, $to, $group, $withSku);
