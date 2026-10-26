@@ -27,7 +27,7 @@ $thumb = static function ($nm) use ($photos) {
         <th class="num">Реклама</th><th class="num">Прочее</th>
       </tr></thead>
       <tbody>
-      <?php foreach ($skus as $nm => $s): $other = $s['acceptance'] + $s['penalty'] + $s['deduction'] + $s['additional'] + $s['exp_sku'] + $s['loyalty'] + $s['vat']; ?>
+      <?php foreach ($skus as $nm => $s): $other = $s['acceptance'] + $s['penalty'] + $s['deduction'] - $s['ads_deducted'] + $s['additional'] + $s['exp_sku'] + $s['loyalty'] + $s['vat']; ?>
         <tr id="nm<?= (int) $nm ?>">
           <td class="sticky"><div class="sku-cell"><?= $thumb($nm) ?><div style="min-width:0"><b><?= e($s['vendor_code'] ?: '—') ?></b><div class="muted small"><?= (int) $nm ?> · <?= e($s['subject']) ?></div></div></div></td>
           <td class="num b <?= $cls($s['profit']) ?>"><?= num_ru($s['profit']) ?></td>

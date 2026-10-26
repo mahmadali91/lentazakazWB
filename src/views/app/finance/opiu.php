@@ -23,13 +23,14 @@ $lines = [
     ['penalty', 'Штрафы', 'sub'],
     ['deduction', 'Удержания', 'sub'],
     ['additional', 'Доплаты (корректировка ВВ)', 'sub'],
+    ['ads_deducted', '+ Из удержаний — оплата рекламы (в строке «Реклама»)', 'money'],
     ['wb_other', 'Хранение и прочие удержания WB', 'total'],
     ['pay_calc', 'Итого к оплате (как в отчётах WB)', 'total'],
     ['cost', 'Себестоимость проданного товара', 'sub'],
     ['tax_base', 'Налоговая база', 'money'],
     ['tax', 'Налог', 'sub'],
     ['vat', 'НДС', 'sub'],
-    ['ads', 'Реклама (без удержанной WB в отчётах)', 'sub'],
+    ['ads', 'Реклама', 'sub'],
     ['exp_sku', 'Доп. затраты на товары', 'sub'],
     ['exp_period', 'Прочие расходы за период', 'sub'],
     ['profit', 'Чистая прибыль', 'profit'],
@@ -68,7 +69,7 @@ $fmt = static function ($v, string $type): string {
       </thead>
       <tbody>
         <?php foreach ($lines as [$k, $label, $type]):
-            if (in_array($k, ['defect_comp', 'lost_comp', 'spp_comp', 'loyalty', 'deduction', 'additional', 'vat', 'exp_sku', 'exp_period', 'acceptance', 'penalty'], true) && abs((float) $t[$k]) < 0.005 && !($k === 'exp_period' && $expenses)) {
+            if (in_array($k, ['defect_comp', 'lost_comp', 'spp_comp', 'ads_deducted', 'loyalty', 'deduction', 'additional', 'vat', 'exp_sku', 'exp_period', 'acceptance', 'penalty'], true) && abs((float) $t[$k]) < 0.005 && !($k === 'exp_period' && $expenses)) {
                 continue;
             } ?>
           <tr class="l-<?= $type ?>">

@@ -41,13 +41,10 @@ final class Finance
     private const SALE_QTY_PLUS = ['продажа', 'корректная продажа', 'сторно возвратов'];
     private const SALE_QTY_MINUS = ['сторно продажи', 'возврат', 'сторно продаж', 'корректный возврат'];
 
-    /** Реклама, которую WB не удерживает в отчёте реализации (оплата с баланса, бонусами, кэшбэком). */
-    public const ADS_NOT_IN_REPORT = "LOWER(COALESCE(payment_type, '')) NOT IN ('счёт', 'счет')";
-
     /** Показатели (порядок — как в ОПИУ). */
     public const METRICS = ['sales', 'returns', 'revenue', 'sales_qty', 'deliveries', 'back_deliveries', 'returns_qty', 'defect_qty', 'lost_qty',
         'defect_comp', 'lost_comp', 'spp_comp', 'commission', 'acquiring', 'logistics', 'loyalty', 'turnover', 'storage', 'acceptance', 'penalty', 'deduction',
-        'additional', 'wb_other', 'cost', 'tax_base', 'tax', 'vat', 'ads', 'exp_sku', 'exp_period', 'pay_calc', 'profit'];
+        'additional', 'ads_deducted', 'wb_other', 'cost', 'tax_base', 'tax', 'vat', 'ads', 'exp_sku', 'exp_period', 'pay_calc', 'profit'];
 
     public const LABELS = [
         'sales'           => 'Продажи',
@@ -72,6 +69,7 @@ final class Finance
         'penalty'         => 'Штрафы',
         'deduction'       => 'Удержания',
         'additional'      => 'Доплаты (корректировка ВВ)',
+        'ads_deducted'    => 'Из удержаний — оплата рекламы (учтена в «Реклама»)',
         'wb_other'        => 'Хранение и прочие удержания WB',
         'cost'            => 'Себестоимость',
         'tax_base'        => 'Налоговая база',
@@ -105,7 +103,7 @@ final class Finance
      * Показатели одной строки детализации.
      * @param float $cost себестоимость единицы товара, $dup — сколько раз ШК повторяется в компенсациях брака
      */
-    public static function row(array $r, float $cost, int $dup, float $taxRate, float $vatRate): array
+    public static function row(array $r, float $cost, int $dup, float $taxRate, float $vatRate, bool $adsLoaded = false): array
     {
         $doc = self::norm($r['doc_type']);
         $op = self::norm($r['oper']);
@@ -158,6 +156,9 @@ final class Finance
         $m['penalty'] = (float) $r['penalty'];
         $m['deduction'] = (float) $r['deduction'];
         $m['additional'] = (float) $r['additional'];
+        // Удержание за продвижение — это расходы на рекламу, они уже есть в «Реклама» (история затрат WB).
+        // Переносим, только если реклама магазина загружена, иначе расход потерялся бы.
+        $m['ads_deducted'] = $adsLoaded && $m['deduction'] != 0.0 && preg_match('/продвиж|реклам/u', $bonus) ? $m['deduction'] : 0.0;
 
         // Налоговая база (DT), НДС (EA), налог (DB)
         $comp = $m['defect_qty'] + $m['lost_qty'];
@@ -240,6 +241,7 @@ final class Finance
             $dups[$d['shk_id'] . '|' . $d['doc_type']] = (int) $d['c'];
         }
 
+        $adStores = array_flip(array_map('intval', array_column(DB::all("SELECT DISTINCT store_id FROM wb_ad_costs WHERE store_id IN ($in)"), 'store_id')));
         $stmt = DB::pdo()->prepare("SELECT r.* FROM wb_report_rows r WHERE $where ORDER BY r.date_from, r.rrd_id");
         $stmt->execute($params);
         while ($r = $stmt->fetch(\PDO::FETCH_ASSOC)) {
@@ -248,7 +250,7 @@ final class Finance
             $nm = (int) $r['nm_id'];
             $srid = (string) $r['srid'];
             $cost = $nm ? ($costs[$r['store_id'] . ':' . $nm] ?? 0.0) : 0.0;
-            $m = self::row($r, $cost, $dups[$r['shk_id'] . '|' . $r['doc_type']] ?? 1, $taxRate, $vatRate);
+            $m = self::row($r, $cost, $dups[$r['shk_id'] . '|' . $r['doc_type']] ?? 1, $taxRate, $vatRate, isset($adStores[$r['store_id']]));
             if ($nm && $cost == 0.0 && ($m['sales'] > 0 || $m['returns'] > 0)) {
                 $res['info']['no_cost'][$nm] = true;
             }
@@ -308,12 +310,12 @@ final class Finance
     private static function addAdsStorageExpenses(array &$res, array $account, string $in, string $from, string $to, string $group, bool $withSku): void
     {
         // Реклама: списание кампании делим поровну между её товарами; без товаров — общий расход.
-        // Оплату со «Счёта» WB удерживает в отчёте реализации (входит в «Удержания») — её не считаем второй раз.
+        // Удержания WB за продвижение (оплата со счёта, пополнение рекламного баланса) в прибыль не идут — см. ads_deducted.
         $nms = [];
         foreach (DB::all("SELECT store_id, advert_id, nm_id FROM wb_ad_nms WHERE store_id IN ($in) AND nm_id > 0") as $n) {
             $nms[$n['store_id'] . ':' . $n['advert_id']][] = (int) $n['nm_id'];
         }
-        foreach (DB::all("SELECT store_id, advert_id, day, amount FROM wb_ad_costs WHERE store_id IN ($in) AND day BETWEEN ? AND ? AND " . self::ADS_NOT_IN_REPORT, [$from, $to]) as $a) {
+        foreach (DB::all("SELECT store_id, advert_id, day, amount FROM wb_ad_costs WHERE store_id IN ($in) AND day BETWEEN ? AND ?", [$from, $to]) as $a) {
             $amount = (float) $a['amount'];
             $pk = self::periodKey(self::weekStart((string) $a['day']), $group);
             $res['periods'][$pk] ??= self::empty();
@@ -370,7 +372,7 @@ final class Finance
         if ($sku) {
             $m['storage'] = $m['storage_sku'] ?? $m['storage'];
         }
-        $m['wb_other'] = $m['storage'] + $m['acceptance'] + $m['penalty'] + $m['deduction'] + $m['additional'];
+        $m['wb_other'] = $m['storage'] + $m['acceptance'] + $m['penalty'] + $m['deduction'] + $m['additional'] - $m['ads_deducted'];
         $m['profit'] = $m['turnover'] - $m['wb_other'] - $m['cost'] - $m['tax'] - $m['vat'] - $m['ads'] - $m['exp_sku'] - $m['exp_period'];
         $m['margin'] = $m['revenue'] > 0 ? $m['profit'] / $m['revenue'] * 100 : null;
         $m['roi'] = $m['cost'] > 0 ? $m['profit'] / $m['cost'] * 100 : null;

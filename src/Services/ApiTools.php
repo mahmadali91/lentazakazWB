@@ -359,7 +359,7 @@ final class ApiTools
             FROM wb_ad_costs WHERE store_id IN ($in) AND day BETWEEN ? AND ? GROUP BY week, payment_type ORDER BY week DESC, amount DESC", [$from, $to]);
         return ['period' => ['from' => $from, 'to' => $to], 'deductions' => array_map([self::class, 'typed'], $deductions),
             'ads' => array_map([self::class, 'typed'], $ads),
-            'note' => 'Реклама с payment_type «Счёт» удерживается WB в отчёте реализации и уже входит в удержания — в строку «Реклама» не включается.'];
+            'note' => 'Удержания с видом «продвижение/реклама» — оплата рекламы из выручки; в прибыли они не вычитаются повторно (метрика ads_deducted), реклама считается по истории затрат.'];
     }
 
     private static function toolFinanceOrder(array $a, array $account, array $plan, array $storeIds): array
