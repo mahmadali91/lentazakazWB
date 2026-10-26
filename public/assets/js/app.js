@@ -146,6 +146,165 @@
   });
 
 
+  // ---------- Финансы: интерактивная динамика (показатель × недели/месяцы) ----------
+  var dyn = window.LZ_FIN_DYN;
+  var dynPlot = document.getElementById('finDynPlot');
+  if (dyn && dynPlot && dyn.series.length) (function () {
+    var NS = 'http://www.w3.org/2000/svg';
+    var box = document.getElementById('finDyn');
+    var tip = document.getElementById('finDynTip');
+    var statsEl = document.getElementById('finDynStats');
+    var MONTHS = ['янв', 'фев', 'мар', 'апр', 'май', 'июн', 'июл', 'авг', 'сен', 'окт', 'ноя', 'дек'];
+    var state = {
+      metric: store.get('lz-dyn-metric', 'revenue'),
+      group: store.get('lz-dyn-group', dyn.series.length > 26 ? 'month' : 'week')
+    };
+    if (!dyn.metrics[state.metric]) state.metric = 'revenue';
+
+    var isPct = function (m) { return m === 'margin'; };
+    var isQty = function (m) { return m === 'qty'; };
+    var fmtFull = function (v, m) {
+      if (v === null) return '—';
+      if (isPct(m)) return v.toLocaleString('ru-RU', { maximumFractionDigits: 1 }) + '%';
+      if (isQty(m)) return Math.round(v).toLocaleString('ru-RU') + ' шт';
+      return Math.round(v).toLocaleString('ru-RU') + ' ' + dyn.cur;
+    };
+    var fmtShort = function (v, m) {
+      if (isPct(m)) return Math.round(v) + '%';
+      var a = Math.abs(v), s;
+      if (a >= 1e6) s = (v / 1e6).toLocaleString('ru-RU', { maximumFractionDigits: a >= 1e7 ? 0 : 1 }) + ' млн';
+      else if (a >= 1e3) s = (v / 1e3).toLocaleString('ru-RU', { maximumFractionDigits: a >= 1e4 ? 0 : 1 }) + ' тыс';
+      else s = Math.round(v).toLocaleString('ru-RU');
+      return s;
+    };
+    var weekLabel = function (k) { var d = k.split('-'); return d[2] + '.' + d[1]; };
+    var monthLabel = function (k) { var d = k.split('-'); return MONTHS[+d[1] - 1] + ' ' + d[0].slice(2); };
+
+    // Сборка периодов: недели как есть, месяцы — суммы недель с началом в этом месяце
+    var buckets = function () {
+      var out = [], idx = {};
+      dyn.series.forEach(function (p) {
+        var key = state.group === 'month' ? p.k.slice(0, 7) : p.k;
+        if (!(key in idx)) { idx[key] = out.length; out.push({ k: key, revenue: 0, profit: 0, pay: 0, cost: 0, logistics: 0, commission: 0, ads: 0, qty: 0, n: 0 }); }
+        var b = out[idx[key]];
+        for (var f in b) if (f !== 'k' && f !== 'n') b[f] += p[f] || 0;
+        b.n++;
+      });
+      out.forEach(function (b) { b.margin = b.revenue > 0 ? b.profit / b.revenue * 100 : null; });
+      return out;
+    };
+
+    var niceStep = function (span) {
+      var raw = span / 4, mag = Math.pow(10, Math.floor(Math.log10(raw || 1))), n = raw / mag;
+      return (n <= 1 ? 1 : n <= 2 ? 2 : n <= 2.5 ? 2.5 : n <= 5 ? 5 : 10) * mag;
+    };
+    var el = function (name, attrs, parent) {
+      var e = document.createElementNS(NS, name);
+      for (var a in attrs) e.setAttribute(a, attrs[a]);
+      if (parent) parent.appendChild(e);
+      return e;
+    };
+    // Столбец со скруглением 4px только на конце данных (у оси — прямой)
+    var barPath = function (x, y0, y1, w) {
+      var h = Math.abs(y1 - y0), r = Math.min(4, w / 2, h);
+      var top = Math.min(y0, y1), bot = Math.max(y0, y1);
+      if (y1 <= y0) return 'M' + x + ',' + bot + 'V' + (top + r) + 'Q' + x + ',' + top + ' ' + (x + r) + ',' + top + 'H' + (x + w - r) + 'Q' + (x + w) + ',' + top + ' ' + (x + w) + ',' + (top + r) + 'V' + bot + 'Z';
+      return 'M' + x + ',' + top + 'V' + (bot - r) + 'Q' + x + ',' + bot + ' ' + (x + r) + ',' + bot + 'H' + (x + w - r) + 'Q' + (x + w) + ',' + bot + ' ' + (x + w) + ',' + (bot - r) + 'V' + top + 'Z';
+    };
+
+    var render = function () {
+      var m = state.metric, data = buckets();
+      var vals = data.map(function (b) { return b[m]; });
+      var real = vals.filter(function (v) { return v !== null; });
+      box.querySelectorAll('[data-dyn="metric"] .chip').forEach(function (b) { b.classList.toggle('on', b.getAttribute('data-value') === m); });
+      box.querySelectorAll('[data-dyn="group"] button').forEach(function (b) { b.classList.toggle('on', b.getAttribute('data-value') === state.group); });
+
+      // Итоги над графиком
+      var unit = state.group === 'month' ? 'месяц' : 'неделю';
+      var total = isPct(m) ? null : real.reduce(function (a, v) { return a + v; }, 0);
+      var avg = real.length ? (isPct(m) ? (function () {
+        var r = data.reduce(function (a, b) { return a + b.revenue; }, 0), p = data.reduce(function (a, b) { return a + b.profit; }, 0);
+        return r > 0 ? p / r * 100 : null;
+      })() : total / real.length) : null;
+      var bestI = -1;
+      vals.forEach(function (v, i) { if (v !== null && (bestI < 0 || v > vals[bestI])) bestI = i; });
+      var lbl = function (b) { return state.group === 'month' ? monthLabel(b.k) : 'нед. с ' + weekLabel(b.k); };
+      statsEl.innerHTML = (total !== null ? '<div>Итого<b>' + fmtFull(total, m) + '</b></div>' : '<div>За период<b>' + fmtFull(avg, m) + '</b></div>') +
+        (!isPct(m) ? '<div>В среднем за ' + unit + '<b>' + fmtFull(avg, m) + '</b></div>' : '') +
+        (bestI >= 0 ? '<div>Лучший период — ' + lzEsc(lbl(data[bestI])) + '<b>' + fmtFull(vals[bestI], m) + '</b></div>' : '');
+
+      // Геометрия
+      dynPlot.innerHTML = '';
+      var W = dynPlot.clientWidth || 600, H = dynPlot.clientHeight || 260;
+      var padL = 54, padR = 8, padT = 10, padB = 24;
+      var min = Math.min(0, Math.min.apply(null, real.length ? real : [0]));
+      var max = Math.max(0, Math.max.apply(null, real.length ? real : [1]));
+      if (max === min) max = min + 1;
+      var step = niceStep(max - min);
+      var lo = Math.floor(min / step) * step, hi = Math.ceil(max / step) * step;
+      var y = function (v) { return padT + (hi - v) / (hi - lo) * (H - padT - padB); };
+      var svg = el('svg', { viewBox: '0 0 ' + W + ' ' + H, preserveAspectRatio: 'none' }, dynPlot);
+      for (var t = lo; t <= hi + step / 2; t += step) {
+        var ty = Math.round(y(t)) + 0.5;
+        el('line', { x1: padL, x2: W - padR, y1: ty, y2: ty, 'class': Math.abs(t) < step / 1e6 ? 'zero' : 'grid' }, svg);
+        el('text', { x: padL - 8, y: ty + 4, 'text-anchor': 'end' }, svg).textContent = fmtShort(t, m);
+      }
+      var n = data.length, slot = (W - padL - padR) / n;
+      var bw = Math.max(2, Math.min(36, slot - Math.max(2, slot * 0.28)));
+      var zeroY = y(0), bars = [];
+      var every = Math.max(1, Math.ceil(n / Math.max(2, Math.floor((W - padL) / 64))));
+      data.forEach(function (b, i) {
+        var v = vals[i], cx = padL + slot * i + slot / 2;
+        if (v !== null && v !== 0) {
+          bars[i] = el('path', { d: barPath(cx - bw / 2, zeroY, y(v), bw), 'class': 'b' + (v < 0 ? ' neg' : '') }, svg);
+        }
+        if (i % every === 0) {
+          el('text', { x: cx, y: H - 6, 'text-anchor': 'middle' }, svg).textContent = state.group === 'month' ? monthLabel(b.k) : weekLabel(b.k);
+        }
+      });
+      if (avg !== null && !isPct(m) && n > 2) {
+        var ay = Math.round(y(avg)) + 0.5;
+        el('line', { x1: padL, x2: W - padR, y1: ay, y2: ay, 'class': 'avg' }, svg);
+      }
+      // Зоны наведения шире столбца: весь слот по высоте
+      data.forEach(function (b, i) {
+        var hit = el('rect', { x: padL + slot * i, y: padT, width: slot, height: H - padT - padB, 'class': 'hit' }, svg);
+        var show = function () {
+          dynPlot.classList.add('hovering');
+          bars.forEach(function (p) { if (p) p.classList.remove('hl'); });
+          if (bars[i]) bars[i].classList.add('hl');
+          var title = state.group === 'month' ? monthLabel(b.k) + ' · ' + b.n + ' ' + (b.n === 1 ? 'отчёт' : b.n < 5 ? 'отчёта' : 'отчётов') : 'Неделя с ' + weekLabel(b.k) + '.' + b.k.slice(2, 4);
+          var sub = m === 'profit' || m === 'margin' ? 'выручка ' + fmtFull(b.revenue, 'revenue') : (m === 'revenue' ? 'прибыль ' + fmtFull(b.profit, 'profit') : '');
+          tip.innerHTML = '<div class="t">' + lzEsc(title) + '</div><div class="v">' + fmtFull(vals[i], m) + '</div>' + (sub ? '<div class="s">' + sub + '</div>' : '');
+          tip.hidden = false;
+          var pr = dynPlot.getBoundingClientRect(), br = box.getBoundingClientRect();
+          var x = pr.left - br.left + (padL + slot * i + slot / 2) * pr.width / W;
+          var top = pr.top - br.top + Math.min(y(Math.max(0, vals[i] || 0)), zeroY) * pr.height / H;
+          tip.style.left = Math.max(70, Math.min(br.width - 70, x)) + 'px';
+          tip.style.top = Math.max(40, top) + 'px';
+        };
+        hit.addEventListener('mouseenter', show);
+        hit.addEventListener('touchstart', show, { passive: true });
+      });
+      svg.addEventListener('mouseleave', function () {
+        dynPlot.classList.remove('hovering');
+        tip.hidden = true;
+      });
+    };
+
+    box.addEventListener('click', function (e) {
+      var b = e.target.closest('[data-value]');
+      if (!b) return;
+      var grp = b.closest('[data-dyn]').getAttribute('data-dyn');
+      state[grp] = b.getAttribute('data-value');
+      store.set(grp === 'metric' ? 'lz-dyn-metric' : 'lz-dyn-group', state[grp]);
+      render();
+    });
+    var rt;
+    window.addEventListener('resize', function () { clearTimeout(rt); rt = setTimeout(render, 120); });
+    render();
+  })();
+
   var cfg = window.LZ_FEED;
   if (!cfg || !cfg.enabled) return;
 

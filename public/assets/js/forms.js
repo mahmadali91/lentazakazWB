@@ -36,4 +36,14 @@
       }
     });
   });
+
+  // Выбор файла: показываем имя выбранного файла
+  document.querySelectorAll('.file-pick input[type=file]').forEach(function (input) {
+    input.addEventListener('change', function () {
+      var label = input.parentNode, span = label.querySelector('span');
+      var name = input.files && input.files[0] ? input.files[0].name : '';
+      span.textContent = name || span.getAttribute('data-empty');
+      label.classList.toggle('has-file', !!name);
+    });
+  });
 })();

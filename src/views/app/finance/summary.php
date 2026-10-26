@@ -29,28 +29,31 @@ $cls = static fn(float $v) => $v < 0 ? 'neg' : 'pos';
 
 <div class="fin-grid">
   <div class="stack">
-    <div class="card">
-      <div class="card-title">Выручка и прибыль по неделям</div>
-      <?php
-      $per = $res['periods'];
-      $max = max(1.0, ...array_values(array_map(static fn($p) => max($p['revenue'], abs($p['profit'])), $per)));
-      $hasNeg = min(0.0, ...array_values(array_map(static fn($p) => $p['profit'], $per))) < 0;
-      $n = count($per);
-      $w = 600; $h = 180; $base = $hasNeg ? 140 : 160; $scale = ($hasNeg ? 120 : 145) / $max;
-      $slot = $w / max(1, $n);
-      ?>
-      <svg class="chart fin-chart" viewBox="0 0 <?= $w ?> <?= $h + 16 ?>" role="img" aria-label="Выручка и прибыль по неделям">
-        <line x1="0" x2="<?= $w ?>" y1="<?= $base ?>" y2="<?= $base ?>" class="axis"/>
-        <?php $i = 0; foreach ($per as $key => $p): $x = $i * $slot; $bw = max(3, $slot * 0.36); ?>
-          <rect class="bar" x="<?= round($x + $slot * 0.1, 1) ?>" y="<?= round($base - $p['revenue'] * $scale, 1) ?>" width="<?= round($bw, 1) ?>" height="<?= round(max(0, $p['revenue']) * $scale, 1) ?>"><title><?= e(Finance::periodLabel($key, 'week')) ?>: выручка <?= money($p['revenue']) ?></title></rect>
-          <?php $ph = abs($p['profit']) * $scale; ?>
-          <rect class="bar2 <?= $p['profit'] < 0 ? 'neg' : '' ?>" x="<?= round($x + $slot * 0.1 + $bw + 2, 1) ?>" y="<?= round($p['profit'] >= 0 ? $base - $ph : $base, 1) ?>" width="<?= round($bw, 1) ?>" height="<?= round($ph, 1) ?>"><title><?= e(Finance::periodLabel($key, 'week')) ?>: прибыль <?= money($p['profit']) ?></title></rect>
-          <?php if ($n <= 8 || $i % (int) ceil($n / 8) === 0): ?>
-            <text x="<?= round($x + $slot / 2, 1) ?>" y="<?= $h + 12 ?>" text-anchor="middle"><?= e(date('d.m', strtotime($key))) ?></text>
-          <?php endif; ?>
-        <?php $i++; endforeach; ?>
-      </svg>
-      <div class="legend"><span><i class="lg-rev"></i>Выручка</span><span><i class="lg-profit"></i>Чистая прибыль</span></div>
+    <?php
+    // Данные для интерактивного графика: по неделям отчётов (месяцы собираются в браузере)
+    $series = [];
+    foreach ($res['periods'] as $key => $p) {
+        $series[] = ['k' => $key, 'revenue' => round($p['revenue'], 2), 'profit' => round($p['profit'], 2), 'pay' => round($p['pay_calc'], 2),
+            'cost' => round($p['cost'], 2), 'logistics' => round($p['logistics'], 2), 'commission' => round($p['commission'] + $p['acquiring'], 2),
+            'ads' => round($p['ads'], 2), 'qty' => (float) $p['sales_qty']];
+    }
+    $metrics = ['revenue' => 'Выручка', 'profit' => 'Чистая прибыль', 'pay' => 'Итого к оплате', 'cost' => 'Себестоимость', 'logistics' => 'Логистика',
+        'commission' => 'Комиссия', 'ads' => 'Реклама', 'qty' => 'Продажи, шт', 'margin' => 'Маржа, %'];
+    ?>
+    <div class="card fin-dyn" id="finDyn">
+      <div class="fin-dyn-head">
+        <div class="card-title" style="margin:0">Динамика</div>
+        <div class="seg seg-sm" data-dyn="group" role="group" aria-label="Группировка">
+          <button type="button" data-value="week">Недели</button><button type="button" data-value="month">Месяцы</button>
+        </div>
+      </div>
+      <div class="chips" data-dyn="metric" role="group" aria-label="Показатель">
+        <?php foreach ($metrics as $k => $label): ?><button type="button" class="chip" data-value="<?= $k ?>"><?= e($label) ?></button><?php endforeach; ?>
+      </div>
+      <div class="fin-dyn-stats" id="finDynStats"></div>
+      <div class="fin-dyn-plot" id="finDynPlot" role="img" aria-label="График показателя по периодам"></div>
+      <div class="fin-dyn-tip" id="finDynTip" hidden></div>
+      <script>window.LZ_FIN_DYN = <?= json_encode(['series' => $series, 'metrics' => $metrics, 'cur' => currency_sign()], JSON_UNESCAPED_UNICODE) ?>;</script>
     </div>
 
     <div class="card">

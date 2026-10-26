@@ -4,7 +4,6 @@ $countryNames = ['RU' => 'Россия', 'KG' => 'Кыргызстан', 'KZ' =>
 ?>
 <div class="topbar">
   <h1>Товары и прибыль</h1>
-  <a class="btn btn-ghost btn-sm" href="/app/products/export"><?= icon('download', 16) ?> Выгрузить CSV</a>
 </div>
 
 <?= App\Core\View::partial('partials/currency_note') ?>
@@ -142,6 +141,21 @@ $countryNames = ['RU' => 'Россия', 'KG' => 'Кыргызстан', 'KZ' =>
   </div>
 
   <div class="products-side">
+    <div class="card io-card">
+      <div class="card-title"><?= icon('download', 18) ?> Себестоимость через Excel</div>
+      <ol class="io-steps">
+        <li><span>Выгрузите товары в файл CSV — он открывается в Excel.</span>
+          <a class="btn btn-ghost btn-sm" href="/app/products/export"><?= icon('download', 16) ?> Выгрузить CSV</a></li>
+        <?php if ($canEdit): ?>
+          <li><span>Заполните колонку «Себестоимость» и загрузите файл обратно. Первая колонка — артикул WB или артикул продавца.</span>
+            <form method="post" action="/app/products/import" enctype="multipart/form-data" class="io-upload">
+              <?= csrf_field() ?>
+              <label class="file-pick"><input type="file" name="file" accept=".csv,text/csv" required><span data-empty="Выбрать файл…">Выбрать файл…</span></label>
+              <button class="btn btn-sm">Загрузить</button>
+            </form></li>
+        <?php endif; ?>
+      </ol>
+    </div>
     <div class="card">
       <div class="card-title"><?= icon('zap', 18) ?> Откуда берутся цифры</div>
       <div class="src-list small">
@@ -169,16 +183,5 @@ $countryNames = ['RU' => 'Россия', 'KG' => 'Кыргызстан', 'KZ' =>
       </form>
       <p class="small muted" style="margin-top:14px">Это оценка. Точные удержания WB — в еженедельном отчёте реализации.</p>
     </div>
-    <?php if ($canEdit): ?>
-      <div class="card">
-        <div class="card-title"><?= icon('download', 18) ?> Загрузить из Excel / CSV</div>
-        <p class="small muted">Выгрузите CSV, заполните колонку «Себестоимость» в Excel и загрузите обратно. Первая колонка — артикул WB или артикул продавца.</p>
-        <form method="post" action="/app/products/import" enctype="multipart/form-data">
-          <?= csrf_field() ?>
-          <input type="file" name="file" accept=".csv,text/csv" required style="margin-bottom:10px;max-width:100%">
-          <button class="btn btn-ghost btn-sm">Загрузить</button>
-        </form>
-      </div>
-    <?php endif; ?>
   </div>
 </div>
