@@ -9,7 +9,7 @@ namespace App\Core;
  */
 final class Migrator
 {
-    public const VERSION = 11;
+    public const VERSION = 12;
 
     public static function ensure(): void
     {
@@ -37,6 +37,10 @@ final class Migrator
             }
             if ($version < 6) {
                 self::v6();
+            }
+            if ($version < 12 && DB::setting('cfg.app.support_telegram') === null) {
+                // Telegram-канал с новостями и поддержкой
+                DB::setSetting('cfg.app.support_telegram', 'wblinkoz');
             }
             if ($version < 11) {
                 // Валюты источников WB различаются: Лента заказов — в валюте кабинета (как отчёты и кабинет),

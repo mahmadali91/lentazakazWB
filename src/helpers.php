@@ -282,6 +282,12 @@ function status_label(?string $status): string
  * Версия для показа: номер из bootstrap.php + короткий хеш коммита и дата обновления (из .git на сервере).
  * Пример: «1.6.0 · 49ff478 · 26.10.2026».
  */
+/** Telegram-канал поддержки без @ (настраивается в админ-панели); пустая строка — не показывать. */
+function support_telegram(): string
+{
+    return ltrim(trim((string) config('app.support_telegram', '')), '@');
+}
+
 function app_version(): string
 {
     static $v = null;

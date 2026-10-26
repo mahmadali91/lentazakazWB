@@ -40,6 +40,9 @@ $initial = mb_strtoupper(mb_substr($display, 0, 1));
     <?php if (config('app.support_phone')): ?>
       <a href="tel:<?= e(config('app.support_phone')) ?>"><?= icon('user') ?> Поддержка: <?= e(phone_ru(config('app.support_phone'))) ?> <span class="chev"><?= icon('chevron', 18) ?></span></a>
     <?php endif; ?>
+    <?php if (support_telegram() !== ''): ?>
+      <a href="https://t.me/<?= e(support_telegram()) ?>" target="_blank" rel="noopener"><?= icon('send') ?> Telegram-канал: новости и поддержка <span class="chev"><?= icon('chevron', 18) ?></span></a>
+    <?php endif; ?>
     <?php if (config('app.support_email')): ?>
       <a href="mailto:<?= e(config('app.support_email')) ?>"><?= icon('mail') ?> Написать в поддержку <span class="chev"><?= icon('chevron', 18) ?></span></a>
     <?php endif; ?>

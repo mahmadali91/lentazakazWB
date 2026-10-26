@@ -41,6 +41,7 @@ final class Config
     public const DB_KEYS = [
         'app.support_phone'     => false,
         'app.support_email'     => false,
+        'app.support_telegram'  => false,
         'telegram.bot_username' => false,
         'telegram.bot_token'    => true,  // true — хранится зашифрованным
         'yookassa.shop_id'      => false,

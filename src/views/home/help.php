@@ -12,8 +12,8 @@ $fig = static function (string $name, string $caption, array $marks = []): strin
     }
     return $html;
 };
-$vid = static fn(string $name, string $caption): string => '<figure class="help-fig help-video"><video controls muted playsinline preload="none" poster="/assets/img/help/poster-' . $name . '.webp">'
-    . '<source src="/assets/video/help/' . $name . '.mp4" type="video/mp4"></video><figcaption>' . icon('zap', 14) . ' Видео: ' . e($caption) . '</figcaption></figure>';
+$vid = static fn(string $name, string $caption): string => '<figure class="help-fig help-video"><video controls playsinline preload="none" poster="/assets/img/help/poster-' . $name . '.webp">'
+    . '<source src="/assets/video/help/' . $name . '.mp4" type="video/mp4"></video><figcaption>' . icon('zap', 14) . ' Видео со звуком: ' . e($caption) . '</figcaption></figure>';
 $phone = phone_ru(config('app.support_phone'));
 $email = (string) config('app.support_email', '');
 $bot = (string) config('telegram.bot_username', 'WBLinkoz_bot');
@@ -176,10 +176,11 @@ $toc = ['start' => 'Быстрый старт', 'register' => 'Регистра�
       </div>
 
       <h2 id="support">Поддержка</h2>
-      <p>Если что-то не получается — напишите или позвоните, поможем подключить магазин и разобраться с цифрами.</p>
+      <p>Если что-то не получается — напишите или позвоните, поможем подключить магазин и разобраться с цифрами. Новости сервиса, советы и ответы на вопросы — в нашем Telegram-канале.</p>
       <p class="help-contacts">
         <?php if ($phone !== ''): ?><a class="btn btn-ghost" href="tel:<?= e(config('app.support_phone')) ?>"><?= icon('user', 16) ?> <?= e($phone) ?></a><?php endif; ?>
         <?php if ($email !== ''): ?><a class="btn btn-ghost" href="mailto:<?= e($email) ?>"><?= icon('mail', 16) ?> <?= e($email) ?></a><?php endif; ?>
+        <?php if (support_telegram() !== ''): ?><a class="btn" href="https://t.me/<?= e(support_telegram()) ?>" target="_blank" rel="noopener"><?= icon('send', 16) ?> Telegram-канал @<?= e(support_telegram()) ?></a><?php endif; ?>
       </p>
     </article>
   </div>

@@ -12,8 +12,8 @@ $fig = static function (string $name, string $caption, array $marks = []): strin
     }
     return $html;
 };
-$vid = static fn(string $name, string $caption): string => '<figure class="help-fig help-video"><video controls muted playsinline preload="none" poster="/assets/img/help/poster-' . $name . '.webp">'
-    . '<source src="/assets/video/help/' . $name . '.mp4" type="video/mp4"></video><figcaption>' . icon('zap', 14) . ' Видео: ' . e($caption) . '</figcaption></figure>';
+$vid = static fn(string $name, string $caption): string => '<figure class="help-fig help-video"><video controls playsinline preload="none" poster="/assets/img/help/poster-' . $name . '.webp">'
+    . '<source src="/assets/video/help/' . $name . '.mp4" type="video/mp4"></video><figcaption>' . icon('zap', 14) . ' Видео со звуком: ' . e($caption) . '</figcaption></figure>';
 $cronCmd = '/usr/local/bin/php' . PHP_MAJOR_VERSION . '.' . PHP_MINOR_VERSION;
 $toc = ['dash' => 'Дашборд', 'cron' => 'Фоновая синхронизация (CRON)', 'clients' => 'Клиенты', 'client' => 'Карточка клиента и тарифы', 'payments' => 'Платежи',
     'settings' => 'Настройки сервиса', 'update' => 'Обновление сайта', 'trouble' => 'Если что-то не работает'];

@@ -171,6 +171,7 @@ $shot = static fn(string $name, string $alt, string $cls = '') => '<figure class
       <h2 style="color:#fff">Попробуйте бесплатно <?= $trial ?> дней</h2>
       <p style="opacity:.9;margin-bottom:22px">Подключите магазин за 3 минуты и посмотрите на свои заказы и прибыль по-новому.</p>
       <a class="btn btn-lg" style="background:#fff;color:#4c1d95" href="/register">Создать аккаунт</a>
+      <?php if (support_telegram() !== ''): ?><p style="margin:18px 0 0;opacity:.9">Новости и поддержка — в Telegram-канале <a href="https://t.me/<?= e(support_telegram()) ?>" target="_blank" rel="noopener" style="color:#fff;font-weight:700">@<?= e(support_telegram()) ?></a></p><?php endif; ?>
     </div>
   </div>
 </section>

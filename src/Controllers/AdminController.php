@@ -332,6 +332,7 @@ final class AdminController
             'tab'      => 'settings',
             'phone'    => (string) config('app.support_phone', ''),
             'email'    => (string) config('app.support_email', ''),
+            'tgChannel' => support_telegram(),
             'botUser'  => (string) config('telegram.bot_username', ''),
             'hasToken' => (string) config('telegram.bot_token', '') !== '',
             'bot'      => $bot,
@@ -388,6 +389,12 @@ final class AdminController
 
         DB::setSetting('cfg.app.support_phone', $phone !== '' ? normalize_phone($phone) : '');
         DB::setSetting('cfg.app.support_email', $email);
+        $channel = preg_replace('~^(https?://)?t\.me/~i', '', ltrim(trim((string) input('support_telegram', '')), '@'));
+        if ($channel !== '' && !preg_match('/^[A-Za-z0-9_]{4,64}$/', $channel)) {
+            flash('error', 'Telegram-канал: укажите имя вида wblinkoz или ссылку t.me/wblinkoz.');
+            redirect('/admin/settings');
+        }
+        DB::setSetting('cfg.app.support_telegram', $channel);
         $username = ltrim(trim((string) input('bot_username', '')), '@');
         $username = preg_replace('~^(https?://)?t\.me/~i', '', $username);
         $token = trim((string) input('bot_token', ''));
