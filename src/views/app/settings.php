@@ -99,7 +99,7 @@ $events = array_filter(explode(',', (string) $user['tg_events']));
   <div class="alert alert-info">Вы вошли как сотрудник кабинета <b><?= e($account['name'] ?: $account['email']) ?></b>.</div>
   <?php endif; ?>
 
-  <?php if (empty($user['owner_id'])): ?>
+  <?php if (($user['role'] ?? '') === 'admin'): ?>
   <a class="card settings-link" href="/app/settings/api">
     <span class="logo-mark" style="width:40px;height:40px"><?= icon('zap', 20) ?></span>
     <span class="grow"><b>API и подключение к Claude</b><span class="muted small" style="display:block">Ключ доступа: Claude сам смотрит заказы, прибыль и состояние синхронизации. Только чтение.</span></span>

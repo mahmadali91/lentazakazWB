@@ -15,7 +15,8 @@ final class ApiKeysController
 
     public function index(): string
     {
-        $user = Auth::require();
+        // API и MCP-сервер — только для администратора сервиса
+        $user = Auth::requireAdmin();
         $account = Auth::account();
         $newKey = $_SESSION['new_api_key'] ?? null;
         unset($_SESSION['new_api_key']);
@@ -34,7 +35,7 @@ final class ApiKeysController
 
     public function create(): never
     {
-        $owner = Auth::requireOwner();
+        $owner = Auth::requireAdmin();
         if ((int) DB::value('SELECT COUNT(*) FROM api_keys WHERE user_id = ?', [(int) $owner['id']]) >= self::MAX_KEYS) {
             flash('error', 'Можно создать не больше ' . self::MAX_KEYS . ' ключей. Удалите ненужные.');
             redirect('/app/settings/api');
@@ -51,7 +52,7 @@ final class ApiKeysController
 
     public function delete(string $id): never
     {
-        $owner = Auth::requireOwner();
+        $owner = Auth::requireAdmin();
         DB::exec('DELETE FROM api_keys WHERE id = ? AND user_id = ?', [(int) $id, (int) $owner['id']]);
         flash('success', 'Ключ отозван — подключения с ним больше не работают.');
         redirect('/app/settings/api');

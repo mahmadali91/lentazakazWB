@@ -103,7 +103,7 @@ $shot = static fn(string $name, string $alt, string $cls = '') => '<figure class
       <div class="card feature"><div class="ico"><?= icon('send') ?></div><h3>Уведомления в Telegram</h3><p>Новый заказ — сразу сообщение с товаром, ценой, складом и городом. Можно включить выкупы, отмены и возвраты.</p></div>
       <div class="card feature"><div class="ico"><?= icon('store') ?></div><h3>Магазины и валюты</h3><p>Подключите несколько кабинетов WB — российских, киргизских, казахстанских. Суммы показываются в валюте кабинета.</p></div>
       <div class="card feature"><div class="ico"><?= icon('users') ?></div><h3>Команда</h3><p>Добавьте менеджеров с отдельным входом: они видят ленту, но не тариф и оплату.</p></div>
-      <div class="card feature"><div class="ico"><?= icon('code') ?></div><h3>API и Claude</h3><p>Личный API-ключ и MCP-сервер: подключите свои данные к Claude и задавайте вопросы о заказах и прибыли.</p></div>
+      <div class="card feature"><div class="ico"><?= icon('download') ?></div><h3>Выгрузка в Excel</h3><p>Заказы за любой период, прибыль по товарам и детализация отчётов — в файл для Excel в один клик.</p></div>
       <div class="card feature"><div class="ico"><?= icon('lock') ?></div><h3>Безопасно</h3><p>Токен WB хранится в зашифрованном виде (AES-256) и работает только на чтение. Удалить его можно в один клик.</p></div>
     </div>
     <div style="margin-top:36px" class="schemes">

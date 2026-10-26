@@ -24,7 +24,8 @@ final class ApiV1Controller
             return null;
         }
         $row = DB::one('SELECT k.id key_id, u.* FROM api_keys k JOIN users u ON u.id = k.user_id WHERE k.token_hash = ?', [hash('sha256', $key)]);
-        if (!$row || (int) $row['is_blocked'] || $row['owner_id'] !== null) {
+        // Ключи работают только у администратора сервиса
+        if (!$row || (int) $row['is_blocked'] || $row['owner_id'] !== null || $row['role'] !== 'admin') {
             return null;
         }
         DB::exec('UPDATE api_keys SET requests = requests + 1, last_used_at = NOW(), last_ip = ? WHERE id = ?', [client_ip(), $row['key_id']]);

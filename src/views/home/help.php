@@ -14,12 +14,11 @@ $fig = static function (string $name, string $caption, array $marks = []): strin
 };
 $vid = static fn(string $name, string $caption): string => '<figure class="help-fig help-video"><video controls playsinline preload="none" poster="/assets/img/help/poster-' . $name . '.webp">'
     . '<source src="/assets/video/help/' . $name . '.mp4" type="video/mp4"></video><figcaption>' . icon('zap', 14) . ' Видео со звуком: ' . e($caption) . '</figcaption></figure>';
-$phone = phone_ru(config('app.support_phone'));
 $email = (string) config('app.support_email', '');
 $bot = (string) config('telegram.bot_username', 'WBLinkoz_bot');
 $toc = ['start' => 'Быстрый старт', 'register' => 'Регистрация', 'store' => 'Подключение магазина WB', 'feed' => 'Лента заказов', 'products' => 'Товары и прибыль',
     'finance' => 'Финансы', 'telegram' => 'Уведомления в Telegram', 'team' => 'Сотрудники', 'profile' => 'Профиль и пароль', 'billing' => 'Тариф и оплата',
-    'api' => 'API и Claude', 'mobile' => 'На телефоне', 'faq' => 'Частые вопросы', 'support' => 'Поддержка'];
+    'mobile' => 'На телефоне', 'faq' => 'Частые вопросы', 'support' => 'Поддержка'];
 ?>
 <section class="section help">
   <div class="container help-wrap">
@@ -148,14 +147,6 @@ $toc = ['start' => 'Быстрый старт', 'register' => 'Регистра�
       <?= $fig('billing', 'Тариф и оплата') ?>
       <p>Выберите тариф и срок — при оплате за 3, 6 или 12 месяцев действует скидка. Оплата картой или через СБП (ЮKassa), тариф включается сразу. В течение 15 дней с даты оплаты можно отказаться от тарифа и вернуть оставшуюся сумму — см. <a href="/oferta">оферту</a>.</p>
 
-      <h2 id="api">API и Claude</h2>
-      <?= $fig('api', 'Настройки → API и подключение к Claude') ?>
-      <ol class="help-steps">
-        <li>«Настройки» → «API и подключение к Claude» → <b>создайте ключ</b> и скопируйте адрес MCP-сервера.</li>
-        <li>В Claude: «Настройки» → «Коннекторы» → «Добавить пользовательский коннектор», вставьте адрес.</li>
-        <li>Спрашивайте Claude о заказах, выкупах и прибыли — доступ только на чтение. Ключ можно удалить в любой момент.</li>
-      </ol>
-
       <h2 id="mobile">На телефоне</h2>
       <div class="help-side">
         <?= $fig('mobile-feed', 'Лента на телефоне') ?>
@@ -176,9 +167,8 @@ $toc = ['start' => 'Быстрый старт', 'register' => 'Регистра�
       </div>
 
       <h2 id="support">Поддержка</h2>
-      <p>Если что-то не получается — напишите или позвоните, поможем подключить магазин и разобраться с цифрами. Новости сервиса, советы и ответы на вопросы — в нашем Telegram-канале.</p>
+      <p>Если что-то не получается — напишите нам, поможем подключить магазин и разобраться с цифрами. Новости сервиса, советы и ответы на вопросы — в нашем Telegram-канале.</p>
       <p class="help-contacts">
-        <?php if ($phone !== ''): ?><a class="btn btn-ghost" href="tel:<?= e(config('app.support_phone')) ?>"><?= icon('user', 16) ?> <?= e($phone) ?></a><?php endif; ?>
         <?php if ($email !== ''): ?><a class="btn btn-ghost" href="mailto:<?= e($email) ?>"><?= icon('mail', 16) ?> <?= e($email) ?></a><?php endif; ?>
         <?php if (support_telegram() !== ''): ?><a class="btn" href="https://t.me/<?= e(support_telegram()) ?>" target="_blank" rel="noopener"><?= icon('send', 16) ?> Telegram-канал @<?= e(support_telegram()) ?></a><?php endif; ?>
       </p>

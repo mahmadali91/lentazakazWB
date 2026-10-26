@@ -31,7 +31,6 @@
       <a href="/help">Инструкция</a>
       <a href="/oferta">Оферта</a>
       <a href="/privacy">Конфиденциальность</a>
-      <?php if (config('app.support_phone')): ?><a href="tel:<?= e(config('app.support_phone')) ?>"><?= e(phone_ru(config('app.support_phone'))) ?></a><?php endif; ?>
       <?php if (support_telegram() !== ''): ?><a href="https://t.me/<?= e(support_telegram()) ?>" target="_blank" rel="noopener">Telegram @<?= e(support_telegram()) ?></a><?php endif; ?>
       <?php if (config('app.support_email')): ?><a href="mailto:<?= e(config('app.support_email')) ?>"><?= e(config('app.support_email')) ?></a><?php endif; ?>
     </div>

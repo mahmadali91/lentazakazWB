@@ -328,8 +328,11 @@ table.table { width: 100%; border-collapse: collapse; font-size: 14px; }
   .toolbar select { flex: 1; }
   .toolbar .seg { flex-wrap: nowrap; overflow-x: auto; max-width: 100%; scrollbar-width: none; }
   .toolbar .seg::-webkit-scrollbar { display: none; }
-  .order { grid-template-columns: 112px minmax(0, 1fr); gap: 12px; padding: 12px; }
-  .order .thumb { width: 112px; height: 150px; border-radius: 10px; }
+  .order { grid-template-columns: 84px minmax(0, 1fr); gap: 12px; padding: 12px; }
+  .order .thumb { width: 84px; height: 112px; border-radius: 10px; }
+  /* На телефоне — только главное; артикул, склад → город, № задания и остаток — в окне заказа */
+  .orders .o-meta, .orders .o-x { display: none; }
+  .orders:not(.tiles) .o-title { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; white-space: normal; }
   .o-info { gap: 4px; }
   .o-top { flex-direction: column-reverse; gap: 4px; }
   .o-title { font-size: 14px; }
@@ -531,6 +534,7 @@ span.p-thumb img { width: 100%; height: 100%; object-fit: cover; display: block;
 .orders.tiles .o-stats { gap: 4px; }
 .orders.tiles .o-stat { flex: 1 1 calc(50% - 4px); min-width: 0; padding: 5px 8px; }
 .orders.tiles .o-stat b { font-size: 14px; }
+@media (max-width: 600px) { .orders.tiles #orderList { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; padding: 8px; } .orders.tiles .order .thumb { width: 100%; height: auto; } .orders.tiles .o-stat { flex: 1 1 100%; } }
 @media (max-width: 600px) { .orders.tiles #orderList { grid-template-columns: 1fr 1fr; gap: 8px; padding: 8px; } .orders.tiles .order { padding: 8px; } }
 
 /* ---------- Выгрузка/загрузка себестоимости ---------- */

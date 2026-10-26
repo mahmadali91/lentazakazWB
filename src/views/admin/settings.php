@@ -17,7 +17,7 @@
 
   <div class="card">
     <div class="card-title"><?= icon('mail', 18) ?> Контакты для клиентов</div>
-    <p class="muted small">Показываются в подвале сайта, в профиле клиента («Написать в поддержку»), на странице тарифов и в документах.</p>
+    <p class="muted small">Telegram-канал и email — контакты поддержки на сайте (подвал, профиль, инструкция, тарифы, оферта). Телефон указывается только в реквизитах документов.</p>
     <div class="row" style="align-items:flex-start">
       <div class="field grow"><label for="sp">Телефон поддержки</label><input id="sp" type="tel" name="support_phone" value="<?= e(phone_ru($phone)) ?>" placeholder="+7 900 123-45-67" inputmode="tel"></div>
       <div class="field grow"><label for="se">Email поддержки</label><input id="se" type="email" name="support_email" value="<?= e($email) ?>" placeholder="admin@linkoz.ru"></div>

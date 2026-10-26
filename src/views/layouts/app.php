@@ -63,12 +63,9 @@ if (($user['role'] ?? '') === 'admin') {
 </div>
 <?php
 // Нижнее меню на телефоне: основные разделы + «Профиль» (тариф, настройки, админка, выход)
-$mobile = [['feed', '/app', 'Лента', 'feed'], ['products', '/app/products', 'Товары', 'box'], ['finance', '/app/finance', 'Финансы', 'chart']];
-if (!$isMember) {
-    $mobile[] = ['stores', '/app/stores', 'Магазины', 'store'];
-}
-$mobile[] = ['profile', '/app/profile', 'Профиль', 'user'];
-$profileActive = in_array($nav, ['profile', 'settings', 'billing', 'admin'], true);
+// «Магазины» на телефоне — в профиле
+$mobile = [['feed', '/app', 'Лента', 'feed'], ['products', '/app/products', 'Товары', 'box'], ['finance', '/app/finance', 'Финансы', 'chart'], ['profile', '/app/profile', 'Профиль', 'user']];
+$profileActive = in_array($nav, ['profile', 'settings', 'billing', 'admin', 'stores'], true);
 ?>
 <nav class="mobile-nav">
   <?php foreach ($mobile as [$key, $href, $short, $ico]): ?>

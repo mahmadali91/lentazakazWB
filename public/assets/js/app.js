@@ -406,7 +406,7 @@
       (o.status === 'cancel' && o.cancel_type ? ' · ' + esc(CANCEL[o.cancel_type] || o.cancel_type) : '') + '</span>';
     if (o.scheme) badges += '<span class="badge badge-scheme">' + esc(o.scheme_label) + '</span>';
     if (o.is_b2b) badges += '<span class="badge badge-accent">B2B</span>';
-    if (o.mp_order_id) badges += '<span class="badge" title="Сборочное задание">№ ' + o.mp_order_id + '</span>';
+    if (o.mp_order_id) badges += '<span class="badge o-x" title="Сборочное задание">№ ' + o.mp_order_id + '</span>';
 
     // Показатели с короткими подписями
     var stats = '<div class="o-stat"><span class="o-cap">Цена продавца</span><b>' + money(o.price) + '</b></div>';
@@ -418,7 +418,7 @@
       }
     }
     if (o.stock !== null && o.stock !== undefined) {
-      stats += '<div class="o-stat"><span class="o-cap">Остаток WB</span><b>' + o.stock + ' шт</b></div>';
+      stats += '<div class="o-stat o-x"><span class="o-cap">Остаток WB</span><b>' + o.stock + ' шт</b></div>';
     }
     var el = document.createElement('div');
     el.className = 'order';

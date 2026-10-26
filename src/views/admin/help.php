@@ -16,7 +16,7 @@ $vid = static fn(string $name, string $caption): string => '<figure class="help-
     . '<source src="/assets/video/help/' . $name . '.mp4" type="video/mp4"></video><figcaption>' . icon('zap', 14) . ' Видео со звуком: ' . e($caption) . '</figcaption></figure>';
 $cronCmd = '/usr/local/bin/php' . PHP_MAJOR_VERSION . '.' . PHP_MINOR_VERSION;
 $toc = ['dash' => 'Дашборд', 'cron' => 'Фоновая синхронизация (CRON)', 'clients' => 'Клиенты', 'client' => 'Карточка клиента и тарифы', 'payments' => 'Платежи',
-    'settings' => 'Настройки сервиса', 'update' => 'Обновление сайта', 'trouble' => 'Если что-то не работает'];
+    'settings' => 'Настройки сервиса', 'api' => 'API и Claude', 'update' => 'Обновление сайта', 'trouble' => 'Если что-то не работает'];
 ?>
 <div class="topbar"><h1>Инструкция администратора</h1></div>
 <?= App\Core\View::partial('admin/_nav', ['tab' => 'help']) ?>
@@ -96,6 +96,15 @@ $toc = ['dash' => 'Дашборд', 'cron' => 'Фоновая синхрониз
       <li>Вставьте их в настройках и сохраните — сервис проверит подключение и покажет статус магазина.</li>
       <li>«Интеграция» → «HTTP-уведомления»: URL <code><?= e(url('/webhook/yookassa')) ?></code>, события <b>payment.succeeded</b> и <b>payment.canceled</b>.</li>
       <li>Если подключена онлайн-касса, включите «передавать чек (54-ФЗ)» и выберите ставку НДС.</li>
+    </ol>
+
+    <h2 id="api">API и Claude</h2>
+    <?= $fig('api', 'Настройки → API и подключение к Claude') ?>
+    <p>Раздел виден только администраторам, ключи клиентов не работают. Через него Claude смотрит заказы, финансы и состояние синхронизации — только чтение.</p>
+    <ol class="help-steps">
+      <li>«Настройки» → «API и подключение к Claude» → создайте ключ и скопируйте адрес MCP-сервера.</li>
+      <li>В Claude: «Настройки» → «Коннекторы» → «Добавить пользовательский коннектор», вставьте адрес.</li>
+      <li>Инструмент <code>admin_overview</code> показывает всех клиентов, ошибки магазинов и cron; остальные — данные вашего кабинета.</li>
     </ol>
 
     <h2 id="update">Обновление сайта</h2>
