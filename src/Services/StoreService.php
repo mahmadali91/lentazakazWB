@@ -57,7 +57,18 @@ final class StoreService
         ];
     }
 
-    public static function create(int $userId, string $name, string $token): int
+    /** Налог, НДС и фиксированные расходы в неделю из формы магазина. */
+    public static function financeInput(array $in): array
+    {
+        $num = static function ($v, float $max): ?float {
+            $v = str_replace([',', ' ', "\u{A0}"], ['.', '', ''], trim((string) $v));
+            return $v === '' || !is_numeric($v) ? null : round(max(0.0, min($max, (float) $v)), 2);
+        };
+        return ['tax_rate' => $num($in['tax_rate'] ?? '', 100) ?? 6.0, 'vat_rate' => $num($in['vat_rate'] ?? '', 100) ?? 0.0,
+            'weekly_expense' => $num($in['weekly_expense'] ?? '', 100000000)];
+    }
+
+    public static function create(int $userId, string $name, string $token, array $finance = []): int
     {
         $info = self::inspectToken($token);
         $seller = $info['seller'];
@@ -74,7 +85,7 @@ final class StoreService
             'token_expires_at' => $info['expires_at'],
             'scopes'           => json_encode($info['scopes']),
             'created_at'       => now(),
-        ]);
+        ] + ($finance ?: self::financeInput([])));
     }
 
     public static function updateToken(array $store, string $token): void

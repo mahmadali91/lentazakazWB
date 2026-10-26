@@ -40,7 +40,7 @@ final class StoreController
             redirect('/app/billing');
         }
         try {
-            StoreService::create((int) $user['id'], (string) input('name', ''), (string) ($_POST['token'] ?? ''));
+            StoreService::create((int) $user['id'], (string) input('name', ''), (string) ($_POST['token'] ?? ''), StoreService::financeInput($_POST));
             flash('success', 'Магазин подключён! Первые заказы появятся в ленте в течение 5 минут.');
             redirect('/app');
         } catch (\InvalidArgumentException $e) {
@@ -82,6 +82,16 @@ final class StoreController
             DB::exec('UPDATE stores SET name = ? WHERE id = ?', [$name, $store['id']]);
             flash('success', 'Название сохранено.');
         }
+        redirect('/app/stores');
+    }
+
+    /** Налог, НДС и фиксированные расходы магазина (для расчёта прибыли). */
+    public function finance(string $id): never
+    {
+        Auth::requireOwner();
+        $store = $this->own($id);
+        DB::update('stores', StoreService::financeInput($_POST), 'id = :id', ['id' => $store['id']]);
+        flash('success', 'Налог и расходы магазина сохранены — прибыль пересчитана.');
         redirect('/app/stores');
     }
 

@@ -58,7 +58,7 @@ $thumb = static function ($nm) use ($photos) {
         <td class="num"><?= num_ru($res['total']['logistics']) ?></td><td class="num"><?= num_ru($res['total']['turnover']) ?></td>
         <td class="num"><?= num_ru($res['total']['cost']) ?></td><td class="num"><?= num_ru($res['total']['storage']) ?></td>
         <td class="num"><?= num_ru($res['total']['tax']) ?></td><td class="num"><?= num_ru($res['total']['ads']) ?></td>
-        <td class="num"><?= num_ru($res['total']['wb_other'] - $res['total']['storage'] + $res['total']['exp_sku'] + $res['total']['exp_period'] + $res['total']['loyalty'] + $res['total']['vat']) ?></td></tr>
+        <td class="num"><?= num_ru($res['total']['wb_other'] - $res['total']['storage'] + $res['total']['exp_sku'] + $res['total']['exp_period'] + $res['total']['exp_fixed'] + $res['total']['loyalty'] + $res['total']['vat']) ?></td></tr>
       </tbody>
     </table>
   </div>

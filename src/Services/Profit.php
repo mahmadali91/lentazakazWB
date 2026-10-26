@@ -73,11 +73,14 @@ final class Profit
         if (isset($cache[$key])) {
             return $cache[$key];
         }
-        $ctx = ['comm' => [], 'commByName' => [], 'box' => [], 'commAt' => null, 'boxAt' => null, 'cur' => [], 'dlv' => [], 'rev' => []];
+        $ctx = ['comm' => [], 'commByName' => [], 'box' => [], 'commAt' => null, 'boxAt' => null, 'cur' => [], 'dlv' => [], 'rev' => [], 'tax' => []];
         if ($storeIds) {
             $in = implode(',', array_map('intval', $storeIds));
-            foreach (DB::all("SELECT id, currency FROM stores WHERE id IN ($in)") as $st) {
+            foreach (DB::all("SELECT id, currency, tax_rate FROM stores WHERE id IN ($in)") as $st) {
                 $ctx['cur'][(int) $st['id']] = strtoupper((string) $st['currency']);
+                if ($st['tax_rate'] !== null) {
+                    $ctx['tax'][(int) $st['id']] = (float) $st['tax_rate'];
+                }
             }
             // Фактическая логистика по отчётам реализации (в валюте магазина) — для магазинов не в рублях:
             // формула WB даёт тарифы в ₽, а цены у них в своей валюте
@@ -214,7 +217,8 @@ final class Profit
 
         $cost = isset($r['p_cost']) && $r['p_cost'] !== null ? (float) $r['p_cost'] : null;
         $commission = round($price * $commPct / 100, 2);
-        $tax = round($price * (float) $s['tax'] / 100, 2);
+        $taxPct = $ctx['tax'][$sid] ?? (float) $s['tax'];
+        $tax = round($price * $taxPct / 100, 2);
         $other = (float) $s['other'];
 
         if ($status === 'cancel' || $lostAtPickup) {
@@ -237,7 +241,7 @@ final class Profit
             'reverse'        => $reverse,
             'volume'         => $volume,
             'coef'           => $coef,
-            'tax_pct'        => (float) $s['tax'],
+            'tax_pct'        => $taxPct,
             'tax'            => $tax,
             'other'          => $other,
             'cost'           => $cost,

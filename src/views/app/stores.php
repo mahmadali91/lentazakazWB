@@ -53,6 +53,7 @@ $canAdd = count($stores) < (int) $plan['stores'];
         <?php if ($s['stats_ok_at']): ?><span>Статистика: <?= date_ru($s['stats_ok_at']) ?></span><?php endif; ?>
       </div>
 
+      <div class="row small muted" style="margin-top:6px">Налог <?= e(num_ru((float) $s['tax_rate'], 1)) ?>%<?= (float) $s['vat_rate'] > 0 ? ' + НДС ' . e(num_ru((float) $s['vat_rate'], 0)) . '%' : '' ?><?= (float) $s['weekly_expense'] > 0 ? ' · фиксированные расходы ' . e(money((float) $s['weekly_expense'])) . ' в неделю' : ' · фиксированные расходы не указаны' ?></div>
       <details class="inline">
         <summary>Управление магазином</summary>
         <div class="stack">
@@ -60,6 +61,16 @@ $canAdd = count($stores) < (int) $plan['stores'];
             <?= csrf_field() ?>
             <input type="text" name="name" value="<?= e($s['name']) ?>" style="max-width:320px" aria-label="Название">
             <button class="btn btn-ghost btn-sm">Переименовать</button>
+          </form>
+          <form method="post" action="/app/stores/<?= (int) $s['id'] ?>/finance">
+            <?= csrf_field() ?>
+            <label style="font-weight:600">Налог и фиксированные расходы</label>
+            <div class="row store-fin">
+            <div class="field"><label>Налог, %</label><input type="text" inputmode="decimal" name="tax_rate" value="<?= e(rtrim(rtrim(number_format((float) $s['tax_rate'], 2, '.', ''), '0'), '.')) ?>" placeholder="6"><div class="hint">УСН «доходы» — 6%, без налога — 0</div></div>
+            <div class="field"><label>НДС, %</label><input type="text" inputmode="decimal" name="vat_rate" value="<?= e(rtrim(rtrim(number_format((float) $s['vat_rate'], 2, '.', ''), '0'), '.')) ?>" placeholder="0"><div class="hint">0 — без НДС</div></div>
+            <div class="field grow"><label>Фиксированные расходы в неделю, <?= e(currency_sign(($s ?? [])['currency'] ?? null ?: 'RUB')) ?></label><input type="text" inputmode="decimal" name="weekly_expense" value="<?= $s['weekly_expense'] !== null ? e(rtrim(rtrim(number_format((float) $s['weekly_expense'], 2, '.', ''), '0'), '.')) : '' ?>" placeholder="Например: 15 000"><div class="hint">Зарплата, аренда, фулфилмент, сервисы — вычитается из прибыли за каждую неделю в «Финансах»</div></div>
+          </div>
+            <button class="btn btn-sm">Сохранить</button>
           </form>
           <form method="post" action="/app/stores/<?= (int) $s['id'] ?>/token">
             <?= csrf_field() ?>
@@ -97,6 +108,11 @@ $canAdd = count($stores) < (int) $plan['stores'];
         <div class="field"><label for="sname">Название (необязательно)</label><input id="sname" type="text" name="name" value="<?= e(old('name')) ?>" placeholder="Например: Основной кабинет"></div>
         <div class="field"><label for="token">Токен API WB</label><textarea id="token" name="token" required placeholder="eyJhbGciOiJFUzI1NiIsImtpZCI6…"></textarea>
           <div class="hint"><?= icon('lock', 12) ?> Токен проверяется на всех сервисах WB и хранится в зашифрованном виде.</div></div>
+        <div class="row store-fin">
+            <div class="field"><label>Налог, %</label><input type="text" inputmode="decimal" name="tax_rate" value="<?= e(old('tax_rate') ?: '6') ?>" placeholder="6"><div class="hint">УСН «доходы» — 6%, без налога — 0</div></div>
+            <div class="field"><label>НДС, %</label><input type="text" inputmode="decimal" name="vat_rate" value="<?= e(old('vat_rate') ?: '0') ?>" placeholder="0"><div class="hint">0 — без НДС</div></div>
+            <div class="field grow"><label>Фиксированные расходы в неделю, ₽</label><input type="text" inputmode="decimal" name="weekly_expense" value="<?= e(old('weekly_expense')) ?>" placeholder="Например: 15 000"><div class="hint">Зарплата, аренда, фулфилмент, сервисы — вычитается из прибыли за каждую неделю в «Финансах»</div></div>
+          </div>
         <button class="btn btn-lg">Проверить токен и подключить</button>
       </form>
     <?php endif; ?>

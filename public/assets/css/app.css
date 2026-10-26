@@ -623,3 +623,6 @@ span.p-thumb img { width: 100%; height: 100%; object-fit: cover; display: block;
   .help-dl { grid-template-columns: minmax(0, 1fr); gap: 2px; }
   .help-dl dd { margin-bottom: 10px; }
 }
+.store-fin { gap: 12px; align-items: flex-start; }
+.store-fin .field:not(.grow) { flex: 1 1 120px; }
+.store-fin .field.grow { flex: 2 1 260px; }

@@ -552,16 +552,6 @@ final class FinanceController
         $this->back('expenses');
     }
 
-    // ------------------------------------------------------------------ настройки
-
-    public function settings(): never
-    {
-        $ctx = $this->requireEdit();
-        Profit::save((int) $ctx['account']['id'], array_intersect_key($_POST, ['tax' => 1, 'vat' => 1]));
-        flash('success', 'Ставки налога сохранены.');
-        $this->back((string) input('tab', ''));
-    }
-
     private function requireEdit(): array
     {
         Auth::requireOwner();

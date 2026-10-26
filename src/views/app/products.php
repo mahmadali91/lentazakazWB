@@ -174,7 +174,7 @@ $countryNames = ['RU' => 'Россия', 'KG' => 'Кыргызстан', 'KZ' =>
       <div class="card-title"><?= icon('chart', 18) ?> Параметры расчёта</div>
       <form method="post" action="/app/products/settings">
         <?= csrf_field() ?>
-        <div class="field"><label>Налог, % от цены</label><input type="text" inputmode="decimal" name="tax" value="<?= e($fmt($settings['tax'])) ?>" <?= $canEdit ? '' : 'disabled' ?>><div class="hint">УСН «доходы» — 6%. Без налога — 0.</div></div>
+        <div class="hint" style="margin-bottom:12px">Налог и фиксированные расходы задаются у каждого магазина — в разделе <a href="/app/stores">«Магазины»</a>.</div>
         <div class="field"><label>Прочие расходы на единицу, <?= currency_sign() ?></label><input type="text" inputmode="decimal" name="other" value="<?= e($fmt($settings['other'])) ?>" <?= $canEdit ? '' : 'disabled' ?>><div class="hint">Упаковка, хранение, реклама, фулфилмент.</div></div>
         <div class="field"><label>Коэффициент склада, если неизвестен, %</label><input type="text" inputmode="decimal" name="coef" value="<?= e($fmt($settings['coef'])) ?>" <?= $canEdit ? '' : 'disabled' ?>><div class="hint">С 15 августа для складов РФ единый — 170%. Для складов СНГ — свои.</div></div>
         <div class="field"><label>Комиссия, если категория не найдена, %</label><input type="text" inputmode="decimal" name="commission" value="<?= e($fmt($settings['commission'])) ?>" <?= $canEdit ? '' : 'disabled' ?>></div>

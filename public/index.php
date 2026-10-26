@@ -104,6 +104,7 @@ $r->get('/app/export', [FeedController::class, 'export']);
 $r->get('/app/stores', [StoreController::class, 'index']);
 $r->post('/app/stores', [StoreController::class, 'create']);
 $r->post('/app/stores/{id}/token', [StoreController::class, 'updateToken']);
+$r->post('/app/stores/{id}/finance', [StoreController::class, 'finance']);
 $r->post('/app/stores/{id}/rename', [StoreController::class, 'rename']);
 $r->post('/app/stores/{id}/toggle', [StoreController::class, 'toggle']);
 $r->post('/app/stores/{id}/delete', [StoreController::class, 'delete']);
@@ -144,7 +145,6 @@ $r->get('/app/finance/ads', [FinanceController::class, 'ads']);
 $r->get('/app/finance/expenses', [FinanceController::class, 'expenses']);
 $r->post('/app/finance/expenses', [FinanceController::class, 'addExpense']);
 $r->post('/app/finance/expenses/{id}/delete', [FinanceController::class, 'deleteExpense']);
-$r->post('/app/finance/settings', [FinanceController::class, 'settings']);
 
 // JSON для живой ленты
 $r->get('/api/feed', [ApiController::class, 'feed']);

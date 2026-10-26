@@ -40,6 +40,9 @@ CREATE TABLE IF NOT EXISTS stores (
   seller_country  VARCHAR(8) NOT NULL DEFAULT '',
   currency        VARCHAR(8) NULL,                -- валюта кабинета WB: RUB, KGS, KZT…
   stats_rate      DECIMAL(10,4) NULL,             -- курс: цена Ленты (валюта кабинета) / цена Статистики (рубли)
+  tax_rate        DECIMAL(5,2) NULL,              -- налог магазина, % (УСН «доходы» — 6)
+  vat_rate        DECIMAL(5,2) NULL,              -- НДС магазина, % (0 — без НДС)
+  weekly_expense  DECIMAL(12,2) NULL,             -- фиксированные расходы магазина в неделю (зарплата, аренда…)
   token_enc       TEXT NOT NULL,
   token_hint      VARCHAR(16) NOT NULL DEFAULT '',
   token_expires_at DATETIME NULL,

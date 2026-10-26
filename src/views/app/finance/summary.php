@@ -22,7 +22,7 @@ $cls = static fn(float $v) => $v < 0 ? 'neg' : 'pos';
   <div class="card kpi" title="Как графа «Продажа» в отчётах реализации WB: продажи минус возвраты по цене продажи"><div class="k-label">Выручка</div><div class="k-value"><?= money($rev) ?></div><div class="k-sub"><?= num_ru($t['sales_qty']) ?> продаж · <?= num_ru($t['returns_qty']) ?> возвр.</div></div>
   <div class="card kpi" title="Как «Итого к оплате» в отчётах реализации WB: к перечислению за товар − логистика − хранение, приёмка, штрафы и прочие удержания"><div class="k-label">Итого к оплате от WB</div><div class="k-value"><?= money($t['pay_calc']) ?></div><div class="k-sub">за товар <?= money($t['turnover']) ?> − удержания <?= money($t['turnover'] - $t['pay_calc']) ?></div></div>
   <div class="card kpi"><div class="k-label">Себестоимость</div><div class="k-value"><?= money($t['cost']) ?></div><div class="k-sub"><?= $pct($t['cost']) ?> выручки</div></div>
-  <div class="card kpi"><div class="k-label">Налог<?= $t['vat'] ? ' и НДС' : '' ?></div><div class="k-value"><?= money($t['tax'] + $t['vat']) ?></div><div class="k-sub"><?= num_ru($settings['tax'], 1) ?>%<?= $settings['vat'] ? ' + НДС ' . num_ru($settings['vat'], 0) . '%' : '' ?></div></div>
+  <div class="card kpi"><div class="k-label">Налог<?= $t['vat'] ? ' и НДС' : '' ?></div><div class="k-value"><?= money($t['tax'] + $t['vat']) ?></div><div class="k-sub"><?php $rates = array_unique(array_map(static fn($st) => (float) $st['tax_rate'], array_filter($stores, static fn($st) => in_array((int) $st['id'], $storeIds, true)))); ?><?= count($rates) === 1 ? num_ru(reset($rates), 1) . '% · ставка магазина' : 'по ставкам магазинов' ?></div></div>
   <div class="card kpi" title="Все расходы на рекламные кампании WB. Удержания WB за продвижение в отчётах реализации второй раз не вычитаются"><div class="k-label">Реклама</div><div class="k-value"><?= money($t['ads']) ?></div><div class="k-sub">ДРР <?= $pct($t['ads']) ?></div></div>
   <div class="card kpi k-accent"><div class="k-label">Чистая прибыль</div><div class="k-value"><?= money($t['profit']) ?></div><div class="k-sub">маржа <?= $t['margin'] !== null ? num_ru($t['margin'], 1) . '%' : '—' ?><?= $t['roi'] !== null ? ' · ROI ' . num_ru($t['roi'], 0) . '%' : '' ?></div></div>
 </div>
@@ -68,7 +68,7 @@ $cls = static fn(float $v) => $v < 0 ? 'neg' : 'pos';
           'Себестоимость' => $t['cost'],
           'Налог' . ($t['vat'] ? ' и НДС' : '') => $t['tax'] + $t['vat'],
           'Реклама' => $t['ads'],
-          'Прочие расходы' => $t['exp_sku'] + $t['exp_period'],
+          'Прочие и фиксированные расходы' => $t['exp_sku'] + $t['exp_period'] + $t['exp_fixed'],
           'Чистая прибыль' => $t['profit'],
       ];
       ?>

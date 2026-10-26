@@ -9,7 +9,7 @@ namespace App\Core;
  */
 final class Migrator
 {
-    public const VERSION = 12;
+    public const VERSION = 13;
 
     public static function ensure(): void
     {
@@ -37,6 +37,9 @@ final class Migrator
             }
             if ($version < 6) {
                 self::v6();
+            }
+            if ($version < 13) {
+                self::v13();
             }
             if ($version < 12 && DB::setting('cfg.app.support_telegram') === null) {
                 // Telegram-канал с новостями и поддержкой
@@ -276,6 +279,23 @@ final class Migrator
             CONSTRAINT fk_sb_user FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci',
     ];
+
+    /** v13: налог, НДС и фиксированные расходы в неделю — у каждого магазина (раньше налог был общим на аккаунт). */
+    private static function v13(): void
+    {
+        self::addColumn('stores', 'tax_rate', 'DECIMAL(5,2) NULL AFTER stats_rate');
+        self::addColumn('stores', 'vat_rate', 'DECIMAL(5,2) NULL AFTER tax_rate');
+        self::addColumn('stores', 'weekly_expense', 'DECIMAL(12,2) NULL AFTER vat_rate');
+        foreach (DB::all('SELECT id, profit_settings FROM users WHERE profit_settings IS NOT NULL') as $u) {
+            $s = json_decode((string) $u['profit_settings'], true);
+            if (is_array($s)) {
+                DB::exec('UPDATE stores SET tax_rate = ?, vat_rate = ? WHERE user_id = ? AND tax_rate IS NULL',
+                    [is_numeric($s['tax'] ?? null) ? (float) $s['tax'] : 6.0, is_numeric($s['vat'] ?? null) ? (float) $s['vat'] : 0.0, (int) $u['id']]);
+            }
+        }
+        DB::exec('UPDATE stores SET tax_rate = 6 WHERE tax_rate IS NULL');
+        DB::exec('UPDATE stores SET vat_rate = 0 WHERE vat_rate IS NULL');
+    }
 
     /** v6: телефон клиента, индекс по дате статуса (выкупы за период), контакты поддержки и бот по умолчанию. */
     private static function v6(): void
