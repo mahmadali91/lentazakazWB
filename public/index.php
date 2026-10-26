@@ -83,6 +83,7 @@ $r = new Router();
 
 // Публичные страницы
 $r->get('/', [HomeController::class, 'index']);
+$r->get('/help', [HomeController::class, 'help']);
 $r->get('/oferta', [HomeController::class, 'oferta']);
 $r->get('/privacy', [HomeController::class, 'privacy']);
 
@@ -174,6 +175,7 @@ $r->post('/admin/users/{id}/delete', [AdminController::class, 'delete']);
 $r->post('/admin/users/{id}/login', [AdminController::class, 'impersonate']);
 $r->post('/admin/impersonate/stop', [AdminController::class, 'stopImpersonate']);
 $r->get('/admin/payments', [AdminController::class, 'payments']);
+$r->get('/admin/help', [AdminController::class, 'help']);
 $r->get('/admin/settings', [AdminController::class, 'settings']);
 $r->post('/admin/settings', [AdminController::class, 'saveSettings']);
 $r->post('/admin/cron', [AdminController::class, 'runCron']);

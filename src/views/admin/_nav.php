@@ -3,4 +3,5 @@
   <a href="/admin/users" class="<?= ($tab ?? '') === 'users' ? 'on' : '' ?>">Клиенты</a>
   <a href="/admin/payments" class="<?= ($tab ?? '') === 'payments' ? 'on' : '' ?>">Платежи</a>
   <a href="/admin/settings" class="<?= ($tab ?? '') === 'settings' ? 'on' : '' ?>">Настройки сервиса</a>
+  <a href="/admin/help" class="<?= ($tab ?? '') === 'help' ? 'on' : '' ?>">Инструкция</a>
 </div>

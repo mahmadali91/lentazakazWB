@@ -11,6 +11,7 @@
       <a class="nav-link" href="/#features">Возможности</a>
       <a class="nav-link" href="/#pricing">Тарифы</a>
       <a class="nav-link" href="/#faq">Вопросы</a>
+      <a class="nav-link" href="/help">Инструкция</a>
       <?php if (!empty($user)): ?>
         <a class="btn btn-sm" href="/app">Открыть ленту</a>
       <?php else: ?>
@@ -27,6 +28,7 @@
   <div class="container">
     <div>© <?= date('Y') ?> <?= e(config('app.name')) ?><?= company_line() !== '' ? ' · ' . e(company_line()) : '' ?>. Сервис не является официальным продуктом Wildberries. <span class="app-version">v<?= e(app_version()) ?></span></div>
     <div class="row">
+      <a href="/help">Инструкция</a>
       <a href="/oferta">Оферта</a>
       <a href="/privacy">Конфиденциальность</a>
       <?php if (config('app.support_phone')): ?><a href="tel:<?= e(config('app.support_phone')) ?>"><?= e(phone_ru(config('app.support_phone'))) ?></a><?php endif; ?>

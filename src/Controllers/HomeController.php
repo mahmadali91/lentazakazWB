@@ -17,6 +17,11 @@ final class HomeController
         ], 'main');
     }
 
+    public function help(): string
+    {
+        return view('home/help', ['title' => 'Инструкция', 'user' => Auth::user()], 'main');
+    }
+
     public function oferta(): string
     {
         return view('home/legal', ['title' => 'Публичная оферта', 'doc' => 'oferta', 'user' => Auth::user()], 'main');

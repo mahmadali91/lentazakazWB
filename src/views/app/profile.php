@@ -36,6 +36,7 @@ $initial = mb_strtoupper(mb_substr($display, 0, 1));
     <?php if (($user['role'] ?? '') === 'admin'): ?>
       <a href="/admin"><?= icon('shield') ?> Админ-панель <span class="chev"><?= icon('chevron', 18) ?></span></a>
     <?php endif; ?>
+    <a href="/help"><?= icon('help') ?> Инструкция по сервису <span class="chev"><?= icon('chevron', 18) ?></span></a>
     <?php if (config('app.support_phone')): ?>
       <a href="tel:<?= e(config('app.support_phone')) ?>"><?= icon('user') ?> Поддержка: <?= e(phone_ru(config('app.support_phone'))) ?> <span class="chev"><?= icon('chevron', 18) ?></span></a>
     <?php endif; ?>

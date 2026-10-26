@@ -27,6 +27,7 @@ if (($user['role'] ?? '') === 'admin') {
         <a href="<?= $href ?>" class="<?= $nav === $key ? 'active' : '' ?>"><?= icon($ico) ?> <?= e($label) ?></a>
       <?php endforeach; ?>
     </nav>
+    <a class="side-help" href="/help" target="_blank" rel="noopener"><?= icon('help', 18) ?> Инструкция</a>
     <div class="side-foot">
       <div class="plan-line">Тариф «<?= e($plan['name'] ?? '') ?>»</div>
       <div class="muted">

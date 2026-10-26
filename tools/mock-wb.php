@@ -379,7 +379,7 @@ switch ($path) {
             'nmID' => $p[0], 'vendorCode' => $p[1], 'title' => $p[2], 'brand' => $p[3], 'subjectName' => $p[4],
             'subjectID' => ['Платья' => 101, 'Кроссовки' => 102, 'Наборы посуды' => 103, 'Рюкзаки' => 104, 'Футболки' => 105][$p[4]],
             'dimensions' => ['length' => 30, 'width' => 20, 'height' => 5, 'weightBrutto' => 0.5, 'isValid' => true],
-            'photos' => [['c246x328' => 'https://placehold.co/246x328/png?text=' . urlencode($p[1])]],
+            'photos' => [['c246x328' => 'http://127.0.0.1:8090/img/' . $p[0] . '.svg', 'c516x688' => 'http://127.0.0.1:8090/img/' . $p[0] . '.svg']],
         ], $products), 'cursor' => ['updatedAt' => date('c'), 'nmID' => end($products)[0], 'total' => count($products)]]);
 }
 
