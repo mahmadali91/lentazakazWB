@@ -475,6 +475,7 @@ span.p-thumb img { width: 100%; height: 100%; object-fit: cover; display: block;
 .bd-bar { height: 8px; border-radius: 4px; background: var(--surface-2); overflow: hidden; }
 .bd-bar i { display: block; height: 100%; background: var(--accent); opacity: .7; border-radius: 4px; }
 .bd-bar i.neg { background: #dc2626; }
+.bd-bar i.inc { background: #16a34a; }
 .bd-total { border-top: 1px solid var(--border); padding-top: 8px; }
 .bd-total .bd-bar i { background: #16a34a; opacity: 1; }
 .bd-pct { text-align: right; }

@@ -12,6 +12,7 @@ $lines = [
     ['returns_qty', 'Возвраты покупателей, шт', 'qty'],
     ['defect_comp', 'Компенсация брака от WB', 'money'],
     ['lost_comp', 'Компенсация потерянного товара от WB', 'money'],
+    ['spp_comp', 'Компенсация скидки WB (СПП)', 'money'],
     ['commission', 'Комиссия WB', 'sub'],
     ['acquiring', 'Эквайринг', 'sub'],
     ['logistics', 'Логистика', 'sub'],
@@ -52,7 +53,7 @@ $fmt = static function ($v, string $type): string {
     <a href="/app/finance/opiu<?= $qs(['g' => 'week']) ?>" class="<?= $group === 'week' ? 'on' : '' ?>">По неделям</a>
     <a href="/app/finance/opiu<?= $qs(['g' => 'month']) ?>" class="<?= $group === 'month' ? 'on' : '' ?>">По месяцам</a>
   </div>
-  <span class="muted small">Суммы в рублях. «−» — расход, вычитается из выручки.</span>
+  <span class="muted small">Суммы в <?= e(currency_sign()) ?>. Выручка — как графа «Продажа» в отчётах WB. «−» — расход, вычитается из выручки.</span>
 </div>
 
 <div class="card" style="padding:0">
@@ -67,7 +68,7 @@ $fmt = static function ($v, string $type): string {
       </thead>
       <tbody>
         <?php foreach ($lines as [$k, $label, $type]):
-            if (in_array($k, ['defect_comp', 'lost_comp', 'loyalty', 'deduction', 'additional', 'vat', 'exp_sku', 'exp_period', 'acceptance', 'penalty'], true) && abs((float) $t[$k]) < 0.005 && !($k === 'exp_period' && $expenses)) {
+            if (in_array($k, ['defect_comp', 'lost_comp', 'spp_comp', 'loyalty', 'deduction', 'additional', 'vat', 'exp_sku', 'exp_period', 'acceptance', 'penalty'], true) && abs((float) $t[$k]) < 0.005 && !($k === 'exp_period' && $expenses)) {
                 continue;
             } ?>
           <tr class="l-<?= $type ?>">

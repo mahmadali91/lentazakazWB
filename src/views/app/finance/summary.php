@@ -19,8 +19,8 @@ $cls = static fn(float $v) => $v < 0 ? 'neg' : 'pos';
 <?php endif; ?>
 
 <div class="kpis">
-  <div class="card kpi"><div class="k-label">Выручка</div><div class="k-value"><?= money($rev) ?></div><div class="k-sub"><?= num_ru($t['sales_qty']) ?> продаж · <?= num_ru($t['returns_qty']) ?> возвр.</div></div>
-  <div class="card kpi"><div class="k-label">Придёт от WB за товар</div><div class="k-value"><?= money($t['turnover']) ?></div><div class="k-sub">выручка − комиссия − логистика</div></div>
+  <div class="card kpi" title="Как графа «Продажа» в отчётах реализации WB: продажи минус возвраты по цене продажи"><div class="k-label">Выручка</div><div class="k-value"><?= money($rev) ?></div><div class="k-sub"><?= num_ru($t['sales_qty']) ?> продаж · <?= num_ru($t['returns_qty']) ?> возвр.</div></div>
+  <div class="card kpi"><div class="k-label">Придёт от WB за товар</div><div class="k-value"><?= money($t['turnover']) ?></div><div class="k-sub">как «К перечислению за товар» − логистика в отчётах WB</div></div>
   <div class="card kpi"><div class="k-label">Себестоимость</div><div class="k-value"><?= money($t['cost']) ?></div><div class="k-sub"><?= $pct($t['cost']) ?> выручки</div></div>
   <div class="card kpi"><div class="k-label">Налог<?= $t['vat'] ? ' и НДС' : '' ?></div><div class="k-value"><?= money($t['tax'] + $t['vat']) ?></div><div class="k-sub"><?= num_ru($settings['tax'], 1) ?>%<?= $settings['vat'] ? ' + НДС ' . num_ru($settings['vat'], 0) . '%' : '' ?></div></div>
   <div class="card kpi"><div class="k-label">Реклама</div><div class="k-value"><?= money($t['ads']) ?></div><div class="k-sub">ДРР <?= $pct($t['ads']) ?></div></div>
@@ -57,6 +57,7 @@ $cls = static fn(float $v) => $v < 0 ? 'neg' : 'pos';
       <div class="card-title">Куда уходит выручка</div>
       <?php
       $parts = [
+          '+ Компенсация скидки WB (СПП)' => -$t['spp_comp'],
           'Комиссия WB и эквайринг' => $t['commission'] + $t['acquiring'],
           'Логистика' => $t['logistics'],
           'Хранение, приёмка, штрафы, удержания' => $t['wb_other'],
@@ -72,9 +73,10 @@ $cls = static fn(float $v) => $v < 0 ? 'neg' : 'pos';
         <?php foreach ($parts as $label => $v): if (abs($v) < 0.5 && $label !== 'Чистая прибыль') continue; ?>
           <div class="bd-row <?= $label === 'Чистая прибыль' ? 'bd-total' : '' ?>">
             <span class="bd-label"><?= e($label) ?></span>
-            <span class="bd-bar"><i class="<?= $v < 0 ? 'neg' : '' ?>" style="width:<?= $rev > 0 ? min(100, round(abs($v) / $rev * 100, 1)) : 0 ?>%"></i></span>
-            <b class="<?= $label === 'Чистая прибыль' ? $cls($v) : '' ?>"><?= money($v) ?></b>
-            <span class="muted small bd-pct"><?= $pct($v) ?></span>
+            <?php $inc = $label[0] === '+'; ?>
+            <span class="bd-bar"><i class="<?= $inc ? 'inc' : ($v < 0 ? 'neg' : '') ?>" style="width:<?= $rev > 0 ? min(100, round(abs($v) / $rev * 100, 1)) : 0 ?>%"></i></span>
+            <b class="<?= $label === 'Чистая прибыль' ? $cls($v) : ($inc ? 'pos' : '') ?>"><?= $inc ? '+' . money(-$v) : money($v) ?></b>
+            <span class="muted small bd-pct"><?= $pct($inc ? -$v : $v) ?></span>
           </div>
         <?php endforeach; ?>
       </div>

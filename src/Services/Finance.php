@@ -43,7 +43,7 @@ final class Finance
 
     /** Показатели (порядок — как в ОПИУ). */
     public const METRICS = ['sales', 'returns', 'revenue', 'sales_qty', 'deliveries', 'back_deliveries', 'returns_qty', 'defect_qty', 'lost_qty',
-        'defect_comp', 'lost_comp', 'commission', 'acquiring', 'logistics', 'loyalty', 'turnover', 'storage', 'acceptance', 'penalty', 'deduction',
+        'defect_comp', 'lost_comp', 'spp_comp', 'commission', 'acquiring', 'logistics', 'loyalty', 'turnover', 'storage', 'acceptance', 'penalty', 'deduction',
         'additional', 'wb_other', 'cost', 'tax_base', 'tax', 'vat', 'ads', 'exp_sku', 'exp_period', 'pay_calc', 'profit'];
 
     public const LABELS = [
@@ -58,6 +58,7 @@ final class Finance
         'lost_qty'        => 'Потерянный товар, компенсированный WB',
         'defect_comp'     => 'Компенсация брака от WB',
         'lost_comp'       => 'Компенсация потерянного товара от WB',
+        'spp_comp'        => 'Компенсация скидки WB (СПП)',
         'commission'      => 'Комиссия WB',
         'acquiring'       => 'Эквайринг',
         'logistics'       => 'Логистика',
@@ -114,16 +115,25 @@ final class Finance
         $dup = max(1, $dup);
         $m = [];
 
-        // Продажи (CR) и возвраты (CP)
-        $m['sales'] = $doc === 'возврат' ? 0.0 : (in_array($op, self::COMPENSATION, true) ? $forPay : (in_array($op, self::SALE_OPS, true) ? $rpwd : 0.0));
-        if ($doc === 'возврат') {
-            $m['returns'] = in_array($op, self::COMPENSATION, true) ? $forPay : (in_array($op, self::RETURN_OPS, true) ? $rpwd : 0.0);
-        } else {
-            $m['returns'] = $op === 'возврат' ? $rpwd : 0.0;
-        }
+        // Продажи (CR) и возвраты (CP) — по цене продажи WB (retail_amount), как графа «Продажа» в отчётах WB.
+        // Разница с ценой продавца (retail_price_withdisc) — скидка WB покупателю (СПП), её WB компенсирует продавцу.
+        // $p — цена товара, $c — сумма компенсации (компенсации WB тоже входят в «Продажу» по retail_amount).
+        $isComp = in_array($op, self::COMPENSATION, true);
+        $sale = static fn(float $p, float $c): float => $doc === 'возврат' ? 0.0 : ($isComp ? $c : (in_array($op, self::SALE_OPS, true) ? $p : 0.0));
+        $ret = static fn(float $p, float $c): float => $doc === 'возврат'
+            ? ($isComp ? $c : (in_array($op, self::RETURN_OPS, true) ? $p : 0.0))
+            : ($op === 'возврат' ? $p : 0.0);
+        $sellerSale = $sale($rpwd, $forPay);
+        $sellerReturn = $ret($rpwd, $forPay);
+        $isSale = $sellerSale > 0;
+        $isReturn = $sellerReturn > 0;
+        $m['sales'] = $sale($retail, $retail);
+        $m['returns'] = $ret($retail, $retail);
         $m['revenue'] = $m['sales'] - $m['returns'];
+        $m['spp_comp'] = $sellerSale - $sellerReturn - $m['revenue'];
 
-        // Комиссия WB (CU) и эквайринг — со знаком документа, так что Выручка − Комиссия − Эквайринг = к перечислению
+        // Комиссия WB (CU) и эквайринг — от цены продавца, со знаком документа:
+        // Выручка + Компенсация СПП − Комиссия − Эквайринг = к перечислению
         $m['commission'] = in_array($op, self::NO_COMMISSION, true) ? 0.0 : $sign * ($rpwd - $forPay - $acq);
         $m['acquiring'] = ($sign ?: 1) * $acq;
         $m['logistics'] = (float) $r['delivery_service'];
@@ -136,8 +146,8 @@ final class Finance
         $m['returns_qty'] = ($doc === 'возврат' && $op === 'возврат') ? 1 : 0;
         $m['defect_qty'] = in_array($op, self::DEFECT, true) ? $sign / $dup : 0.0;
         $m['lost_qty'] = in_array($op, self::LOST, true) ? (float) $sign : 0.0;
-        $m['defect_comp'] = $m['defect_qty'] > 0 ? $m['sales'] : 0.0;
-        $m['lost_comp'] = $m['lost_qty'] > 0 ? $m['sales'] : 0.0;
+        $m['defect_comp'] = $m['defect_qty'] > 0 ? $sellerSale : 0.0;
+        $m['lost_comp'] = $m['lost_qty'] > 0 ? $sellerSale : 0.0;
 
         // Удержания WB (DC)
         $m['storage'] = (float) $r['paid_storage'];
@@ -148,7 +158,7 @@ final class Finance
 
         // Налоговая база (DT), НДС (EA), налог (DB)
         $comp = $m['defect_qty'] + $m['lost_qty'];
-        $base = $m['sales'] > 0 ? $retail : ($m['returns'] > 0 ? -$retail : ($comp > 0 ? $forPay : ($comp < 0 ? -$forPay : 0.0)));
+        $base = $isSale ? $retail : ($isReturn ? -$retail : ($comp > 0 ? $forPay : ($comp < 0 ? -$forPay : 0.0)));
         $m['tax_base'] = $base;
         $m['vat'] = $vatRate > 0 ? $base / (1 + $vatRate / 100) * ($vatRate / 100) : 0.0;
         $m['tax'] = ($base - $m['vat']) * $taxRate / 100;
@@ -159,9 +169,9 @@ final class Finance
             $m['cost'] = 0.0;
         } elseif (in_array($op, self::DEFECT, true)) {
             $m['cost'] = ($doc === 'возврат' ? -1 : 1) * $cost / $dup;
-        } elseif ($m['returns'] > 0) {
+        } elseif ($isReturn) {
             $m['cost'] = -$cost * $qty;
-        } elseif ($m['sales'] > 0) {
+        } elseif ($isSale) {
             $m['cost'] = $cost * $qty;
         } else {
             $m['cost'] = 0.0;
@@ -352,7 +362,7 @@ final class Finance
     /** Итоговые показатели. Для товара хранение берётся из отчёта о платном хранении. */
     private static function finalize(array &$m, bool $sku = false): void
     {
-        $m['turnover'] = $m['revenue'] - $m['commission'] - $m['acquiring'] - $m['logistics'] - $m['loyalty'];
+        $m['turnover'] = $m['revenue'] + $m['spp_comp'] - $m['commission'] - $m['acquiring'] - $m['logistics'] - $m['loyalty'];
         if ($sku) {
             $m['storage'] = $m['storage_sku'] ?? $m['storage'];
         }

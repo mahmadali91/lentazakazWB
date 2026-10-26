@@ -209,7 +209,7 @@ final class FinanceController
 
     private function exportSku(array $skus, array $ctx): never
     {
-        $cols = ['sales_qty', 'deliveries', 'back_deliveries', 'returns_qty', 'defect_qty', 'lost_qty', 'revenue', 'commission', 'acquiring', 'logistics',
+        $cols = ['sales_qty', 'deliveries', 'back_deliveries', 'returns_qty', 'defect_qty', 'lost_qty', 'revenue', 'spp_comp', 'commission', 'acquiring', 'logistics',
             'loyalty', 'turnover', 'cost', 'storage', 'acceptance', 'penalty', 'tax', 'vat', 'ads', 'exp_sku', 'profit'];
         $this->csvStart('pribyl_po_tovaram_' . $ctx['from'] . '_' . $ctx['to']);
         $out = fopen('php://output', 'w');

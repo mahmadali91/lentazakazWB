@@ -22,7 +22,7 @@ $thumb = static function ($nm) use ($photos) {
   <div class="table-wrap">
     <table class="table fin-table sku-table">
       <thead><tr>
-        <th class="sticky">Товар</th><th class="num">Прибыль</th><th class="num">Маржа</th><th>ABC</th><th class="num">Продаж</th><th class="num">Возвр.</th><th class="num">Выручка</th><th class="num">Комиссия и эквайринг</th>
+        <th class="sticky">Товар</th><th class="num">Прибыль</th><th class="num">Маржа</th><th>ABC</th><th class="num">Продаж</th><th class="num">Возвр.</th><th class="num">Выручка</th><th class="num" title="Комиссия WB и эквайринг за вычетом компенсации скидки WB (СПП)">Комиссия и эквайринг</th>
         <th class="num">Логистика</th><th class="num">Придёт от WB</th><th class="num">Себест.</th><th class="num">Хранение</th><th class="num">Налог</th>
         <th class="num">Реклама</th><th class="num">Прочее</th>
       </tr></thead>
@@ -36,7 +36,7 @@ $thumb = static function ($nm) use ($photos) {
           <td class="num"><?= num_ru($s['sales_qty']) ?></td>
           <td class="num"><?= num_ru($s['returns_qty']) ?></td>
           <td class="num"><?= num_ru($s['revenue']) ?></td>
-          <td class="num"><?= num_ru($s['commission'] + $s['acquiring']) ?></td>
+          <td class="num"><?= num_ru($s['commission'] + $s['acquiring'] - $s['spp_comp']) ?></td>
           <td class="num"><?= num_ru($s['logistics']) ?></td>
           <td class="num"><?= num_ru($s['turnover']) ?></td>
           <td class="num <?= $s['cost'] == 0 && $s['revenue'] > 0 ? 'warn' : '' ?>" <?= $s['cost'] == 0 && $s['revenue'] > 0 ? 'title="Себестоимость не указана"' : '' ?>><?= num_ru($s['cost']) ?></td>
@@ -54,7 +54,7 @@ $thumb = static function ($nm) use ($photos) {
         <td class="num b <?= $cls($res['total']['profit']) ?>"><?= num_ru($res['total']['profit']) ?></td>
         <td class="num"><?= $res['total']['margin'] !== null ? num_ru($res['total']['margin'], 1) . '%' : '—' ?></td><td></td>
         <td class="num"><?= num_ru($res['total']['sales_qty']) ?></td><td class="num"><?= num_ru($res['total']['returns_qty']) ?></td>
-        <td class="num"><?= num_ru($res['total']['revenue']) ?></td><td class="num"><?= num_ru($res['total']['commission'] + $res['total']['acquiring']) ?></td>
+        <td class="num"><?= num_ru($res['total']['revenue']) ?></td><td class="num"><?= num_ru($res['total']['commission'] + $res['total']['acquiring'] - $res['total']['spp_comp']) ?></td>
         <td class="num"><?= num_ru($res['total']['logistics']) ?></td><td class="num"><?= num_ru($res['total']['turnover']) ?></td>
         <td class="num"><?= num_ru($res['total']['cost']) ?></td><td class="num"><?= num_ru($res['total']['storage']) ?></td>
         <td class="num"><?= num_ru($res['total']['tax']) ?></td><td class="num"><?= num_ru($res['total']['ads']) ?></td>
@@ -77,7 +77,7 @@ $thumb = static function ($nm) use ($photos) {
         <span class="fin-card-profit"><b class="<?= $cls($s['profit']) ?>"><?= money($s['profit']) ?></b><span class="muted small"><?= $s['margin'] !== null ? num_ru($s['margin'], 0) . '%' : '' ?> <span class="abc abc-<?= $s['abc_rev'] ?>"><?= $s['abc_rev'] ?></span><span class="abc abc-<?= $s['abc_profit'] ?>"><?= $s['abc_profit'] ?></span></span></span>
       </summary>
       <div class="kv-list">
-        <?php foreach (['revenue' => 'Выручка', 'commission' => '− Комиссия WB', 'acquiring' => '− Эквайринг', 'logistics' => '− Логистика', 'turnover' => '= Придёт от WB',
+        <?php foreach (['revenue' => 'Выручка', 'spp_comp' => '+ Компенсация СПП', 'commission' => '− Комиссия WB', 'acquiring' => '− Эквайринг', 'logistics' => '− Логистика', 'turnover' => '= Придёт от WB',
                        'cost' => '− Себестоимость', 'storage' => '− Хранение', 'tax' => '− Налог', 'vat' => '− НДС', 'ads' => '− Реклама', 'acceptance' => '− Приёмка',
                        'penalty' => '− Штрафы', 'exp_sku' => '− Доп. затраты', 'profit' => '= Чистая прибыль'] as $k => $label):
             if (abs($s[$k]) < 0.5 && !in_array($k, ['revenue', 'turnover', 'profit', 'cost'], true)) continue; ?>

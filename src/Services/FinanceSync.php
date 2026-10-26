@@ -33,6 +33,19 @@ final class FinanceSync
         return json_decode((string) ($this->store[$column] ?? ''), true) ?: [];
     }
 
+    /**
+     * Как часто проверять список отчётов: с понедельника по среду, пока нет отчёта за прошлую неделю, — раз в час
+     * (WB открывает новый отчёт в API в разное время после формирования), иначе — раз в 6 часов.
+     */
+    private function listEvery(int $storeId): int
+    {
+        if ((int) date('N') > 3) {
+            return self::LIST_EVERY;
+        }
+        $last = DB::value('SELECT MAX(date_to) FROM wb_reports WHERE store_id = ?', [$storeId]);
+        return $last !== null && $last < date('Y-m-d', strtotime('last sunday')) ? 3600 : self::LIST_EVERY;
+    }
+
     private function save(string $column, array $state, string $nextColumn, int $seconds, ?string $okColumn = null): void
     {
         $sql = "UPDATE stores SET $column = ?, $nextColumn = ?" . ($okColumn ? ", $okColumn = NOW()" : '') . ' WHERE id = ?';
@@ -72,7 +85,7 @@ final class FinanceSync
         $storeId = (int) $this->store['id'];
 
         // 1. Список отчётов: при подключении — за всю историю, дальше раз в 6 часов за последние 5 недель
-        if (empty($state['listed']) || (int) $state['listed'] < time() - self::LIST_EVERY) {
+        if (empty($state['listed']) || (int) $state['listed'] < time() - $this->listEvery($storeId)) {
             $from = empty($state['history_done']) ? $this->historyFrom($state) : date('Y-m-d', time() - 35 * 86400);
             $offset = (int) ($state['list_offset'] ?? 0);
             $list = $this->wb->salesReports($from, date('Y-m-d'), $offset);
@@ -98,7 +111,7 @@ final class FinanceSync
         // 2. Детализация: по одному запросу в минуту, от старых отчётов к новым
         $rep = DB::one('SELECT * FROM wb_reports WHERE store_id = ? AND detail_done = 0 ORDER BY date_from, report_id LIMIT 1', [$storeId]);
         if (!$rep) {
-            $this->save('fin_state', $state, 'fin_next_at', max(61, (int) $state['listed'] + self::LIST_EVERY - time()), 'fin_ok_at');
+            $this->save('fin_state', $state, 'fin_next_at', max(61, (int) $state['listed'] + $this->listEvery($storeId) - time()), 'fin_ok_at');
             return 0;
         }
         $rows = $this->wb->salesReportRows((int) $rep['report_id'], (int) $rep['rrd_cursor'], self::ROWS_LIMIT);
