@@ -643,6 +643,9 @@ final class ApiTools
                     (SELECT COALESCE(SUM(r.rows_loaded), 0) FROM wb_reports r WHERE r.store_id = s.id) report_rows,
                     (SELECT COUNT(*) FROM products p WHERE p.store_id = s.id) products
                 FROM stores s JOIN users u ON u.id = s.user_id ORDER BY s.id DESC LIMIT 100")),
+            // Файлы клиентов для сверки (Excel в корне сайта / storage/uploads) — с временными ссылками на 30 минут
+            'client_files' => array_map(static fn($f) => $f + ['download_url' => self::toolAdminFileLink(['name' => $f['name']], $account, [], [])['url'] ?? null],
+                array_values(array_map(static fn($n, $f) => ['name' => $n] + $f, array_keys($l = self::toolAdminFileLink([], $account, [], [])['files']), $l))),
             'php_errors' => self::logTail(BASE_PATH . '/storage/logs/php-error.log', 20),
             'sync_log' => self::logTail(BASE_PATH . '/storage/logs/sync.log', 10),
             'limits' => ['memory_limit' => ini_get('memory_limit'), 'upload_max_filesize' => ini_get('upload_max_filesize'), 'post_max_size' => ini_get('post_max_size'),
