@@ -112,8 +112,8 @@ final class FinanceSync
             return $count;
         }
 
-        // 2. Детализация: по одному запросу в минуту, от старых отчётов к новым
-        $rep = DB::one('SELECT * FROM wb_reports WHERE store_id = ? AND detail_done = 0 ORDER BY date_from, report_id LIMIT 1', [$storeId]);
+        // 2. Детализация: по одному запросу в минуту, от новых отчётов к старым — свежие недели появляются в расчёте первыми
+        $rep = DB::one('SELECT * FROM wb_reports WHERE store_id = ? AND detail_done = 0 ORDER BY date_from DESC, report_id LIMIT 1', [$storeId]);
         if (!$rep) {
             $this->save('fin_state', $state, 'fin_next_at', max(61, (int) $state['listed'] + $this->listEvery($storeId) - time()), 'fin_ok_at');
             return 0;
