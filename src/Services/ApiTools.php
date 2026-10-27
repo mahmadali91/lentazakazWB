@@ -346,7 +346,7 @@ final class ApiTools
                 r.storage, r.acceptance, r.penalty, r.deduction, r.additional, r.bank_payment, r.rows_loaded, r.detail_done,
                 (SELECT ROUND(SUM(CASE WHEN rr.doc_type = \'Продажа\' THEN rr.for_pay WHEN rr.doc_type = \'Возврат\' THEN -rr.for_pay ELSE 0 END)
                     - SUM(rr.delivery_service + rr.paid_storage + rr.paid_acceptance + rr.penalty + rr.deduction + rr.additional)
-                    - SUM(CASE WHEN rr.doc_type = \'Возврат\' THEN -1 ELSE 1 END * (rr.cashback_amount + rr.cashback_comm - rr.cashback_discount)), 2)
+                    - SUM(CASE WHEN rr.doc_type = \'Возврат\' THEN -1 ELSE 1 END * (rr.cashback_amount + rr.cashback_comm)), 2)
                  FROM wb_report_rows rr WHERE rr.store_id = r.store_id AND rr.report_id = r.report_id) bank_payment_calc
             FROM wb_reports r WHERE r.store_id IN (' . implode(',', $storeIds) . ") ORDER BY r.date_from DESC, r.report_id DESC LIMIT $limit");
         foreach ($rows as &$r) {

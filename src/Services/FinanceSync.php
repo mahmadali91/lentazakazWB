@@ -196,7 +196,7 @@ final class FinanceSync
             !empty($r['createDate']) ? substr((string) $r['createDate'], 0, 10) : null, (int) ($r['reportType'] ?? 1),
             mb_substr((string) ($r['currency'] ?? ''), 0, 8), $n('retailAmountSum'), $n('forPaySum'), $n('deliveryServiceSum'),
             $n('paidStorageSum'), $n('paidAcceptanceSum'), $n('deductionSum'), $n('penaltySum'), $n('additionalPaymentSum'),
-            round(self::num($r['cashbackAmountSum'] ?? 0) + self::num($r['cashbackCommissionChangeSum'] ?? 0) - self::num($r['cashbackDiscountSum'] ?? 0), 2),
+            round(self::num($r['cashbackAmountSum'] ?? 0) + self::num($r['cashbackCommissionChangeSum'] ?? 0), 2),
             $n('bankPaymentSum'),
         ]);
     }

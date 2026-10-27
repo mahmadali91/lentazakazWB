@@ -302,7 +302,7 @@ final class FinanceController
             $reports = DB::all('SELECT r.*, s.name store_name,
                     (SELECT SUM(CASE WHEN rr.doc_type = \'Продажа\' THEN rr.for_pay WHEN rr.doc_type = \'Возврат\' THEN -rr.for_pay ELSE 0 END)
                         - SUM(rr.delivery_service + rr.paid_storage + rr.paid_acceptance + rr.penalty + rr.deduction + rr.additional)
-                        - SUM(CASE WHEN rr.doc_type = \'Возврат\' THEN -1 ELSE 1 END * (rr.cashback_amount + rr.cashback_comm - rr.cashback_discount))
+                        - SUM(CASE WHEN rr.doc_type = \'Возврат\' THEN -1 ELSE 1 END * (rr.cashback_amount + rr.cashback_comm))
                      FROM wb_report_rows rr WHERE rr.store_id = r.store_id AND rr.report_id = r.report_id) pay_calc
                 FROM wb_reports r JOIN stores s ON s.id = r.store_id
                 WHERE r.store_id IN (' . implode(',', $ctx['storeIds']) . ') ORDER BY r.date_from DESC, r.report_id DESC LIMIT 300');

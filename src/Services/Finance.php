@@ -148,7 +148,9 @@ final class Finance
         $m['commission'] = in_array($op, self::NO_COMMISSION, true) ? 0.0 : $sign * ($rpwd - $forPay - $acq);
         $m['acquiring'] = ($sign ?: 1) * $acq;
         $m['logistics'] = (float) $r['delivery_service'];
-        $m['loyalty'] = ($doc === 'возврат' ? -1 : 1) * ((float) $r['cashback_amount'] + (float) $r['cashback_comm'] - (float) $r['cashback_discount']);
+        // Программа лояльности: удержанные баллы и стоимость участия. «Компенсацию скидки по программе лояльности»
+        // WB в «Итого к оплате» не включает (bank_payment отчёта сходится без неё) — в расчёт не берём.
+        $m['loyalty'] = ($doc === 'возврат' ? -1 : 1) * ((float) $r['cashback_amount'] + (float) $r['cashback_comm']);
 
         // Количества (DD, CV, DO, DF, CX, CY)
         // Строка может быть суммой однотипных строк отчёта (_n — сколько их, _qty — сумма max(1, |quantity|))
