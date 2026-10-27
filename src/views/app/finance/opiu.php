@@ -64,7 +64,7 @@ $fmt = static function ($v, string $type): string {
       <thead>
         <tr>
           <th class="sticky">Показатель</th>
-          <?php foreach ($cols as $key => $c): ?><th class="num"><?= e(Finance::periodLabel($key, $group)) ?></th><?php endforeach; ?>
+          <?php foreach ($cols as $key => $c): ?><th class="num"><?= e(Finance::periodLabel($key, $group, $res['ends'][$key] ?? null)) ?></th><?php endforeach; ?>
           <?php if (count($cols) > 1): ?><th class="num">Итого</th><?php endif; ?>
         </tr>
       </thead>

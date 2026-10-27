@@ -367,6 +367,8 @@ final class Finance
             self::add($res['total'], $m);
             $res['periods'][$pk] ??= self::empty();
             self::add($res['periods'][$pk], $m);
+            // Фактический конец периода (отчёты WB на стыке месяцев короче недели) — для подписей столбцов
+            $res['ends'][$pk] = max($res['ends'][$pk] ?? '', (string) ($r['date_to'] ?? ''));
             if ($withSku && $nm) {
                 $res['bySku'][$nm] ??= self::empty() + ['nm_id' => $nm, 'store_id' => (int) $r['store_id'], 'vendor_code' => '', 'subject' => '', 'brand' => '', 'title' => '', 'ts' => []];
                 $sku = &$res['bySku'][$nm];
@@ -394,7 +396,7 @@ final class Finance
         $perRow = "'" . implode("','", array_unique(array_merge(self::DEFECT, self::LOST))) . "'";
         $queries = $withSrid ? ["SELECT r.* FROM wb_report_rows r WHERE $where ORDER BY r.date_from, r.rrd_id"] : [
             "SELECT r.* FROM wb_report_rows r WHERE $where AND LOWER(COALESCE(r.oper, '')) IN ($perRow) ORDER BY r.date_from, r.rrd_id",
-            "SELECT r.store_id, r.date_from, r.nm_id, r.doc_type, r.oper, r.bonus_type, NULL AS shk_id, NULL AS srid,
+            "SELECT r.store_id, r.date_from, MAX(r.date_to) date_to, r.nm_id, r.doc_type, r.oper, r.bonus_type, NULL AS shk_id, NULL AS srid,
                 MAX(r.vendor_code) vendor_code, MAX(r.subject) subject, MAX(r.brand) brand, MAX(r.title) title,
                 COUNT(*) _n, SUM(GREATEST(1, ABS(COALESCE(r.quantity, 0)))) _qty, SUM(r.quantity) quantity,
                 SUM(r.retail_price_disc) retail_price_disc, SUM(r.for_pay) for_pay, SUM(r.acquiring_fee) acquiring_fee, SUM(r.retail_amount) retail_amount,
@@ -680,7 +682,8 @@ final class Finance
         };
     }
 
-    public static function periodLabel(string $key, string $group): string
+    /** Подпись периода; $end — фактический конец отчёта WB (из расчёта, ключ ends). */
+    public static function periodLabel(string $key, string $group, ?string $end = null): string
     {
         static $months = ['январь', 'февраль', 'март', 'апрель', 'май', 'июнь', 'июль', 'август', 'сентябрь', 'октябрь', 'ноябрь', 'декабрь'];
         if ($group === 'month') {
@@ -690,7 +693,8 @@ final class Finance
             return 'Итого';
         }
         $t = strtotime($key);
-        return date('d.m', $t) . '–' . date('d.m.y', $t + 6 * 86400);
+        $end = $end !== null && $end !== '' ? strtotime($end) : $t + 6 * 86400;
+        return date('d.m', $t) . '–' . date('d.m.y', $end);
     }
 
     // ------------------------------------------------------------------ ABC-анализ
