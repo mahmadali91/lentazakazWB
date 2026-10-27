@@ -43,6 +43,20 @@ final class Plans
         return $plan;
     }
 
+    /** Названия публичных тарифов, где есть возможность: «A» и «B» — для подсказок «доступно на тарифах…». */
+    public static function namesWith(string $feature): string
+    {
+        $names = [];
+        foreach (self::all() as $p) {
+            $on = $feature === 'finance' ? self::finance($p) : !empty($p[$feature]);
+            if ($on && ($p['public'] ?? true) && ($p['price'] ?? 0) > 0) {
+                $names[] = '«' . $p['name'] . '»';
+            }
+        }
+        $last = array_pop($names);
+        return $names ? implode(', ', $names) . ' и ' . $last : (string) $last;
+    }
+
     /** Доступен ли раздел «Финансы» (отчёты реализации WB). */
     public static function finance(array $plan): bool
     {

@@ -255,7 +255,7 @@ final class ApiTools
     private static function requireProfit(array $plan): void
     {
         if (!Plans::finance($plan)) {
-            throw new \InvalidArgumentException('Раздел «Финансы» доступен на тарифах «Про» и «Бизнес».');
+            throw new \InvalidArgumentException('Раздел «Финансы» доступен на тарифах ' . Plans::namesWith('finance') . '.');
         }
     }
 

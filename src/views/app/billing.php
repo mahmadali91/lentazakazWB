@@ -65,7 +65,7 @@ if ($canAddon): $left = Plans::maxExtra($plan) - $plan['extra_stores']; $days = 
     $selStores = $current ? (int) $plan['stores'] : (int) $p['stores']; ?>
     <div class="card plan <?= !empty($p['popular']) ? 'popular' : '' ?>" <?= $maxExtra ? 'data-base="' . (int) $p['price'] . '" data-store="' . (int) $p['store_price'] . '" data-incl="' . (int) $p['stores'] . '"' : '' ?>>
       <?php if (!empty($p['popular'])): ?><span class="badge badge-accent tag">Популярный</span><?php endif; ?>
-      <div class="plan-name"><?= e($p['name']) ?> <?= $current ? '<span class="badge badge-buyout">Ваш тариф</span>' : '' ?></div>
+      <div class="plan-name"><?= e($p['name']) ?></div>
       <?php if (!empty($p['tagline'])): ?><div class="plan-tagline"><?= e($p['tagline']) ?></div><?php endif; ?>
       <div class="plan-price">
         <?php foreach (Plans::PERIODS as $m => $d): ?>
@@ -86,6 +86,7 @@ if ($canAddon): $left = Plans::maxExtra($plan) - $plan['extra_stores']; $days = 
             </select>
           </label>
         <?php endif; ?>
+        <?php if ($current): ?><div class="plan-current"><span class="badge badge-buyout">Ваш тариф</span></div><?php endif; ?>
         <button class="btn btn-block <?= !empty($p['popular']) ? '' : 'btn-ghost' ?>" <?= $payEnabled ? '' : 'disabled' ?>><?= $current ? 'Продлить' : 'Оплатить' ?></button>
       </form>
     </div>

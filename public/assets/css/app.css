@@ -207,6 +207,8 @@ table.table { width: 100%; border-collapse: collapse; font-size: 14px; }
 .plan .tag { position: absolute; top: -12px; left: 50%; transform: translateX(-50%); }
 .plan-name { font-weight: 700; font-size: 18px; }
 .plan-tagline { font-size: 13px; color: var(--muted); margin-top: 4px; line-height: 1.35; min-height: 2.7em; }
+.plan-current { text-align: center; margin-bottom: 8px; }
+@media (min-width: 900px) { .plans:has(.plan:nth-child(4)) .plan-name { min-height: 2.6em; } }
 .plan-price { font-size: 34px; font-weight: 800; letter-spacing: -.02em; margin: 6px 0 2px; }
 .plan-price small { font-size: 15px; font-weight: 500; color: var(--muted); }
 .plan ul { list-style: none; padding: 0; margin: 16px 0 22px; flex: 1; }

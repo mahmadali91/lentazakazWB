@@ -16,7 +16,7 @@ $events = array_filter(explode(',', (string) $user['tg_events']));
         <p class="muted">Уведомления в Telegram скоро заработают — администратор подключает бота.</p>
       <?php endif; ?>
     <?php elseif (empty($plan['telegram'])): ?>
-      <p class="muted">Уведомления доступны на тарифах «Про» и «Бизнес».</p>
+      <p class="muted">Уведомления доступны на тарифах <?= e(App\Services\Plans::namesWith('telegram')) ?>.</p>
       <a class="btn" href="/app/billing">Выбрать тариф</a>
     <?php elseif ($user['tg_chat_id']): ?>
       <div class="alert alert-success">Telegram подключён. Уведомления приходят в чат с ботом @<?= e(config('telegram.bot_username')) ?>.</div>
@@ -90,7 +90,7 @@ $events = array_filter(explode(',', (string) $user['tg_events']));
         <div class="hint small muted" style="margin-top:8px">Вход: <?= e(url('/login')) ?> — логин и пароль, которые вы задали.</div>
       </form>
     <?php elseif ($teamLimit === 0): ?>
-      <a class="btn btn-sm" href="/app/billing">Доступно на тарифах «Про» и «Бизнес»</a>
+      <a class="btn btn-sm" href="/app/billing">Доступно на тарифе <?= e(App\Services\Plans::namesWith('team')) ?></a>
     <?php else: ?>
       <p class="small muted">Лимит сотрудников по тарифу исчерпан. <a href="/app/billing">Увеличить</a></p>
     <?php endif; ?>

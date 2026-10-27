@@ -96,7 +96,7 @@ final class FeedController
         $account = Auth::account();
         $plan = Plans::forUser($account);
         if (empty($plan['export'])) {
-            flash('error', 'Выгрузка в Excel доступна на тарифах «Про» и «Бизнес».');
+            flash('error', 'Выгрузка в Excel доступна на ' . (str_contains(Plans::namesWith('export'), ' и ') ? 'тарифах ' : 'тарифе ') . Plans::namesWith('export') . '.');
             redirect('/app/billing');
         }
         [$storeIds, $f] = self::filters($account, $plan);
