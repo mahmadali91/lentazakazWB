@@ -169,9 +169,12 @@ CREATE TABLE IF NOT EXISTS payments (
   amount      DECIMAL(10,2) NOT NULL,
   provider    VARCHAR(20) NOT NULL DEFAULT 'yookassa',
   provider_id VARCHAR(64) NULL,
+  card        VARCHAR(80) NULL,            -- способ оплаты: «Visa •••• 4242, до 12/28», «СБП»…
   status      VARCHAR(20) NOT NULL DEFAULT 'pending', -- pending | succeeded | canceled | manual
   created_at  DATETIME NOT NULL,
   paid_at     DATETIME NULL,
+  period_from DATETIME NULL,               -- за какой период оплачено (с)
+  period_to   DATETIME NULL,               -- за какой период оплачено (по)
   PRIMARY KEY (id),
   KEY idx_payments_user (user_id),
   KEY idx_payments_provider (provider_id),

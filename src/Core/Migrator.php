@@ -9,7 +9,7 @@ namespace App\Core;
  */
 final class Migrator
 {
-    public const VERSION = 19;
+    public const VERSION = 20;
 
     private const AD_PAYMENTS_DDL = "CREATE TABLE IF NOT EXISTS wb_ad_payments (
         store_id    INT UNSIGNED NOT NULL,
@@ -80,6 +80,12 @@ final class Migrator
                 // Пересчёт сумм в рубли по курсу ЦБ: настройка кабинета и кэш курсов
                 self::addColumn('users', 'show_rub', 'TINYINT(1) NOT NULL DEFAULT 0');
                 self::run(self::FX_DDL);
+            }
+            if ($version < 20) {
+                // История платежей в кабинете: способ оплаты (карта) и период, за который оплачено
+                self::addColumn('payments', 'card', 'VARCHAR(80) NULL AFTER provider_id');
+                self::addColumn('payments', 'period_from', 'DATETIME NULL AFTER paid_at');
+                self::addColumn('payments', 'period_to', 'DATETIME NULL AFTER period_from');
             }
             if ($version < 19) {
                 // Пополнения рекламного счёта (картой / по счёту / с баланса) — реклама считается по деньгам, а не по затратам кабинета

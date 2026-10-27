@@ -644,3 +644,5 @@ span.p-thumb img { width: 100%; height: 100%; object-fit: cover; display: block;
 
 .acc-switch { margin: 0 0 14px; display: flex; flex-direction: column; gap: 4px; }
 .acc-switch select { width: 100%; padding: 8px 10px; font-size: 13px; }
+.refund-terms { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 6px; font-size: 14px; }
+.refund-terms b { font-weight: 600; }

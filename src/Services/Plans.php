@@ -123,11 +123,12 @@ final class Plans
     /**
      * Продлевает/меняет тариф. Если продлевается тот же действующий тариф — срок добавляется к текущему.
      */
-    public static function activate(int $userId, string $code, int $months, int $extra = 0): void
+    /** @return array{0: string, 1: string}|null период действия оплаты [с, по] */
+    public static function activate(int $userId, string $code, int $months, int $extra = 0): ?array
     {
         $user = DB::one('SELECT plan_code, plan_expires_at FROM users WHERE id = ?', [$userId]);
         if (!$user) {
-            return;
+            return null;
         }
         $from = time();
         if ($user['plan_code'] === $code && $user['plan_expires_at'] && strtotime($user['plan_expires_at']) > time()) {
@@ -136,5 +137,6 @@ final class Plans
         $expires = date('Y-m-d H:i:s', strtotime("+$months month", $from));
         $extra = min(max(0, $extra), self::maxExtra(self::get($code)));
         DB::exec('UPDATE users SET plan_code = ?, plan_expires_at = ?, extra_stores = ? WHERE id = ?', [$code, $expires, $extra, $userId]);
+        return [date('Y-m-d H:i:s', $from), $expires];
     }
 }

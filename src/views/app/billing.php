@@ -106,27 +106,48 @@ if ($canAddon): $left = Plans::maxExtra($plan) - $plan['extra_stores']; $days = 
   <?php endforeach; ?>
 </div>
 
-<?php if ($payments): ?>
-  <div class="card">
-    <div class="card-title">История платежей</div>
+<div class="card" id="payments" style="margin-bottom:20px">
+  <div class="card-title"><?= icon('card', 18) ?> История платежей</div>
+  <?php if (!$payments): ?>
+    <p class="muted small">Платежей пока нет. После оплаты здесь появятся дата, оплаченный период, сумма и карта.</p>
+  <?php else: ?>
     <div class="table-wrap">
       <table class="table">
-        <thead><tr><th>Дата</th><th>Тариф</th><th>Срок</th><th>Сумма</th><th>Статус</th></tr></thead>
+        <thead><tr><th>Дата</th><th>Что оплачено</th><th>Период действия</th><th class="num">Сумма</th><th>Способ оплаты</th><th>Статус</th></tr></thead>
         <tbody>
-          <?php foreach ($payments as $pay): ?>
+          <?php foreach ($payments as $pay): $kind = $pay['kind'] ?? 'plan'; ?>
             <tr>
-              <td><?= date_ru($pay['created_at']) ?></td>
-              <td><?= e(Plans::get($pay['plan_code'])['name']) ?><?= ($pay['kind'] ?? 'plan') === 'stores' ? ' · доп. магазин ×' . (int) $pay['extra_stores'] : ((int) ($pay['extra_stores'] ?? 0) ? ' + ' . (int) $pay['extra_stores'] . ' доп. маг.' : '') ?></td>
-              <td><?= (int) $pay['months'] ? (int) $pay['months'] . ' мес' : '—' ?></td>
-              <td><?= rub($pay['amount']) ?></td>
+              <td class="nowrap"><?= date_ru($pay['paid_at'] ?: $pay['created_at']) ?></td>
+              <td>
+                <?= $kind === 'transfer' ? 'Передача аккаунта' : e(Plans::get($pay['plan_code'])['name']) ?>
+                <div class="small muted"><?php
+                  if ($kind === 'stores') {
+                      echo 'доп. магазин ×' . (int) $pay['extra_stores'] . ' до конца подписки';
+                  } elseif ($kind === 'transfer') {
+                      echo 'новый аккаунт на тарифе «' . e(Plans::get($pay['plan_code'])['name']) . '»';
+                  } else {
+                      echo (int) $pay['months'] ? (int) $pay['months'] . ' мес' : 'тариф';
+                      echo (int) ($pay['extra_stores'] ?? 0) ? ' + ' . (int) $pay['extra_stores'] . ' доп. маг.' : '';
+                  }
+                ?></div>
+              </td>
+              <td class="nowrap"><?= $pay['period_from'] ? date_ru($pay['period_from'], false) . ' — ' . ($pay['period_to'] ? date_ru($pay['period_to'], false) : '…') : '<span class="muted">—</span>' ?></td>
+              <td class="num nowrap"><?= rub($pay['amount']) ?></td>
+              <td class="small"><?= $pay['card'] ? e($pay['card']) : '<span class="muted">—</span>' ?></td>
               <td><span class="badge <?= $pay['status'] === 'succeeded' || $pay['status'] === 'manual' ? 'badge-buyout' : ($pay['status'] === 'canceled' ? 'badge-cancel' : 'badge-created') ?>"><?= e($statusNames[$pay['status']] ?? $pay['status']) ?></span></td>
             </tr>
           <?php endforeach; ?>
         </tbody>
       </table>
     </div>
-  </div>
-<?php endif; ?>
+    <p class="small muted" style="margin-top:8px">Номер карты ЮKassa передаёт только маской — полные данные карты сервис не хранит и не видит.</p>
+  <?php endif; ?>
+</div>
+
+<div class="card" id="refund">
+  <div class="card-title"><?= icon('shield', 18) ?> Условия возврата</div>
+  <?= App\Core\View::partial('partials/refund_terms') ?>
+</div>
 
 <script>
   document.getElementById('periodSeg').addEventListener('click', function (e) {

@@ -125,19 +125,28 @@ final class YooKassa
         $paid = $status === 'succeeded' && !empty($remote['paid']);
         $sameAmount = isset($remote['amount']['value']) && abs((float) $remote['amount']['value'] - (float) $payment['amount']) < 0.01;
         if ($paid && $sameAmount) {
-            $updated = DB::exec("UPDATE payments SET status = 'succeeded', paid_at = ? WHERE id = ? AND status <> 'succeeded'", [now(), $payment['id']]);
+            $updated = DB::exec("UPDATE payments SET status = 'succeeded', paid_at = ?, card = ? WHERE id = ? AND status <> 'succeeded'",
+                [now(), self::methodLabel($remote['payment_method'] ?? []), $payment['id']]);
             if ($updated) {
+                // Период, за который оплачено: тариф — от текущего срока (или сегодня) на N месяцев;
+                // доп. магазины — до конца подписки; передача аккаунта — месяц тарифа нового владельца
+                $period = null;
                 if (($payment['kind'] ?? 'plan') === 'stores') {
                     Plans::addStores((int) $payment['user_id'], (int) $payment['extra_stores']);
+                    $period = [now(), (string) DB::value('SELECT plan_expires_at FROM users WHERE id = ?', [$payment['user_id']])];
                 } elseif (($payment['kind'] ?? 'plan') === 'transfer') {
                     try {
                         AccountTransfer::execute((int) $payment['user_id'], (int) $payment['ref_id']);
+                        $period = [now(), date('Y-m-d H:i:s', strtotime('+1 month'))];
                     } catch (\Throwable $e) {
                         // Оплата прошла, но передать не удалось (сотрудника удалили и т. п.) — разбирается администратор
                         log_message('payments', 'transfer after payment ' . $payment['id'] . ' failed: ' . $e->getMessage());
                     }
                 } else {
-                    Plans::activate((int) $payment['user_id'], $payment['plan_code'], (int) $payment['months'], (int) ($payment['extra_stores'] ?? 0));
+                    $period = Plans::activate((int) $payment['user_id'], $payment['plan_code'], (int) $payment['months'], (int) ($payment['extra_stores'] ?? 0));
+                }
+                if ($period) {
+                    DB::exec('UPDATE payments SET period_from = ?, period_to = ? WHERE id = ?', [$period[0], $period[1] ?: null, $payment['id']]);
                 }
             }
             return 'succeeded';
@@ -147,5 +156,24 @@ final class YooKassa
             return 'canceled';
         }
         return 'pending';
+    }
+
+    /**
+     * Способ оплаты для истории платежей: «Visa •••• 4242, до 12/28», «СБП», «ЮMoney»… (номер карты ЮKassa отдаёт только маской).
+     */
+    public static function methodLabel(array $pm): ?string
+    {
+        $type = (string) ($pm['type'] ?? '');
+        if ($type === 'bank_card' && !empty($pm['card'])) {
+            $c = $pm['card'];
+            $label = trim(($c['card_type'] ?? 'Карта') . ' •••• ' . ($c['last4'] ?? ''));
+            if (!empty($c['expiry_month']) && !empty($c['expiry_year'])) {
+                $label .= ', до ' . $c['expiry_month'] . '/' . substr((string) $c['expiry_year'], -2);
+            }
+            return mb_substr($label, 0, 80);
+        }
+        $names = ['sbp' => 'СБП', 'yoo_money' => 'ЮMoney', 'sberbank' => 'SberPay', 'tinkoff_bank' => 'T-Pay', 'mobile_balance' => 'Баланс телефона',
+            'b2b_sberbank' => 'Сбербанк Бизнес Онлайн', 'qiwi' => 'QIWI', 'cash' => 'Наличные'];
+        return $type !== '' ? mb_substr($names[$type] ?? (string) ($pm['title'] ?? $type), 0, 80) : null;
     }
 }

@@ -178,7 +178,7 @@ final class AdminController
             'created_at'      => now(),
         ]);
         if ($planCode !== 'free' && $days > 0) {
-            $this->manualPayment($id, $planCode, 0, (float) str_replace(',', '.', (string) input('amount', '0')));
+            $this->manualPayment($id, $planCode, 0, (float) str_replace(',', '.', (string) input('amount', '0')), [now(), date('Y-m-d 23:59:59', strtotime("+$days day"))]);
         }
         flash('success', "Клиент создан. Данные для входа: " . url('/login') . " · логин «{$login}» · пароль, который вы указали.");
         redirect('/admin/users/' . $id);
@@ -207,7 +207,7 @@ final class AdminController
             'phone'           => array_key_exists('phone', $_POST) ? (normalize_phone((string) input('phone', '')) ?? $target['phone']) : $target['phone'],
         ], 'id = :id', ['id' => $target['id']]);
         if ($plan !== 'free' && $expiresAt && ($target['plan_code'] !== $plan || $target['plan_expires_at'] !== $expiresAt)) {
-            $this->manualPayment((int) $target['id'], $plan, 0, (float) str_replace(',', '.', (string) input('amount', '0')));
+            $this->manualPayment((int) $target['id'], $plan, 0, (float) str_replace(',', '.', (string) input('amount', '0')), [now(), $expiresAt]);
         }
         flash('success', 'Клиент ' . $target['email'] . ' обновлён.');
         redirect($this->back('/admin/users/' . $target['id']));
@@ -232,7 +232,8 @@ final class AdminController
         }
         $expires = date('Y-m-d 23:59:59', strtotime('+' . (int) $m[1] . ($m[2] === 'd' ? ' day' : ' month'), $from));
         DB::exec('UPDATE users SET plan_code = ?, plan_expires_at = ? WHERE id = ?', [$plan, $expires, $target['id']]);
-        $this->manualPayment((int) $target['id'], $plan, $m[2] === 'm' ? (int) $m[1] : 0, (float) str_replace(',', '.', (string) input('amount', '0')));
+        $this->manualPayment((int) $target['id'], $plan, $m[2] === 'm' ? (int) $m[1] : 0, (float) str_replace(',', '.', (string) input('amount', '0')),
+            [date('Y-m-d H:i:s', $from), $expires]);
         flash('success', $target['email'] . ': тариф «' . Plans::get($plan)['name'] . '» до ' . date_ru($expires, false) . '.');
         redirect($this->back('/admin/users/' . $target['id']));
     }
@@ -244,17 +245,20 @@ final class AdminController
         return preg_match('#^/admin(/[A-Za-z0-9/_?=&%.-]*)?$#', $back) ? $back : $default;
     }
 
-    private function manualPayment(int $userId, string $plan, int $months, float $amount): void
+    /** @param array{0: string, 1: ?string}|null $period за какой период выдан тариф [с, по] */
+    private function manualPayment(int $userId, string $plan, int $months, float $amount, ?array $period = null): void
     {
         DB::insert('payments', [
-            'user_id'    => $userId,
-            'plan_code'  => $plan,
-            'months'     => max(0, min(255, $months)),
-            'amount'     => max(0, $amount),
-            'provider'   => 'admin',
-            'status'     => 'manual',
-            'created_at' => now(),
-            'paid_at'    => now(),
+            'user_id'     => $userId,
+            'plan_code'   => $plan,
+            'months'      => max(0, min(255, $months)),
+            'amount'      => max(0, $amount),
+            'provider'    => 'admin',
+            'status'      => 'manual',
+            'created_at'  => now(),
+            'paid_at'     => now(),
+            'period_from' => $period[0] ?? null,
+            'period_to'   => $period[1] ?? null,
         ]);
     }
 
