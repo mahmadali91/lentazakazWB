@@ -26,7 +26,34 @@
   </div>
 
   <div class="card">
+    <div class="card-title"><?= icon('send', 18) ?> MAX-бот для уведомлений</div>
+    <?php if ($maxBot): ?>
+      <?php if ($maxBot['ok']): ?>
+        <div class="alert alert-success">Бот работает: <b><?= e($maxBot['name']) ?></b> — <a href="https://max.ru/<?= e($maxBot['username'] ?: $maxUser) ?>" target="_blank" rel="noopener"><?= e($maxBot['username'] ?: $maxUser) ?></a>. Подключили уведомления: <?= (int) $maxBot['linked'] ?>.</div>
+      <?php else: ?>
+        <div class="alert alert-error">MAX не отвечает на этот токен (GET /me): <?= e($maxBot['error']) ?>.</div>
+      <?php endif; ?>
+    <?php else: ?>
+      <div class="alert alert-warn">Бот MAX не подключён. Telegram в России работает со сбоями — рекомендуем подключить MAX.</div>
+    <?php endif; ?>
+    <div class="field"><label for="mu">Ник бота</label><input id="mu" type="text" name="max_username" value="<?= e($maxUser) ?>" placeholder="wblinkoz_bot" autocapitalize="none"></div>
+    <div class="field"><label for="mt">Токен бота</label><input id="mt" type="password" name="max_token" value="" autocomplete="off" placeholder="<?= $maxHasToken ? 'сохранён — оставьте пустым, чтобы не менять' : 'токен из платформы MAX для партнёров' ?>">
+      <div class="hint">Платформа MAX для партнёров → Чат-боты → ⋮ → Настройки. Хранится в базе в зашифрованном виде. При сохранении проверяем его в MAX (GET /me), ник подставится автоматически.</div></div>
+    <?php if ($maxHasToken): ?><label class="check"><input type="checkbox" name="max_remove" value="1"> отключить бота MAX (удалить токен)</label><?php endif; ?>
+    <details class="inline" style="margin-top:10px">
+      <summary>Как создать бота MAX</summary>
+      <ol class="small">
+        <li>Зарегистрируйте организацию или ИП на <a href="https://business.max.ru" target="_blank" rel="noopener">платформе MAX для партнёров</a> и пройдите верификацию.</li>
+        <li>«Чат-боты» → «Создать бота»: название (например «WBLinkoz») и ник. После модерации бот станет доступен.</li>
+        <li>Откройте настройки бота, скопируйте токен и вставьте выше.</li>
+        <li>Клиенты подключают уведомления в «Настройки» → «Уведомления о заказах»: кнопка «Подключить MAX» откроет бота, после «Начать» аккаунт привяжется в течение минуты.</li>
+      </ol>
+    </details>
+  </div>
+
+  <div class="card">
     <div class="card-title"><?= icon('send', 18) ?> Telegram-бот для уведомлений</div>
+    <p class="muted small">Telegram в России работает со сбоями: с хостинга может не быть связи с api.telegram.org. Клиенты видят пометку и подключают MAX.</p>
     <?php if ($bot): ?>
       <?php if ($bot['ok']): ?>
         <div class="alert alert-success">Бот работает: <b><?= e($bot['name']) ?></b> — <a href="https://t.me/<?= e($bot['username']) ?>" target="_blank" rel="noopener">@<?= e($bot['username']) ?></a>. Подключили уведомления: <?= (int) $bot['linked'] ?>.
@@ -46,7 +73,7 @@
       <ol class="small">
         <li>Откройте <a href="https://t.me/BotFather" target="_blank" rel="noopener">@BotFather</a> → <span class="kbd">/newbot</span>, задайте название (например «WBLinkoz бот») и имя, оканчивающееся на <code>bot</code>.</li>
         <li>Скопируйте токен и вставьте выше. Имя бота подставится автоматически.</li>
-        <li>Клиенты подключают уведомления в «Настройки» → «Уведомления в Telegram»: кнопка откроет бота, после «Запустить» аккаунт привяжется в течение минуты (бот опрашивается вместе с cron).</li>
+        <li>Клиенты подключают уведомления в «Настройки» → «Уведомления о заказах»: кнопка откроет бота, после «Запустить» аккаунт привяжется в течение минуты (бот опрашивается вместе с cron).</li>
       </ol>
     </details>
   </div>

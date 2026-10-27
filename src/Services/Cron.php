@@ -48,6 +48,7 @@ final class Cron
             }
 
             Telegram::processUpdates();
+            Max::processUpdates();
             Telegram::notifyOrders();
             self::remindExpiring();
             self::cleanup();

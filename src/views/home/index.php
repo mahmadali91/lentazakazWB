@@ -7,7 +7,7 @@ $shot = static fn(string $name, string $alt, string $cls = '') => '<figure class
   <div class="container">
     <span class="badge badge-accent"><?= icon('zap', 14) ?> Данные из официального API Wildberries</span>
     <h1 style="margin-top:18px">Все заказы <span>Wildberries</span> и чистая прибыль в одном окне</h1>
-    <p class="lead">Живая лента заказов по всем схемам — FBO, FBS, DBS, DBW, самовывоз и B2B. Заказы и выкупы считаются так же, как в кабинете WB, а прибыль — по отчётам реализации. Уведомления в Telegram, несколько магазинов и валют.</p>
+    <p class="lead">Живая лента заказов по всем схемам — FBO, FBS, DBS, DBW, самовывоз и B2B. Заказы и выкупы считаются так же, как в кабинете WB, а прибыль — по отчётам реализации. Уведомления в MAX и Telegram, несколько магазинов и валют.</p>
     <div class="row">
       <a class="btn btn-lg" href="/register">Начать бесплатно</a>
       <a class="btn btn-lg btn-ghost" href="#screens">Посмотреть сервис</a>
@@ -100,7 +100,7 @@ $shot = static fn(string $name, string $alt, string $cls = '') => '<figure class
       <div class="card feature"><div class="ico"><?= icon('check') ?></div><h3>Цифры как в кабинете WB</h3><p>Заказы — по ленте WB без отменённых, выкупы — по дате выкупа минус возвраты. Количество совпадает с кабинетом.</p></div>
       <div class="card feature"><div class="ico"><?= icon('box') ?></div><h3>Все схемы работы</h3><p>FBO, FBS, DBS, DBW, самовывоз и B2B. Схема определяется автоматически по сборочным заданиям.</p></div>
       <div class="card feature"><div class="ico"><?= icon('chart') ?></div><h3>Чистая прибыль</h3><p>Оценка прибыли по выкупам в ленте и точный расчёт по отчётам реализации: ОПИУ, товары, ABC-анализ.</p></div>
-      <div class="card feature"><div class="ico"><?= icon('send') ?></div><h3>Уведомления в Telegram</h3><p>Новый заказ — сразу сообщение с товаром, ценой, складом и городом. Можно включить выкупы, отмены и возвраты.</p></div>
+      <div class="card feature"><div class="ico"><?= icon('send') ?></div><h3>Уведомления в MAX и Telegram</h3><p>Новый заказ — сразу сообщение с товаром, ценой, складом и городом. Можно включить выкупы, отмены и возвраты.</p></div>
       <div class="card feature"><div class="ico"><?= icon('store') ?></div><h3>Магазины и валюты</h3><p>Подключите несколько кабинетов WB — российских, киргизских, казахстанских. Суммы показываются в валюте кабинета.</p></div>
       <div class="card feature"><div class="ico"><?= icon('users') ?></div><h3>Команда</h3><p>Добавьте менеджеров с отдельным входом: они видят ленту, но не тариф и оплату.</p></div>
       <div class="card feature"><div class="ico"><?= icon('download') ?></div><h3>Выгрузка в Excel</h3><p>Заказы за любой период, прибыль по товарам и детализация отчётов — в файл для Excel в один клик.</p></div>

@@ -591,6 +591,14 @@ final class ApiTools
             $tg['pending_updates'] = $hook['result']['pending_update_count'] ?? null;
         }
         $tg['linked_users'] = (int) DB::value('SELECT COUNT(*) FROM users WHERE tg_chat_id IS NOT NULL');
+        $max = ['configured' => Max::enabled(), 'username' => (string) config('max.bot_username', '')];
+        if ($max['configured']) {
+            $me = Max::api('GET', '/me');
+            $max['token_ok'] = $me !== null;
+            $max['error'] = $me === null ? Max::$lastError : null;
+        }
+        $max['linked_users'] = (int) DB::value('SELECT COUNT(*) FROM users WHERE max_user_id IS NOT NULL');
+        $max['recent_errors'] = self::logTail(BASE_PATH . '/storage/logs/max.log', 5);
         $tg['updates_offset'] = DB::setting('tg_offset');
         $logFile = BASE_PATH . '/storage/logs/telegram.log';
         $tg['recent_errors'] = is_file($logFile) ? array_slice(file($logFile, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES) ?: [], -5) : [];
@@ -598,6 +606,7 @@ final class ApiTools
             'version' => app_version(),
             'cron_last_run' => $cron, 'cron_ok' => $cron !== null && strtotime($cron) > time() - 600,
             'telegram' => $tg,
+            'max' => $max,
             'counts' => self::typed(DB::one('SELECT (SELECT COUNT(*) FROM users WHERE owner_id IS NULL) clients, (SELECT COUNT(*) FROM users WHERE owner_id IS NULL AND plan_code <> \'free\' AND plan_expires_at > NOW()) paid,
                 (SELECT COUNT(*) FROM stores) stores, (SELECT COUNT(*) FROM orders) orders, (SELECT COUNT(*) FROM wb_reports) finance_reports')),
             'payments_30d' => self::typed(DB::one("SELECT COUNT(*) count, COALESCE(SUM(amount), 0) amount FROM payments WHERE status = 'succeeded' AND created_at >= ?", [date('Y-m-d H:i:s', time() - 30 * 86400)])),

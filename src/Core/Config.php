@@ -44,6 +44,8 @@ final class Config
         'app.support_telegram'  => false,
         'telegram.bot_username' => false,
         'telegram.bot_token'    => true,  // true — хранится зашифрованным
+        'max.bot_username'      => false,
+        'max.bot_token'         => true,
         'yookassa.shop_id'      => false,
         'yookassa.secret_key'   => true,
         'yookassa.send_receipt' => false,

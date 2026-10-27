@@ -127,6 +127,8 @@ $r->post('/app/settings/telegram', [SettingsController::class, 'telegram']);
 $r->post('/app/settings/currency', [SettingsController::class, 'currency']);
 $r->post('/app/settings/telegram/unlink', [SettingsController::class, 'telegramUnlink']);
 $r->post('/app/settings/telegram/test', [SettingsController::class, 'telegramTest']);
+$r->post('/app/settings/max/unlink', [SettingsController::class, 'maxUnlink']);
+$r->post('/app/settings/max/test', [SettingsController::class, 'maxTest']);
 $r->post('/app/team', [SettingsController::class, 'teamAdd']);
 $r->post('/app/team/{id}/password', [SettingsController::class, 'teamPassword']);
 $r->post('/app/team/{id}/delete', [SettingsController::class, 'teamDelete']);

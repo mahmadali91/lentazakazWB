@@ -9,7 +9,7 @@ namespace App\Core;
  */
 final class Migrator
 {
-    public const VERSION = 16;
+    public const VERSION = 17;
 
     public static function ensure(): void
     {
@@ -45,6 +45,11 @@ final class Migrator
                 // Пересчёт сумм в рубли по курсу ЦБ: настройка кабинета и кэш курсов
                 self::addColumn('users', 'show_rub', 'TINYINT(1) NOT NULL DEFAULT 0');
                 self::run(self::FX_DDL);
+            }
+            if ($version < 17) {
+                // Уведомления в мессенджер MAX (Telegram в России работает со сбоями)
+                self::addColumn('users', 'max_user_id', 'BIGINT NULL AFTER tg_link_code');
+                self::addColumn('users', 'max_link_code', 'VARCHAR(32) NULL AFTER max_user_id');
             }
             if ($version < 16) {
                 // Тариф для менеджеров: клиенту-сотруднику — доступ только к своим магазинам; уведомления Telegram по выбранным магазинам

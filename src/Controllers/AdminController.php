@@ -8,6 +8,7 @@ use App\Core\Config;
 use App\Core\Crypto;
 use App\Core\DB;
 use App\Services\Cron;
+use App\Services\Max;
 use App\Services\Plans;
 use App\Services\Telegram;
 use App\Services\YooKassa;
@@ -329,7 +330,16 @@ final class AdminController
             $bot = ['ok' => $me !== null, 'error' => $me === null ? Telegram::$lastError : '', 'username' => $me['result']['username'] ?? null, 'name' => $me['result']['first_name'] ?? null,
                 'webhook' => $hook['result']['url'] ?? '', 'linked' => (int) DB::value('SELECT COUNT(*) FROM users WHERE tg_chat_id IS NOT NULL')];
         }
+        $maxBot = null;
+        if (Max::enabled()) {
+            $me = Max::api('GET', '/me');
+            $maxBot = ['ok' => $me !== null, 'error' => $me === null ? Max::$lastError : '', 'username' => $me['username'] ?? null, 'name' => $me['first_name'] ?? $me['name'] ?? null,
+                'linked' => (int) DB::value('SELECT COUNT(*) FROM users WHERE max_user_id IS NOT NULL')];
+        }
         return view('admin/settings', $this->base($admin) + [
+            'maxBot'   => $maxBot,
+            'maxUser'  => (string) config('max.bot_username', ''),
+            'maxHasToken' => (string) config('max.bot_token', '') !== '',
             'title'    => 'Настройки сервиса',
             'tab'      => 'settings',
             'phone'    => (string) config('app.support_phone', ''),
@@ -422,6 +432,29 @@ final class AdminController
         }
         DB::setSetting('cfg.telegram.bot_username', $username);
 
+        // Бот MAX: токен из платформы MAX для партнёров (зашифрован; пусто — не менять), ник бота — из GET /me
+        $maxToken = trim((string) input('max_token', ''));
+        $maxUser = preg_replace('~^(https?://)?max\.ru/~i', '', ltrim(trim((string) input('max_username', '')), '@'));
+        if ($maxToken !== '') {
+            Config::set('max.bot_token', $maxToken);
+            Config::set('max.bot_username', $maxUser !== '' ? $maxUser : 'bot');
+            $me = Max::api('GET', '/me');
+            if ($me === null) {
+                flash('error', 'MAX не принял токен бота (GET /me): ' . Max::$lastError . '. Скопируйте токен в платформе MAX → Чат-боты → Настройки.');
+                redirect('/admin/settings');
+            }
+            $maxUser = (string) (($me['username'] ?? '') ?: $maxUser);
+            DB::setSetting('cfg.max.bot_token', Crypto::encrypt($maxToken));
+        }
+        if ($maxUser !== '' && !preg_match('/^[A-Za-z0-9_.-]{3,64}$/', $maxUser)) {
+            flash('error', 'Ник бота MAX — латиница, цифры, _ . -, например wblinkoz_bot.');
+            redirect('/admin/settings');
+        }
+        DB::setSetting('cfg.max.bot_username', $maxUser);
+        if (!empty($_POST['max_remove'])) {
+            DB::setSetting('cfg.max.bot_token', '');
+        }
+
         // ЮKassa: shopId, секретный ключ (зашифрован; пусто — не менять), чек 54-ФЗ и ставка НДС
         $shop = preg_replace('/\D/', '', (string) input('yk_shop_id', ''));
         $secret = trim((string) input('yk_secret', ''));
@@ -442,7 +475,7 @@ final class AdminController
         if (!empty($_POST['bot_remove'])) {
             DB::setSetting('cfg.telegram.bot_token', '');
         }
-        flash('success', 'Настройки сохранены.' . ($token !== '' ? ' Бот @' . $username . ' подключён.' : ''));
+        flash('success', 'Настройки сохранены.' . ($token !== '' ? ' Бот Telegram @' . $username . ' подключён.' : '') . ($maxToken !== '' ? ' Бот MAX ' . $maxUser . ' подключён.' : ''));
         redirect('/admin/settings');
     }
 

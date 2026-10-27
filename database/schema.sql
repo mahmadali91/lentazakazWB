@@ -17,6 +17,8 @@ CREATE TABLE IF NOT EXISTS users (
   extra_stores    SMALLINT UNSIGNED NOT NULL DEFAULT 0, -- доп. магазины к тарифу, оплаченные до конца подписки
   tg_chat_id      BIGINT NULL,
   tg_link_code    VARCHAR(32) NULL,
+  max_user_id     BIGINT NULL,                -- MAX: id пользователя в диалоге с ботом
+  max_link_code   VARCHAR(32) NULL,           -- MAX: код привязки из ссылки max.ru/<бот>?start=<код>
   tg_events       VARCHAR(64) NOT NULL DEFAULT 'created',
   tg_stores       TEXT NULL,                  -- JSON: id магазинов для уведомлений Telegram (NULL — все доступные)
   owner_id        INT UNSIGNED NULL,          -- сотрудник: id владельца кабинета

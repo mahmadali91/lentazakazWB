@@ -20,54 +20,91 @@ $accessFields = static function (?array $access, array $stores, string $uid): st
 <div class="topbar"><h1>Настройки</h1></div>
 
 <div class="stack page-narrow">
-  <div class="card">
-    <div class="card-title"><?= icon('send', 18) ?> Уведомления в Telegram</div>
-    <?php if (!$tgEnabled): ?>
+  <div class="card" id="notify">
+    <div class="card-title"><?= icon('send', 18) ?> Уведомления о заказах — MAX и Telegram</div>
+    <?php if (!$tgEnabled && !$maxEnabled): ?>
       <?php if (($user['role'] ?? '') === 'admin'): ?>
-        <p class="muted">Бот ещё не подключён. Вставьте токен бота в <a href="/admin/settings">Админ-панель → Настройки сервиса</a> — после этого здесь появится кнопка «Подключить Telegram».</p>
+        <p class="muted">Боты ещё не подключены. Вставьте токены ботов MAX и Telegram в <a href="/admin/settings">Админ-панель → Настройки сервиса</a> — после этого здесь появятся кнопки подключения.</p>
       <?php else: ?>
-        <p class="muted">Уведомления в Telegram скоро заработают — администратор подключает бота.</p>
+        <p class="muted">Уведомления скоро заработают — администратор подключает ботов.</p>
       <?php endif; ?>
     <?php elseif (empty($plan['telegram'])): ?>
-      <p class="muted">Уведомления доступны на тарифах <?= e(App\Services\Plans::namesWith('telegram')) ?>.</p>
+      <p class="muted">Уведомления о заказах в MAX и Telegram доступны на тарифах <?= e(App\Services\Plans::namesWith('telegram')) ?>.</p>
       <a class="btn" href="/app/billing">Выбрать тариф</a>
-    <?php elseif ($user['tg_chat_id']): ?>
-      <div class="alert alert-success">Telegram подключён. Уведомления приходят в чат с ботом @<?= e(config('telegram.bot_username')) ?>.</div>
-      <form method="post" action="/app/settings/telegram">
-        <?= csrf_field() ?>
-        <label>О чём уведомлять</label>
-        <div class="row" style="margin-bottom:14px">
-          <?php foreach (SettingsController::TG_EVENTS as $k => $label): ?>
-            <label class="check"><input type="checkbox" name="events[]" value="<?= $k ?>" <?= in_array($k, $events, true) ? 'checked' : '' ?>> <?= e($label) ?></label>
-          <?php endforeach; ?>
+    <?php else: ?>
+      <p class="muted small">Бот присылает сообщение о каждом новом заказе: товар, цена, склад, город. Можно включить выкупы, отмены и возвраты. Подключите один или оба мессенджера.</p>
+
+      <?php if ($maxEnabled): ?>
+        <div class="notify-ch">
+          <div class="notify-ch-head"><b>MAX</b> <span class="badge badge-buyout">рекомендуем</span></div>
+          <?php if ($user['max_user_id']): ?>
+            <div class="alert alert-success">MAX подключён — уведомления приходят в чат с ботом <?= e(config('max.bot_username')) ?>.</div>
+            <div class="row">
+              <form method="post" action="/app/settings/max/test"><?= csrf_field() ?><button class="btn btn-ghost btn-sm">Отправить тест</button></form>
+              <form method="post" action="/app/settings/max/unlink"><?= csrf_field() ?><button class="btn btn-danger btn-sm">Отключить</button></form>
+            </div>
+          <?php else: ?>
+            <ol class="tg-steps">
+              <li>Нажмите <b>«Подключить MAX»</b> — откроется бот в приложении или веб-версии MAX (<a href="https://web.max.ru" target="_blank" rel="noopener">web.max.ru</a>).</li>
+              <li>В чате с ботом нажмите <span class="kbd">Начать</span>.</li>
+              <li>Подождите до минуты и нажмите «Проверить подключение».</li>
+            </ol>
+            <div class="row">
+              <a class="btn" href="<?= e(App\Services\Max::linkUrl((string) $user['max_link_code'])) ?>" target="_blank" rel="noopener"><?= icon('send', 16) ?> Подключить MAX</a>
+              <a class="btn btn-ghost" href="/app/settings#notify">Проверить подключение</a>
+            </div>
+            <p class="small muted" style="margin-top:10px">Не открылось? Найдите в MAX бота <b><?= e(config('max.bot_username')) ?></b> и отправьте ему <code>/start <?= e($user['max_link_code']) ?></code> — код привязывает бота к вашему кабинету, не передавайте его другим.</p>
+          <?php endif; ?>
         </div>
-        <?php if (count($myStores) > 1): ?>
-          <input type="hidden" name="tg_stores_on" value="1">
-          <label>По каким магазинам</label>
+      <?php endif; ?>
+
+      <?php if ($tgEnabled): ?>
+        <div class="notify-ch">
+          <div class="notify-ch-head"><b>Telegram</b></div>
+          <div class="alert alert-warn small">Из-за ограничений и блокировок Telegram в России уведомления могут приходить с задержкой или не приходить. Для надёжности подключите MAX.</div>
+          <?php if ($user['tg_chat_id']): ?>
+            <div class="alert alert-success">Telegram подключён — уведомления приходят в чат с ботом @<?= e(config('telegram.bot_username')) ?>.</div>
+            <div class="row">
+              <form method="post" action="/app/settings/telegram/test"><?= csrf_field() ?><button class="btn btn-ghost btn-sm">Отправить тест</button></form>
+              <form method="post" action="/app/settings/telegram/unlink"><?= csrf_field() ?><button class="btn btn-danger btn-sm">Отключить</button></form>
+            </div>
+          <?php else: ?>
+            <ol class="tg-steps">
+              <li>Нажмите <b>«Подключить Telegram»</b> — откроется бот <a href="https://t.me/<?= e(config('telegram.bot_username')) ?>" target="_blank" rel="noopener">t.me/<?= e(config('telegram.bot_username')) ?></a> (на компьютере — в Telegram Desktop или веб-версии).</li>
+              <li>В чате с ботом нажмите <span class="kbd">Запустить</span> (Start).</li>
+              <li>Подождите до минуты и нажмите «Проверить подключение».</li>
+            </ol>
+            <div class="row">
+              <a class="btn btn-ghost" href="<?= e(Telegram::linkUrl((string) $user['tg_link_code'])) ?>" target="_blank" rel="noopener"><?= icon('send', 16) ?> Подключить Telegram</a>
+              <a class="btn btn-ghost" href="/app/settings#notify">Проверить подключение</a>
+            </div>
+            <p class="small muted" style="margin-top:10px">Не открылось? Найдите в Telegram <b>@<?= e(config('telegram.bot_username')) ?></b> и отправьте ему <code>/start <?= e($user['tg_link_code']) ?></code>.</p>
+          <?php endif; ?>
+        </div>
+      <?php endif; ?>
+
+      <?php if ($user['tg_chat_id'] || $user['max_user_id']): ?>
+        <form method="post" action="/app/settings/telegram" class="notify-ch">
+          <?= csrf_field() ?>
+          <label>О чём уведомлять</label>
           <div class="row" style="margin-bottom:14px">
-            <?php foreach ($myStores as $s): ?>
-              <label class="check"><input type="checkbox" name="tg_stores[]" value="<?= (int) $s['id'] ?>" <?= $tgStores === null || in_array((int) $s['id'], $tgStores, true) ? 'checked' : '' ?>> <?= e($s['name']) ?></label>
+            <?php foreach (SettingsController::TG_EVENTS as $k => $label): ?>
+              <label class="check"><input type="checkbox" name="events[]" value="<?= $k ?>" <?= in_array($k, $events, true) ? 'checked' : '' ?>> <?= e($label) ?></label>
             <?php endforeach; ?>
           </div>
-        <?php endif; ?>
-        <button class="btn btn-sm">Сохранить</button>
-      </form>
-      <div class="row" style="margin-top:14px">
-        <form method="post" action="/app/settings/telegram/test"><?= csrf_field() ?><button class="btn btn-ghost btn-sm">Отправить тест</button></form>
-        <form method="post" action="/app/settings/telegram/unlink"><?= csrf_field() ?><button class="btn btn-danger btn-sm">Отключить</button></form>
-      </div>
-    <?php else: ?>
-      <p>Бот <b>@<?= e(config('telegram.bot_username')) ?></b> присылает сообщение о каждом новом заказе: товар, цена, склад, город. Можно включить выкупы, отмены и возвраты.</p>
-      <ol class="tg-steps">
-        <li>Нажмите <b>«Подключить Telegram»</b> — откроется бот <a href="https://t.me/<?= e(config('telegram.bot_username')) ?>" target="_blank" rel="noopener">t.me/<?= e(config('telegram.bot_username')) ?></a> (на компьютере — в Telegram Desktop или веб-версии).</li>
-        <li>В чате с ботом нажмите <span class="kbd">Запустить</span> (Start).</li>
-        <li>Подождите до минуты и нажмите «Проверить подключение» — здесь появится «Telegram подключён».</li>
-      </ol>
-      <div class="row">
-        <a class="btn" href="<?= e(Telegram::linkUrl((string) $user['tg_link_code'])) ?>" target="_blank" rel="noopener"><?= icon('send', 16) ?> Подключить Telegram</a>
-        <a class="btn btn-ghost" href="/app/settings">Проверить подключение</a>
-      </div>
-      <p class="small muted" style="margin-top:12px">Не открылось? Найдите в Telegram <b>@<?= e(config('telegram.bot_username')) ?></b> и отправьте ему сообщение <code>/start <?= e($user['tg_link_code']) ?></code> — код привязывает бота именно к вашему кабинету, не передавайте его другим.</p>
+          <?php if (count($myStores) > 1): ?>
+            <input type="hidden" name="tg_stores_on" value="1">
+            <label>По каким магазинам</label>
+            <div class="row" style="margin-bottom:14px">
+              <?php foreach ($myStores as $s): ?>
+                <label class="check"><input type="checkbox" name="tg_stores[]" value="<?= (int) $s['id'] ?>" <?= $tgStores === null || in_array((int) $s['id'], $tgStores, true) ? 'checked' : '' ?>> <?= e($s['name']) ?></label>
+              <?php endforeach; ?>
+            </div>
+          <?php endif; ?>
+          <button class="btn btn-sm">Сохранить</button>
+          <span class="small muted">Настройки общие для MAX и Telegram.</span>
+        </form>
+      <?php endif; ?>
     <?php endif; ?>
   </div>
 

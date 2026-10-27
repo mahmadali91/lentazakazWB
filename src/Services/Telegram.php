@@ -124,8 +124,12 @@ final class Telegram
             $plan = Plans::forUser($list[0]);
             // Получатели: владелец кабинета и его сотрудники с подключённым Telegram — каждый по своим магазинам
             // (клиент менеджера — только по магазинам, к которым у него есть доступ) и по выбранным для уведомлений
-            $recipients = self::enabled() && !empty($plan['telegram'])
-                ? DB::all('SELECT id, owner_id, store_access, tg_chat_id, tg_events, tg_stores FROM users WHERE (id = ? OR owner_id = ?) AND tg_chat_id IS NOT NULL AND is_blocked = 0', [$ownerId, $ownerId])
+            // Каналы: Telegram и MAX (настройки событий и магазинов — общие)
+            $tgOn = self::enabled();
+            $maxOn = Max::enabled();
+            $recipients = ($tgOn || $maxOn) && !empty($plan['telegram'])
+                ? DB::all('SELECT id, owner_id, store_access, tg_chat_id, max_user_id, tg_events, tg_stores FROM users
+                    WHERE (id = ? OR owner_id = ?) AND (' . ($tgOn ? 'tg_chat_id IS NOT NULL' : '0') . ' OR ' . ($maxOn ? 'max_user_id IS NOT NULL' : '0') . ') AND is_blocked = 0', [$ownerId, $ownerId])
                 : [];
             foreach ($recipients as &$rcp) {
                 $rcp['stores'] = self::recipientStores($rcp);
@@ -147,7 +151,12 @@ final class Telegram
                 DB::exec('UPDATE orders SET notified_status = ? WHERE id = ?', [$o['status'], $o['id']]);
             }
             foreach ($recipients as $i => $rcp) {
-                self::sendBatch($rcp['tg_chat_id'], $messages[$i]);
+                if ($tgOn && $rcp['tg_chat_id']) {
+                    self::sendBatch($rcp['tg_chat_id'], $messages[$i]);
+                }
+                if ($maxOn && $rcp['max_user_id']) {
+                    self::sendBatch($rcp['max_user_id'], $messages[$i], [Max::class, 'send']);
+                }
             }
         }
     }
@@ -167,8 +176,9 @@ final class Telegram
     }
 
     /** Отправляет пачку уведомлений, укладываясь в лимит Telegram (4096 символов на сообщение). */
-    private static function sendBatch(int|string $chatId, array $messages): void
+    private static function sendBatch(int|string $chatId, array $messages, ?callable $send = null): void
     {
+        $send ??= [self::class, 'send'];
         if (!$messages) {
             return;
         }
@@ -180,13 +190,13 @@ final class Telegram
         $chunk = '';
         foreach ($messages as $m) {
             if (mb_strlen($chunk) + mb_strlen($m) > 3800) {
-                self::send($chatId, $chunk);
+                $send($chatId, $chunk);
                 $chunk = '';
             }
             $chunk .= ($chunk === '' ? '' : "\n\n") . $m;
         }
         if ($chunk !== '') {
-            self::send($chatId, $chunk);
+            $send($chatId, $chunk);
         }
     }
 

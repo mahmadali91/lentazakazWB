@@ -94,15 +94,15 @@ $cronStale = !$cronLast || strtotime($cronLast) < time() - 600;
       </div>
       <?php if (empty($plan['telegram'])): ?>
         <div class="card" style="background:var(--accent-soft);border-color:transparent">
-          <div class="card-title"><?= icon('send', 18) ?> Уведомления в Telegram</div>
+          <div class="card-title"><?= icon('send', 18) ?> Уведомления в MAX и Telegram</div>
           <p class="small muted">Получайте сообщение о каждом новом заказе. Доступно на тарифах <?= e(App\Services\Plans::namesWith('telegram')) ?>.</p>
           <a class="btn btn-sm" href="/app/billing">Выбрать тариф</a>
         </div>
-      <?php elseif (!$user['tg_chat_id'] && App\Services\Telegram::enabled()): ?>
+      <?php elseif (!$user['tg_chat_id'] && empty($user['max_user_id']) && (App\Services\Telegram::enabled() || App\Services\Max::enabled())): ?>
         <div class="card" style="background:var(--accent-soft);border-color:transparent">
-          <div class="card-title"><?= icon('send', 18) ?> Подключите Telegram</div>
-          <p class="small muted">Новые заказы будут приходить в Telegram, даже когда сайт закрыт.</p>
-          <a class="btn btn-sm" href="/app/settings">Подключить</a>
+          <div class="card-title"><?= icon('send', 18) ?> Подключите уведомления</div>
+          <p class="small muted">Новые заказы будут приходить в <?= App\Services\Max::enabled() ? 'MAX' . (App\Services\Telegram::enabled() ? ' или Telegram' : '') : 'Telegram' ?>, даже когда сайт закрыт.</p>
+          <a class="btn btn-sm" href="/app/settings#notify">Подключить</a>
         </div>
       <?php endif; ?>
     </div>

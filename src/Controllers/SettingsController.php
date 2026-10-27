@@ -5,6 +5,7 @@ namespace App\Controllers;
 
 use App\Core\Auth;
 use App\Core\DB;
+use App\Services\Max;
 use App\Services\Plans;
 use App\Services\StoreService;
 use App\Services\Telegram;
@@ -26,6 +27,11 @@ final class SettingsController
             DB::exec('UPDATE users SET tg_link_code = ? WHERE id = ?', [$code, $user['id']]);
             $user['tg_link_code'] = $code;
         }
+        if (Max::enabled() && !$user['max_user_id'] && !$user['max_link_code']) {
+            $code = random_code(9);
+            DB::exec('UPDATE users SET max_link_code = ? WHERE id = ?', [$code, $user['id']]);
+            $user['max_link_code'] = $code;
+        }
         $account = Auth::account();
         $plan = Plans::forUser($account);
         $visible = StoreService::visibleIds((int) $account['id'], $plan, $user);
@@ -39,6 +45,7 @@ final class SettingsController
             'allStores'=> Auth::isMember() ? [] : DB::all('SELECT id, name FROM stores WHERE user_id = ? ORDER BY id', [$user['id']]),
             'members'  => Auth::isMember() ? [] : DB::all('SELECT id, email, name, store_access, last_login_at, created_at FROM users WHERE owner_id = ? ORDER BY id', [$user['id']]),
             'tgEnabled'=> Telegram::enabled(),
+            'maxEnabled'=> Max::enabled(),
             'nav'      => 'settings',
         ], 'app');
     }
@@ -208,6 +215,25 @@ final class SettingsController
         $user = Auth::require();
         DB::exec('UPDATE users SET tg_chat_id = NULL, tg_link_code = NULL WHERE id = ?', [$user['id']]);
         flash('success', 'Telegram отключён.');
+        redirect('/app/settings');
+    }
+
+    public function maxUnlink(): never
+    {
+        $user = Auth::require();
+        DB::exec('UPDATE users SET max_user_id = NULL, max_link_code = NULL WHERE id = ?', [$user['id']]);
+        flash('success', 'MAX отключён.');
+        redirect('/app/settings');
+    }
+
+    public function maxTest(): never
+    {
+        $user = Auth::require();
+        if ($user['max_user_id'] && Max::send($user['max_user_id'], '🔔 Тестовое уведомление от <b>' . e(config('app.name')) . '</b>. Всё работает!')) {
+            flash('success', 'Тестовое сообщение отправлено в MAX.');
+        } else {
+            flash('error', 'Не удалось отправить сообщение в MAX' . (Max::$lastError !== '' ? ': ' . Max::$lastError : '') . '.');
+        }
         redirect('/app/settings');
     }
 
