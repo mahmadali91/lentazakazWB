@@ -194,6 +194,7 @@ final class AdminController
         DB::update('users', [
             'plan_code'       => $plan,
             'plan_expires_at' => $plan === 'free' ? null : $expiresAt,
+            'extra_stores'    => array_key_exists('extra_stores', $_POST) ? min(Plans::maxExtra(Plans::get($plan)), max(0, (int) input('extra_stores', 0))) : (int) ($target['extra_stores'] ?? 0),
             'is_blocked'      => $self ? 0 : (int) !empty($_POST['is_blocked']),
             'role'            => $self ? 'admin' : (!empty($_POST['is_admin']) ? 'admin' : 'user'),
             'note'            => array_key_exists('note', $_POST) ? (mb_substr((string) input('note', ''), 0, 500) ?: null) : $target['note'],

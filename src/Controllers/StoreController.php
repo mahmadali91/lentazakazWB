@@ -36,8 +36,10 @@ final class StoreController
         $plan = Plans::forUser($user);
         $count = (int) DB::value('SELECT COUNT(*) FROM stores WHERE user_id = ?', [$user['id']]);
         if ($count >= (int) $plan['stores']) {
-            flash('error', 'На тарифе «' . $plan['name'] . '» можно подключить ' . $plan['stores'] . ' ' . plural((int) $plan['stores'], 'магазин', 'магазина', 'магазинов') . '. Перейдите на тариф выше.');
-            redirect('/app/billing');
+            $canBuy = !empty($plan['store_price']) && $plan['expires_at'] && $plan['extra_stores'] < Plans::maxExtra($plan);
+            flash('error', 'На тарифе «' . $plan['name'] . '» можно подключить ' . $plan['stores'] . ' ' . plural((int) $plan['stores'], 'магазин', 'магазина', 'магазинов') . '. '
+                . ($canBuy ? 'Добавьте магазин к тарифу — ' . rub($plan['store_price']) . ' в месяц.' : 'Перейдите на тариф выше.'));
+            redirect('/app/billing' . ($canBuy ? '#add-store' : ''));
         }
         try {
             StoreService::create((int) $user['id'], (string) input('name', ''), (string) ($_POST['token'] ?? ''), StoreService::financeInput($_POST));

@@ -21,7 +21,7 @@ final class Cron
         try {
             DB::setSetting('cron_last_run', now());
 
-            $stores = DB::all('SELECT s.*, u.plan_code, u.plan_expires_at, u.is_blocked
+            $stores = DB::all('SELECT s.*, u.plan_code, u.plan_expires_at, u.extra_stores, u.is_blocked
                 FROM stores s JOIN users u ON u.id = s.user_id
                 WHERE s.is_active = 1 AND u.is_blocked = 0
                 ORDER BY COALESCE(LEAST(

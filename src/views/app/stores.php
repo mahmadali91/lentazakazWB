@@ -91,8 +91,10 @@ $canAdd = count($stores) < (int) $plan['stores'];
   <div class="card" id="add">
     <div class="card-title"><?= icon('plus', 18) ?> Подключить магазин WB</div>
     <?php if (!$canAdd): ?>
-      <p class="muted">На тарифе «<?= e($plan['name']) ?>» можно подключить <?= (int) $plan['stores'] ?> <?= plural((int) $plan['stores'], 'магазин', 'магазина', 'магазинов') ?>.</p>
-      <a class="btn" href="/app/billing">Увеличить лимит</a>
+      <?php $canBuy = !empty($plan['store_price']) && $plan['expires_at'] && $plan['extra_stores'] < App\Services\Plans::maxExtra($plan); ?>
+      <p class="muted">На тарифе «<?= e($plan['name']) ?>» подключено максимум магазинов: <?= (int) $plan['stores'] ?>.
+        <?= $canBuy ? 'Дополнительный магазин — ' . rub($plan['store_price']) . ' в месяц, оплата только за оставшийся срок подписки.' : '' ?></p>
+      <a class="btn" href="/app/billing<?= $canBuy ? '#add-store' : '' ?>"><?= $canBuy ? 'Добавить магазин' : 'Увеличить лимит' ?></a>
     <?php else: ?>
       <div class="guide" style="margin-bottom:18px">
         <ol>

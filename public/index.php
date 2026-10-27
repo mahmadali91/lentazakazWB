@@ -117,6 +117,7 @@ $r->post('/app/stores/{id}/delete', [StoreController::class, 'delete']);
 $r->post('/app/stores/{id}/resync', [StoreController::class, 'resync']);
 $r->get('/app/billing', [BillingController::class, 'index']);
 $r->post('/app/billing/pay', [BillingController::class, 'pay']);
+$r->post('/app/billing/stores', [BillingController::class, 'stores']);
 $r->get('/app/billing/return', [BillingController::class, 'return']);
 $r->get('/app/settings', [SettingsController::class, 'index']);
 $r->get('/app/profile', [SettingsController::class, 'profilePage']);

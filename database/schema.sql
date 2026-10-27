@@ -14,6 +14,7 @@ CREATE TABLE IF NOT EXISTS users (
   is_blocked      TINYINT(1) NOT NULL DEFAULT 0,
   plan_code       VARCHAR(32) NOT NULL DEFAULT 'free',
   plan_expires_at DATETIME NULL,
+  extra_stores    TINYINT UNSIGNED NOT NULL DEFAULT 0, -- доп. магазины к тарифу, оплаченные до конца подписки
   tg_chat_id      BIGINT NULL,
   tg_link_code    VARCHAR(32) NULL,
   tg_events       VARCHAR(64) NOT NULL DEFAULT 'created',
@@ -155,7 +156,9 @@ CREATE TABLE IF NOT EXISTS payments (
   id          INT UNSIGNED NOT NULL AUTO_INCREMENT,
   user_id     INT UNSIGNED NOT NULL,
   plan_code   VARCHAR(32) NOT NULL,
+  kind        VARCHAR(16) NOT NULL DEFAULT 'plan', -- plan — тариф | stores — доп. магазины к действующему тарифу
   months      TINYINT UNSIGNED NOT NULL,
+  extra_stores TINYINT UNSIGNED NOT NULL DEFAULT 0, -- доп. магазинов в платеже
   amount      DECIMAL(10,2) NOT NULL,
   provider    VARCHAR(20) NOT NULL DEFAULT 'yookassa',
   provider_id VARCHAR(64) NULL,

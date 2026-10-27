@@ -49,21 +49,32 @@ final class YooKassa
         return self::request('GET', '/me');
     }
 
-    /** Создаёт платёж и возвращает ссылку на оплату. */
-    public static function createPayment(array $user, string $planCode, int $months): string
+    /**
+     * Создаёт платёж и возвращает ссылку на оплату.
+     * $months > 0 — тариф на срок (с $extra доп. магазинами); $months = 0 — докупка $extra магазинов до конца подписки.
+     */
+    public static function createPayment(array $user, string $planCode, int $months, int $extra = 0): string
     {
         $plan = Plans::get($planCode);
-        $amount = Plans::price($planCode, $months);
+        $addon = $months === 0;
+        $amount = $addon ? Plans::addonPrice($user, $extra) : Plans::price($planCode, $months, $extra);
+        if ($amount === null) {
+            throw new \RuntimeException('Докупить магазины сейчас нельзя: проверьте тариф и лимит магазинов.');
+        }
         $paymentId = DB::insert('payments', [
-            'user_id'    => $user['id'],
-            'plan_code'  => $planCode,
-            'months'     => $months,
-            'amount'     => $amount,
-            'provider'   => 'yookassa',
-            'status'     => 'pending',
-            'created_at' => now(),
+            'user_id'      => $user['id'],
+            'plan_code'    => $planCode,
+            'kind'         => $addon ? 'stores' : 'plan',
+            'months'       => $months,
+            'extra_stores' => $extra,
+            'amount'       => $amount,
+            'provider'     => 'yookassa',
+            'status'       => 'pending',
+            'created_at'   => now(),
         ]);
-        $description = sprintf('Тариф «%s» на %d мес. — %s', $plan['name'], $months, config('app.name'));
+        $description = $addon
+            ? sprintf('Доп. магазин ×%d к тарифу «%s» до %s — %s', $extra, $plan['name'], date('d.m.Y', strtotime((string) $user['plan_expires_at'])), config('app.name'))
+            : sprintf('Тариф «%s»%s на %d мес. — %s', $plan['name'], $extra ? ' + ' . $extra . ' доп. маг.' : '', $months, config('app.name'));
         $value = number_format($amount, 2, '.', '');
         $body = [
             'amount'       => ['value' => $value, 'currency' => 'RUB'],
@@ -114,7 +125,11 @@ final class YooKassa
         if ($paid && $sameAmount) {
             $updated = DB::exec("UPDATE payments SET status = 'succeeded', paid_at = ? WHERE id = ? AND status <> 'succeeded'", [now(), $payment['id']]);
             if ($updated) {
-                Plans::activate((int) $payment['user_id'], $payment['plan_code'], (int) $payment['months']);
+                if (($payment['kind'] ?? 'plan') === 'stores') {
+                    Plans::addStores((int) $payment['user_id'], (int) $payment['extra_stores']);
+                } else {
+                    Plans::activate((int) $payment['user_id'], $payment['plan_code'], (int) $payment['months'], (int) ($payment['extra_stores'] ?? 0));
+                }
             }
             return 'succeeded';
         }

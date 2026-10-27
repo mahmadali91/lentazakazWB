@@ -33,12 +33,32 @@ final class BillingController
             flash('error', 'Выберите тариф и срок.');
             redirect('/app/billing');
         }
+        // Магазинов в тарифе (для тарифов с докупкой): сверх включённых — доп. магазины
+        $plan = Plans::get($code);
+        $extra = max(0, min(Plans::maxExtra($plan), (int) input('stores', $plan['stores']) - (int) $plan['stores']));
+        $this->checkout($user, $code, $months, $extra);
+    }
+
+    /** Докупка магазинов к действующему тарифу до конца подписки. */
+    public function stores(): never
+    {
+        $user = Auth::requireOwner();
+        $qty = (int) input('qty', 1);
+        if (Plans::addonPrice($user, $qty) === null) {
+            flash('error', 'Докупить столько магазинов нельзя: максимум — ' . (int) (Plans::get((string) $user['plan_code'])['stores_max'] ?? 0) . ' магазинов на тарифе.');
+            redirect('/app/billing');
+        }
+        $this->checkout($user, (string) $user['plan_code'], 0, $qty);
+    }
+
+    private function checkout(array $user, string $code, int $months, int $extra): never
+    {
         if (!YooKassa::enabled()) {
-            flash('error', 'Онлайн-оплата пока не подключена. Свяжитесь с поддержкой: ' . trim(phone_ru(config('app.support_phone')) . ' ' . config('app.support_email')));
+            flash('error', 'Онлайн-оплата пока не подключена. Свяжитесь с поддержкой: ' . trim((support_telegram() !== '' ? 'Telegram @' . support_telegram() : '') . ' ' . config('app.support_email')));
             redirect('/app/billing');
         }
         try {
-            redirect(YooKassa::createPayment($user, $code, $months));
+            redirect(YooKassa::createPayment($user, $code, $months, $extra));
         } catch (\RuntimeException $e) {
             flash('error', $e->getMessage());
             redirect('/app/billing');
@@ -53,7 +73,7 @@ final class BillingController
             try {
                 $status = YooKassa::sync($payment['provider_id']);
                 if ($status === 'succeeded') {
-                    flash('success', 'Оплата прошла успешно! Тариф активирован.');
+                    flash('success', ($payment['kind'] ?? 'plan') === 'stores' ? 'Оплата прошла успешно! Магазины добавлены — подключите их в разделе «Магазины».' : 'Оплата прошла успешно! Тариф активирован.');
                 } elseif ($status === 'canceled') {
                     flash('error', 'Платёж отменён. Попробуйте ещё раз.');
                 } else {

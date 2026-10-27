@@ -23,7 +23,7 @@ $names = ['pending' => 'Ожидает', 'succeeded' => 'Оплачен (ЮKassa
       <div class="row" style="margin-bottom:12px">
         <div class="grow">
           <div class="muted small">Тариф</div>
-          <div style="font-size:22px;font-weight:800"><?= e(Plans::get($client['plan_code'])['name']) ?></div>
+          <div style="font-size:22px;font-weight:800"><?= e(Plans::get($client['plan_code'])['name']) ?><?= (int) ($client['extra_stores'] ?? 0) ? ' <span class="small muted">+ ' . (int) $client['extra_stores'] . ' доп. маг.</span>' : '' ?></div>
         </div>
         <div><?= View::partial('admin/_status', ['u' => $client, 'paid' => $hasPaid]) ?></div>
       </div>
@@ -52,6 +52,7 @@ $names = ['pending' => 'Ожидает', 'succeeded' => 'Оплачен (ЮKassa
         <div class="row" style="align-items:flex-start">
           <div class="field"><label>Тариф</label><select name="plan_code"><?php foreach ($plans as $code => $p): ?><option value="<?= e($code) ?>" <?= $client['plan_code'] === $code ? 'selected' : '' ?>><?= e($p['name']) ?></option><?php endforeach; ?></select></div>
           <div class="field"><label>Действует до</label><input type="date" name="plan_expires_at" value="<?= $client['plan_expires_at'] ? e(substr($client['plan_expires_at'], 0, 10)) : '' ?>"></div>
+          <div class="field"><label>Доп. магазины</label><input type="number" name="extra_stores" min="0" max="20" value="<?= (int) ($client['extra_stores'] ?? 0) ?>" style="width:90px" title="Сверх включённых в тариф (только для тарифов с докупкой магазинов)"></div>
         </div>
         <div class="field"><label>Телефон</label><input type="tel" name="phone" value="<?= e(phone_ru($client['phone'] ?? '')) ?>" inputmode="tel" placeholder="+7 900 123-45-67"></div>
         <div class="field"><label>Заметка о клиенте</label><textarea name="note" style="font-family:inherit;font-size:14px;min-height:70px" placeholder="Договорённости, откуда пришёл"><?= e($client['note']) ?></textarea></div>

@@ -9,7 +9,7 @@ namespace App\Core;
  */
 final class Migrator
 {
-    public const VERSION = 14;
+    public const VERSION = 15;
 
     public static function ensure(): void
     {
@@ -45,6 +45,12 @@ final class Migrator
                 // Пересчёт сумм в рубли по курсу ЦБ: настройка кабинета и кэш курсов
                 self::addColumn('users', 'show_rub', 'TINYINT(1) NOT NULL DEFAULT 0');
                 self::run(self::FX_DDL);
+            }
+            if ($version < 15) {
+                // Дополнительные магазины к тарифу (покупаются отдельно до конца подписки)
+                self::addColumn('users', 'extra_stores', 'TINYINT UNSIGNED NOT NULL DEFAULT 0 AFTER plan_expires_at');
+                self::addColumn('payments', 'kind', "VARCHAR(16) NOT NULL DEFAULT 'plan' AFTER plan_code");
+                self::addColumn('payments', 'extra_stores', 'TINYINT UNSIGNED NOT NULL DEFAULT 0 AFTER months');
             }
             if ($version < 12 && DB::setting('cfg.app.support_telegram') === null) {
                 // Telegram-канал с новостями и поддержкой
