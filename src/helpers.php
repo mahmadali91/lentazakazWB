@@ -407,3 +407,16 @@ function normalize_login(string $login): ?string
     }
     return preg_match('/^[a-z0-9._-]{3,64}$/', $login) ? $login : null;
 }
+
+/** Размер из php.ini («32M», «1G») — в байтах. */
+function ini_bytes(string $v): int
+{
+    $v = trim($v);
+    $n = (int) $v;
+    return match (strtoupper(substr($v, -1))) {
+        'G' => $n * 1024 ** 3,
+        'M' => $n * 1024 ** 2,
+        'K' => $n * 1024,
+        default => $n,
+    } ?: PHP_INT_MAX;
+}

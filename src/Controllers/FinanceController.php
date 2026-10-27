@@ -116,11 +116,12 @@ final class FinanceController
                 continue;
             }
             $scopes = json_decode((string) $s['scopes'], true) ?: [];
-            $rep = DB::one('SELECT COUNT(*) total, SUM(detail_done) done, MIN(date_from) min_from, MAX(date_to) max_to FROM wb_reports WHERE store_id = ? AND report_id > 0', [$s['id']]);
+            $rep = DB::one('SELECT COUNT(*) total, SUM(detail_done) done, MIN(date_from) min_from, MAX(date_to) max_to,
+                (SELECT COUNT(*) FROM wb_reports WHERE store_id = ? AND report_id < 0) uploaded FROM wb_reports WHERE store_id = ? AND report_id > 0', [$s['id'], $s['id']]);
             $out[] = [
                 'id' => (int) $s['id'], 'name' => $s['name'], 'finance' => $scopes['finance'] ?? null, 'advert' => $scopes['advert'] ?? null,
                 'storage' => $scopes['storage'] ?? null, 'error' => $scopes['finance_error'] ?? null,
-                'reports' => (int) $rep['total'], 'done' => (int) $rep['done'], 'min' => $rep['min_from'], 'max' => $rep['max_to'],
+                'reports' => (int) $rep['total'], 'done' => (int) $rep['done'], 'uploaded' => (int) $rep['uploaded'], 'min' => $rep['min_from'], 'max' => $rep['max_to'],
                 'fin_ok' => $s['fin_ok_at'], 'storage_ok' => $s['storage_ok_at'], 'ads_ok' => $s['ads_ok_at'],
                 'history' => (json_decode((string) $s['fin_state'], true) ?: [])['from'] ?? null,
             ];
@@ -385,6 +386,11 @@ final class FinanceController
             $storeId = $ctx['activeIds'][0] ?? 0;
         }
         $file = $_FILES['file'] ?? null;
+        if ($file && in_array($file['error'] ?? 0, [UPLOAD_ERR_INI_SIZE, UPLOAD_ERR_FORM_SIZE], true)) {
+            error_log('[upload] store ' . $storeId . ': файл больше upload_max_filesize ' . ini_get('upload_max_filesize'));
+            flash('error', 'Файл слишком большой для сервера (лимит ' . ini_get('upload_max_filesize') . '). Загрузите детализацию за одну неделю или напишите в поддержку.');
+            redirect('/app/finance/reports');
+        }
         if (!$storeId || !$file || ($file['error'] ?? 1) !== UPLOAD_ERR_OK || !is_uploaded_file((string) $file['tmp_name'])) {
             flash('error', 'Выберите файл детализации отчёта (.xlsx), скачанный в кабинете WB.');
             redirect('/app/finance/reports');
@@ -397,6 +403,8 @@ final class FinanceController
             $info = ReportImport::import($storeId, (string) $file['tmp_name'], (string) $file['name']);
             flash('success', 'Загружено строк: ' . $info['rows'] . ' за период ' . date_ru($info['from'], false) . ' – ' . date_ru($info['to'], false) . '.');
         } catch (\Throwable $e) {
+            error_log('[upload] store ' . $storeId . ' «' . $file['name'] . '» ' . round((int) $file['size'] / 1048576, 1) . ' МБ: ' . $e->getMessage()
+                . ($e instanceof \RuntimeException ? '' : ' @ ' . basename($e->getFile()) . ':' . $e->getLine()));
             flash('error', 'Не удалось прочитать файл: ' . $e->getMessage());
         }
         redirect('/app/finance/reports');

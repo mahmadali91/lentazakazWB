@@ -49,7 +49,9 @@ $hasData = ($periods['max'] ?? null) !== null;
       Создайте в кабинете WB токен типа <b>«Персональный»</b> с категориями <b>«Финансы»</b> и «Продвижение» (для рекламы) и замените его в разделе
       <a href="/app/stores">Магазины</a>. Пока можно загрузить детализацию из файла на вкладке <a href="/app/finance/reports<?= $qs() ?>">«Отчёты WB»</a>.
     </div>
-  <?php elseif ($st['reports'] === 0): ?>
+  <?php elseif ($st['reports'] === 0 && $st['uploaded'] === 0 && $st['finance'] === null): ?>
+    <div class="alert alert-info"><b><?= e($st['name']) ?>:</b> проверяем доступ токена к отчётам реализации WB. Можно не ждать и загрузить детализацию из файла на вкладке <a href="/app/finance/reports<?= $qs() ?>">«Отчёты WB»</a>.</div>
+  <?php elseif ($st['reports'] === 0 && $st['uploaded'] === 0): ?>
     <div class="alert alert-info"><b><?= e($st['name']) ?>:</b> загружаем отчёты реализации из WB. WB отдаёт один отчёт в минуту — первые данные появятся через несколько минут, история за 3 месяца — примерно за полчаса.</div>
   <?php elseif ($st['done'] < $st['reports']): ?>
     <div class="alert alert-info"><b><?= e($st['name']) ?>:</b> загружено <?= $st['done'] ?> из <?= $st['reports'] ?> отчётов, остальные подгружаются (1 отчёт в минуту).</div>

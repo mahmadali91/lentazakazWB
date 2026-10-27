@@ -52,6 +52,12 @@ if (Config::installed()) {
 $isWebhook = str_starts_with($path, '/webhook/') || $path === '/cron-run' || str_starts_with($path, '/api/v1') || str_starts_with($path, '/mcp/') || $path === '/mcp';
 if (!$isWebhook) {
     Auth::startSession();
+    // Файл больше post_max_size: PHP отбрасывает всю форму (и токен CSRF) — объясняем причину, а не «сессия устарела»
+    if ($method === 'POST' && !$_POST && !$_FILES && (int) ($_SERVER['CONTENT_LENGTH'] ?? 0) > ini_bytes((string) ini_get('post_max_size'))) {
+        error_log('[upload] POST ' . $path . ': ' . round((int) $_SERVER['CONTENT_LENGTH'] / 1048576, 1) . ' МБ больше post_max_size ' . ini_get('post_max_size'));
+        flash('error', 'Файл слишком большой для сервера (лимит ' . ini_get('post_max_size') . '). Загрузите детализацию за одну неделю или напишите в поддержку.');
+        redirect((string) parse_url($_SERVER['HTTP_REFERER'] ?? $path, PHP_URL_PATH) ?: '/');
+    }
     if ($method === 'POST' && !Csrf::check()) {
         http_response_code(403);
         header('Content-Type: text/html; charset=utf-8');

@@ -603,7 +603,39 @@ final class ApiTools
             'payments_30d' => self::typed(DB::one("SELECT COUNT(*) count, COALESCE(SUM(amount), 0) amount FROM payments WHERE status = 'succeeded' AND created_at >= ?", [date('Y-m-d H:i:s', time() - 30 * 86400)])),
             'clients' => array_map([self::class, 'typed'], $clients),
             'store_errors' => array_map([self::class, 'typed'], $errors),
+            // Магазины всех клиентов: отчёты из WB по API и загруженные файлом — чтобы видеть, почему у клиента пустые финансы
+            'stores' => array_map(static function (array $s): array {
+                $s = self::typed($s);
+                $s['scopes'] = json_decode((string) $s['scopes'], true) ?: [];
+                return $s;
+            }, DB::all("SELECT s.id, s.user_id, u.email owner, s.name, s.currency, s.is_active, s.created_at, s.scopes,
+                    (SELECT COUNT(*) FROM wb_reports r WHERE r.store_id = s.id AND r.report_id > 0) reports_api,
+                    (SELECT COUNT(*) FROM wb_reports r WHERE r.store_id = s.id AND r.report_id < 0) reports_uploaded,
+                    (SELECT MAX(r.loaded_at) FROM wb_reports r WHERE r.store_id = s.id AND r.report_id < 0) last_upload,
+                    (SELECT COALESCE(SUM(r.rows_loaded), 0) FROM wb_reports r WHERE r.store_id = s.id) report_rows,
+                    (SELECT COUNT(*) FROM products p WHERE p.store_id = s.id) products
+                FROM stores s JOIN users u ON u.id = s.user_id ORDER BY s.id DESC LIMIT 100")),
+            'php_errors' => self::logTail(BASE_PATH . '/storage/logs/php-error.log', 30),
+            'limits' => ['memory_limit' => ini_get('memory_limit'), 'upload_max_filesize' => ini_get('upload_max_filesize'), 'post_max_size' => ini_get('post_max_size'),
+                'max_execution_time' => ini_get('max_execution_time'), 'php' => PHP_VERSION, 'zip' => class_exists(\ZipArchive::class), 'xmlreader' => class_exists(\XMLReader::class)],
         ];
+    }
+
+    /** Последние строки лога (читаем только хвост файла). */
+    private static function logTail(string $file, int $lines): array
+    {
+        if (!is_file($file) || !($fh = fopen($file, 'rb'))) {
+            return [];
+        }
+        $size = filesize($file);
+        fseek($fh, max(0, $size - 64 * 1024));
+        $tail = (string) stream_get_contents($fh);
+        fclose($fh);
+        $out = array_values(array_filter(explode("\n", $tail), static fn($l) => trim($l) !== ''));
+        if ($size > 64 * 1024) {
+            array_shift($out);
+        }
+        return array_map(static fn($l) => mb_substr($l, 0, 600), array_slice($out, -$lines));
     }
 
     /** Числа из БД (строки) — в числа, чтобы JSON был удобен для разбора. */

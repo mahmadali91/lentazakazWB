@@ -59,13 +59,13 @@
     <?php if ($canEdit): ?>
       <div class="card">
         <div class="card-title">Загрузить из файла</div>
-        <p class="muted small">Если у токена нет категории «Финансы»: в кабинете WB откройте «Финансовые отчёты», выберите отчёт и нажмите «Скачать детализацию» — загрузите полученный файл .xlsx (можно в архиве — распакуйте).</p>
+        <p class="muted small">Если у токена нет категории «Финансы»: в кабинете WB откройте «Финансовые отчёты», выберите отчёт и нажмите «Скачать детализацию» — загрузите полученный файл .xlsx или архив .zip как есть, распаковывать не нужно.</p>
         <form method="post" action="/app/finance/upload" enctype="multipart/form-data" class="stack">
           <?= csrf_field() ?>
           <?php if (count($activeIds) > 1): ?>
             <select name="store_id"><?php foreach ($stores as $s): ?><option value="<?= (int) $s['id'] ?>"><?= e($s['name']) ?></option><?php endforeach; ?></select>
           <?php endif; ?>
-          <input type="file" name="file" accept=".xlsx" required>
+          <input type="file" name="file" accept=".xlsx,.zip" required>
           <button class="btn btn-sm">Загрузить</button>
         </form>
       </div>
