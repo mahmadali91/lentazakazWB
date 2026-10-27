@@ -233,6 +233,13 @@ final class Finance
             $where .= ' AND (r.srid = :q1 OR r.vendor_code LIKE :q2 OR r.nm_id = :q3)';
             $params += ['q1' => $opt['q'], 'q2' => '%' . $opt['q'] . '%', 'q3' => ctype_digit((string) $opt['q']) ? (int) $opt['q'] : -1];
         }
+        // Неделя загружена файлом, а детализация из WB по API ещё не догрузилась — считаем по файлу, недогруженный отчёт пропускаем
+        $skip = array_map('intval', array_column(DB::all("SELECT a.report_id FROM wb_reports a
+            JOIN wb_reports m ON m.store_id = a.store_id AND m.date_from = a.date_from AND m.report_id < 0
+            WHERE a.store_id IN ($in) AND a.report_id > 0 AND a.detail_done = 0"), 'report_id'));
+        if ($skip) {
+            $where .= ' AND r.report_id NOT IN (' . implode(',', array_unique($skip)) . ')';
+        }
         return [$where, $params];
     }
 

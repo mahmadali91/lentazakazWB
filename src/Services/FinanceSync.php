@@ -20,8 +20,12 @@ final class FinanceSync
     /** За сколько дней загружать историю при подключении (данные WB доступны с 29.01.2024). */
     public const HISTORY_DAYS = 92;
     public const WB_DATA_START = '2024-01-29';
-    /** Строк детализации за запрос: меньше максимума WB (100 000), чтобы уложиться в память хостинга. */
-    private const ROWS_LIMIT = 20000;
+    /**
+     * Строк детализации за запрос: меньше максимума WB (100 000), чтобы уложиться в память хостинга
+     * (строка детализации — ~80 полей, 10 000 строк ≈ 100 МБ в PHP). Если запрос всё же не уложился — порция уменьшается сама.
+     */
+    private const ROWS_LIMIT = 10000;
+    private const ROWS_LIMIT_MIN = 1000;
     private const LIST_EVERY = 6 * 3600;
 
     public function __construct(private array $store, private readonly WbClient $wb)
@@ -114,10 +118,31 @@ final class FinanceSync
             $this->save('fin_state', $state, 'fin_next_at', max(61, (int) $state['listed'] + $this->listEvery($storeId) - time()), 'fin_ok_at');
             return 0;
         }
-        $rows = $this->wb->salesReportRows((int) $rep['report_id'], (int) $rep['rrd_cursor'], self::ROWS_LIMIT);
+        // Порция строк: если прошлый запрос этой же порции не завершился (PHP не хватило памяти — процесс прерван),
+        // берём вчетверо меньше и запоминаем для магазина
+        $limit = (int) ($state['rows_limit'] ?? self::ROWS_LIMIT);
+        $try = $state['detail_try'] ?? null;
+        if ($try && (int) $try['report'] === (int) $rep['report_id'] && (int) $try['cursor'] === (int) $rep['rrd_cursor']) {
+            $limit = max(self::ROWS_LIMIT_MIN, intdiv((int) $try['limit'], 4));
+            $state['rows_limit'] = $limit;
+            log_message('sync', "store {$storeId}: детализация отчёта {$rep['report_id']} не уложилась в память, порция уменьшена до $limit строк");
+        }
+        $state['detail_try'] = ['report' => (int) $rep['report_id'], 'cursor' => (int) $rep['rrd_cursor'], 'limit' => $limit];
+        DB::exec('UPDATE stores SET fin_state = ? WHERE id = ?', [json_encode($state), $storeId]);
+        unset($state['detail_try']);
+        try {
+            $rows = $this->wb->salesReportRows((int) $rep['report_id'], (int) $rep['rrd_cursor'], $limit);
+        } catch (\Throwable $e) {
+            // Обычная ошибка WB (429 и т. п.) — не повод уменьшать порцию
+            DB::exec('UPDATE stores SET fin_state = ? WHERE id = ?', [json_encode($state), $storeId]);
+            $this->store['fin_state'] = json_encode($state);
+            throw $e;
+        }
         $last = (int) $rep['rrd_cursor'];
+        $n = count($rows);
         $chunk = [];
-        foreach ($rows as $row) {
+        foreach ($rows as $k => $row) {
+            unset($rows[$k]); // освобождаем память по ходу записи
             if (empty($row['rrdId'])) {
                 continue;
             }
@@ -131,26 +156,34 @@ final class FinanceSync
         if ($chunk) {
             $this->insertRows($chunk);
         }
-        $done = count($rows) < self::ROWS_LIMIT;
+        $done = $n < $limit;
         if ($done) {
+            self::dropManual($storeId, (string) $rep['date_from']);
             // Товары из отчёта — в справочник, чтобы им можно было указать себестоимость
             DB::exec('INSERT IGNORE INTO products (store_id, nm_id, vendor_code, brand, subject, title, updated_at)
                 SELECT store_id, nm_id, MAX(vendor_code), LEFT(MAX(brand), 120), LEFT(MAX(subject), 120), MAX(title), NOW() FROM wb_report_rows
                 WHERE store_id = ? AND report_id = ? AND nm_id IS NOT NULL GROUP BY store_id, nm_id', [$storeId, $rep['report_id']]);
         }
         DB::exec('UPDATE wb_reports SET rows_loaded = rows_loaded + ?, rrd_cursor = ?, detail_done = ?, loaded_at = IF(?, NOW(), loaded_at) WHERE store_id = ? AND report_id = ?',
-            [count($rows), $last, $done ? 1 : 0, $done ? 1 : 0, $storeId, $rep['report_id']]);
+            [$n, $last, $done ? 1 : 0, $done ? 1 : 0, $storeId, $rep['report_id']]);
         $this->save('fin_state', $state, 'fin_next_at', 61, 'fin_ok_at');
-        return count($rows);
+        return $n;
+    }
+
+    /** Удаляет загруженные файлом отчёты за неделю (их заменил отчёт из WB по API). */
+    private static function dropManual(int $storeId, string $weekFrom): void
+    {
+        foreach (DB::all('SELECT report_id FROM wb_reports WHERE store_id = ? AND date_from = ? AND report_id < 0', [$storeId, $weekFrom]) as $m) {
+            DB::exec('DELETE FROM wb_report_rows WHERE store_id = ? AND report_id = ?', [$storeId, $m['report_id']]);
+            DB::exec('DELETE FROM wb_reports WHERE store_id = ? AND report_id = ?', [$storeId, $m['report_id']]);
+        }
     }
 
     private function upsertReport(int $storeId, array $r): void
     {
-        // Отчёт из WB заменяет загруженный вручную файл за ту же неделю
-        $manual = DB::all('SELECT report_id FROM wb_reports WHERE store_id = ? AND date_from = ? AND report_id < 0', [$storeId, substr((string) $r['dateFrom'], 0, 10)]);
-        foreach ($manual as $m) {
-            DB::exec('DELETE FROM wb_report_rows WHERE store_id = ? AND report_id = ?', [$storeId, $m['report_id']]);
-            DB::exec('DELETE FROM wb_reports WHERE store_id = ? AND report_id = ?', [$storeId, $m['report_id']]);
+        // Отчёт из WB заменяет загруженный вручную файл за ту же неделю — когда его детализация загружена полностью
+        if ((int) DB::value('SELECT detail_done FROM wb_reports WHERE store_id = ? AND report_id = ?', [$storeId, (int) $r['reportId']])) {
+            self::dropManual($storeId, substr((string) $r['dateFrom'], 0, 10));
         }
         $n = static fn($k) => round(self::num($r[$k] ?? 0), 2);
         DB::exec('INSERT INTO wb_reports (store_id, report_id, date_from, date_to, create_date, report_type, currency, retail_amount, for_pay,

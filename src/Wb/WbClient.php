@@ -63,8 +63,13 @@ final class WbClient
             CURLOPT_TIMEOUT        => (int) Config::get('wb.timeout', 30),
             CURLOPT_CONNECTTIMEOUT => 10,
             CURLOPT_ENCODING       => '',
-            CURLOPT_HEADER         => true,
         ];
+        // Заголовки собираем отдельно: тело ответа (детализация — десятки МБ) не копируется лишний раз
+        $rawHeaders = '';
+        $opts[CURLOPT_HEADERFUNCTION] = static function ($ch, string $line) use (&$rawHeaders): int {
+            $rawHeaders .= $line;
+            return strlen($line);
+        };
         if ($body !== null) {
             $headers[] = 'Content-Type: application/json';
             $opts[CURLOPT_POSTFIELDS] = json_encode($body, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
@@ -72,19 +77,19 @@ final class WbClient
         $opts[CURLOPT_HTTPHEADER] = $headers;
         curl_setopt_array($ch, $opts);
 
-        $raw = curl_exec($ch);
-        if ($raw === false) {
+        $content = curl_exec($ch);
+        if ($content === false) {
             $err = curl_error($ch);
             curl_close($ch);
             throw new WbException($err, 0);
         }
         $status = (int) curl_getinfo($ch, CURLINFO_RESPONSE_CODE);
-        $headerSize = (int) curl_getinfo($ch, CURLINFO_HEADER_SIZE);
         curl_close($ch);
 
-        $rawHeaders = substr($raw, 0, $headerSize);
-        $content = substr($raw, $headerSize);
         $data = $content === '' ? [] : json_decode($content, true);
+        if ($status < 400) {
+            unset($content);
+        }
 
         if ($status >= 400) {
             $retry = 0;

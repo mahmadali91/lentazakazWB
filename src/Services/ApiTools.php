@@ -607,15 +607,20 @@ final class ApiTools
             'stores' => array_map(static function (array $s): array {
                 $s = self::typed($s);
                 $s['scopes'] = json_decode((string) $s['scopes'], true) ?: [];
+                $s['fin_state'] = json_decode((string) $s['fin_state'], true) ?: [];
+                $s['recent_errors'] = array_map([self::class, 'typed'], DB::all('SELECT created_at, source, message FROM sync_log WHERE store_id = ? AND ok = 0 ORDER BY id DESC LIMIT 3', [$s['id']]));
                 return $s;
             }, DB::all("SELECT s.id, s.user_id, u.email owner, s.name, s.currency, s.is_active, s.created_at, s.scopes,
                     (SELECT COUNT(*) FROM wb_reports r WHERE r.store_id = s.id AND r.report_id > 0) reports_api,
+                    (SELECT COUNT(*) FROM wb_reports r WHERE r.store_id = s.id AND r.report_id > 0 AND r.detail_done = 1) reports_api_loaded,
+                    s.fin_ok_at, s.fin_next_at, s.fin_state,
                     (SELECT COUNT(*) FROM wb_reports r WHERE r.store_id = s.id AND r.report_id < 0) reports_uploaded,
                     (SELECT MAX(r.loaded_at) FROM wb_reports r WHERE r.store_id = s.id AND r.report_id < 0) last_upload,
                     (SELECT COALESCE(SUM(r.rows_loaded), 0) FROM wb_reports r WHERE r.store_id = s.id) report_rows,
                     (SELECT COUNT(*) FROM products p WHERE p.store_id = s.id) products
                 FROM stores s JOIN users u ON u.id = s.user_id ORDER BY s.id DESC LIMIT 100")),
-            'php_errors' => self::logTail(BASE_PATH . '/storage/logs/php-error.log', 30),
+            'php_errors' => self::logTail(BASE_PATH . '/storage/logs/php-error.log', 20),
+            'sync_log' => self::logTail(BASE_PATH . '/storage/logs/sync.log', 10),
             'limits' => ['memory_limit' => ini_get('memory_limit'), 'upload_max_filesize' => ini_get('upload_max_filesize'), 'post_max_size' => ini_get('post_max_size'),
                 'max_execution_time' => ini_get('max_execution_time'), 'php' => PHP_VERSION, 'zip' => class_exists(\ZipArchive::class), 'xmlreader' => class_exists(\XMLReader::class)],
         ];

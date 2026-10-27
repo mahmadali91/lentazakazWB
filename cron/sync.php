@@ -21,6 +21,10 @@ if (!App\Core\Config::installed()) {
     exit(1);
 }
 
+// Детализация отчётов WB — крупные ответы API; если хостинг разрешает, даём фоновой задаче больше памяти
+if (ini_bytes((string) ini_get('memory_limit')) < 512 * 1024 * 1024) {
+    @ini_set('memory_limit', '512M');
+}
 App\Core\Migrator::ensure();
 App\Core\Config::overlayFromDb();
 set_time_limit(58);

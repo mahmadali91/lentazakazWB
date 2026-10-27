@@ -74,8 +74,9 @@ final class ReportImport
         unset($dates);
         $from = Finance::weekStart($mid);
         $to = date('Y-m-d', strtotime($from) + 6 * 86400);
-        if (DB::value('SELECT COUNT(*) FROM wb_reports WHERE store_id = ? AND date_from = ? AND report_id > 0', [$storeId, $from])) {
-            throw new \RuntimeException('отчёт за неделю ' . date_ru($from, false) . ' уже загружен из WB по API');
+        // Полностью загруженный из WB отчёт за эту неделю уже в расчёте; пока детализация из WB не догрузилась — считаем по файлу
+        if (DB::value('SELECT COUNT(*) FROM wb_reports WHERE store_id = ? AND date_from = ? AND report_id > 0 AND detail_done = 1', [$storeId, $from])) {
+            throw new \RuntimeException('отчёт за неделю с ' . date_ru($from, false) . ' уже загружен из WB автоматически и учтён в расчётах — загружать файл не нужно');
         }
         $reportId = -((int) date('Ymd', strtotime($from)) * 100 + crc32(basename($name)) % 100);
 
