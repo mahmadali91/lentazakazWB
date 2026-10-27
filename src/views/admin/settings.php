@@ -1,9 +1,10 @@
 <div class="topbar"><h1>Настройки сервиса</h1></div>
 <?= App\Core\View::partial('admin/_nav', ['tab' => 'settings']) ?>
 
-<form method="post" action="/admin/settings" class="stack page-narrow">
-  <?= csrf_field() ?>
-  <div class="card">
+<div class="stack page-narrow">
+  <form method="post" action="/admin/settings" class="card" id="set-company">
+    <?= csrf_field() ?>
+    <input type="hidden" name="section" value="company">
     <div class="card-title"><?= icon('shield', 18) ?> Реквизиты исполнителя</div>
     <p class="muted small">Подставляются автоматически в <a href="/oferta" target="_blank">оферту</a>, <a href="/privacy" target="_blank">политику конфиденциальности</a> и подвал сайта.</p>
     <div class="field"><label for="cn">ФИО или наименование</label><input id="cn" type="text" name="company_name" value="<?= e($company['name']) ?>" placeholder="ИП Иванов Иван Иванович или ООО «Линкоз»" maxlength="200"></div>
@@ -13,9 +14,12 @@
     </div>
     <div class="field"><label for="ca">Адрес <span class="muted small">(для ИП можно указать город)</span></label><input id="ca" type="text" name="company_address" value="<?= e($company['address']) ?>" maxlength="300"></div>
     <div class="field"><label for="cb">Банковские реквизиты <span class="muted small">(необязательно)</span></label><textarea id="cb" name="company_bank" maxlength="500" style="font-family:inherit;font-size:14px;min-height:64px" placeholder="Р/с, банк, БИК, к/с"><?= e($company['bank']) ?></textarea></div>
-  </div>
+    <div style="margin-top:14px"><button class="btn btn-sm">Сохранить реквизиты</button></div>
+  </form>
 
-  <div class="card">
+  <form method="post" action="/admin/settings" class="card" id="set-contacts">
+    <?= csrf_field() ?>
+    <input type="hidden" name="section" value="contacts">
     <div class="card-title"><?= icon('mail', 18) ?> Контакты для клиентов</div>
     <p class="muted small">Telegram-канал и email — контакты поддержки на сайте (подвал, профиль, инструкция, тарифы, оферта). Телефон указывается только в реквизитах документов.</p>
     <div class="row" style="align-items:flex-start">
@@ -23,9 +27,12 @@
       <div class="field grow"><label for="se">Email поддержки</label><input id="se" type="email" name="support_email" value="<?= e($email) ?>" placeholder="admin@linkoz.ru"></div>
       <div class="field grow"><label for="stg">Telegram-канал (новости и поддержка)</label><input id="stg" type="text" name="support_telegram" value="<?= e($tgChannel) ?>" placeholder="wblinkoz" autocapitalize="none"></div>
     </div>
-  </div>
+    <div style="margin-top:14px"><button class="btn btn-sm">Сохранить контакты</button></div>
+  </form>
 
-  <div class="card">
+  <form method="post" action="/admin/settings" class="card" id="set-max">
+    <?= csrf_field() ?>
+    <input type="hidden" name="section" value="max">
     <div class="card-title"><?= icon('send', 18) ?> MAX-бот для уведомлений</div>
     <?php if ($maxBot): ?>
       <?php if ($maxBot['ok']): ?>
@@ -49,9 +56,12 @@
         <li>Клиенты подключают уведомления в «Настройки» → «Уведомления о заказах»: кнопка «Подключить MAX» откроет бота, после «Начать» аккаунт привяжется в течение минуты.</li>
       </ol>
     </details>
-  </div>
+    <div style="margin-top:14px"><button class="btn btn-sm">Сохранить бота MAX</button></div>
+  </form>
 
-  <div class="card">
+  <form method="post" action="/admin/settings" class="card" id="set-telegram">
+    <?= csrf_field() ?>
+    <input type="hidden" name="section" value="telegram">
     <div class="card-title"><?= icon('send', 18) ?> Telegram-бот для уведомлений</div>
     <p class="muted small">Telegram в России работает со сбоями: с хостинга может не быть связи с api.telegram.org. Клиенты видят пометку и подключают MAX.</p>
     <?php if ($bot): ?>
@@ -76,8 +86,11 @@
         <li>Клиенты подключают уведомления в «Настройки» → «Уведомления о заказах»: кнопка откроет бота, после «Запустить» аккаунт привяжется в течение минуты (бот опрашивается вместе с cron).</li>
       </ol>
     </details>
-  </div>
-  <div class="card">
+    <div style="margin-top:14px"><button class="btn btn-sm">Сохранить бота Telegram</button></div>
+  </form>
+  <form method="post" action="/admin/settings" class="card" id="set-yookassa">
+    <?= csrf_field() ?>
+    <input type="hidden" name="section" value="yookassa">
     <div class="card-title"><?= icon('card', 18) ?> Оплата тарифов — ЮKassa</div>
     <?php if ($ykOk): ?>
       <div class="alert <?= $ykOk['ok'] ? 'alert-success' : 'alert-error' ?>"><?= e($ykOk['text']) ?></div>
@@ -106,6 +119,6 @@
         <li>Вставьте shopId и ключ выше и сохраните — сервис проверит их запросом к ЮKassa. Ключ хранится в базе в зашифрованном виде.</li>
       </ol>
     </details>
-  </div>
-  <button class="btn">Сохранить настройки</button>
-</form>
+    <div style="margin-top:14px"><button class="btn btn-sm">Сохранить ЮKassa</button></div>
+  </form>
+</div>

@@ -11,7 +11,9 @@ $statusNames = ['pending' => 'Ожидает оплаты', 'succeeded' => 'Оп
       <div class="muted small">Текущий тариф</div>
       <div style="font-size:22px;font-weight:800"><?= e($plan['name']) ?></div>
       <div class="muted">
-        <?php if ($plan['expires_at']): ?>
+        <?php if (!empty($plan['super'])): ?>
+          Владелец сервиса: все возможности бесплатно, без срока и ограничений магазинов, сотрудников и клиентов.
+        <?php elseif ($plan['expires_at']): ?>
           Действует до <?= date_ru($plan['expires_at']) ?> (осталось <?= max(0, (int) ceil((strtotime($plan['expires_at']) - time()) / 86400)) ?> дн.)
         <?php else: ?>
           Бесплатно, без срока
@@ -19,12 +21,13 @@ $statusNames = ['pending' => 'Ожидает оплаты', 'succeeded' => 'Оп
       </div>
     </div>
     <div class="small muted" style="min-width:240px">
-      Магазинов: <b><?= (int) $plan['stores'] ?></b><?= $plan['extra_stores'] ? ' (в т. ч. доп.: ' . (int) $plan['extra_stores'] . ')' : '' ?> · История: <b><?= (int) $plan['history_days'] ?> дн.</b><br>
+      Магазинов: <b><?= !empty($plan['super']) ? '∞' : (int) $plan['stores'] ?></b><?= $plan['extra_stores'] ? ' (в т. ч. доп.: ' . (int) $plan['extra_stores'] . ')' : '' ?> · История: <b><?= (int) $plan['history_days'] ?> дн.</b><br>
       Обновление: <b>каждые <?= (int) $plan['sync_minutes'] ?> мин</b> · Telegram: <b><?= $plan['telegram'] ? 'да' : 'нет' ?></b> · Excel: <b><?= $plan['export'] ? 'да' : 'нет' ?></b>
     </div>
   </div>
 </div>
 
+<?php if (!empty($plan['super'])) { return; } ?>
 <?php if (!$payEnabled): ?>
   <div class="alert alert-info">Онлайн-оплата скоро появится. Чтобы подключить тариф сейчас, свяжитесь с нами: <?php if (support_telegram() !== ''): ?><a href="https://t.me/<?= e(support_telegram()) ?>" target="_blank" rel="noopener">Telegram @<?= e(support_telegram()) ?></a> · <?php endif; ?><a href="mailto:<?= e(config('app.support_email')) ?>"><?= e(config('app.support_email')) ?></a></div>
 <?php endif; ?>

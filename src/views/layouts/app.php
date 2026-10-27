@@ -1,6 +1,10 @@
 <?php
 $nav = $nav ?? '';
-$isMember = !empty($user['owner_id']);
+$isMember = App\Core\Auth::isMember();
+// Агентство: кабинеты клиентов, к которым выдан доступ (переключатель как в WB Partners)
+$grants = App\Core\Auth::grants();
+$actingId = App\Core\Auth::acting();
+$actingAcc = $actingId ? App\Core\Auth::account() : null;
 $items = [['feed', '/app', 'Лента заказов', 'Лента', 'feed'], ['products', '/app/products', 'Товары и прибыль', 'Товары', 'box'], ['finance', '/app/finance', 'Финансы', 'Финансы', 'chart']];
 if (!$isMember) {
     $items[] = ['stores', '/app/stores', 'Магазины', 'Магазины', 'store'];
@@ -22,6 +26,18 @@ if (($user['role'] ?? '') === 'admin') {
 <div class="app">
   <aside class="sidebar">
     <?= App\Core\View::partial('partials/logo', ['href' => '/app']) ?>
+    <?php if ($grants): ?>
+      <form method="post" action="/app/switch" class="acc-switch">
+        <?= csrf_field() ?>
+        <label class="muted small" for="accSw">Кабинет</label>
+        <select id="accSw" name="account" onchange="this.form.submit()">
+          <option value="0">Мой кабинет</option>
+          <?php foreach ($grants as $g): ?>
+            <option value="<?= (int) $g['owner_id'] ?>" <?= $actingId === (int) $g['owner_id'] ? 'selected' : '' ?>><?= e(($g['name'] ?: $g['email']) . ' · ID ' . client_code((int) $g['owner_id'])) ?></option>
+          <?php endforeach; ?>
+        </select>
+      </form>
+    <?php endif; ?>
     <nav class="side-nav">
       <?php foreach ($items as [$key, $href, $label, , $ico]): ?>
         <a href="<?= $href ?>" class="<?= $nav === $key ? 'active' : '' ?>"><?= icon($ico) ?> <?= e($label) ?></a>
@@ -31,7 +47,9 @@ if (($user['role'] ?? '') === 'admin') {
     <div class="side-foot">
       <div class="plan-line">Тариф «<?= e($plan['name'] ?? '') ?>»</div>
       <div class="muted">
-        <?php if ($isMember): ?>
+        <?php if (!empty($plan['super'])): ?>
+          всё бесплатно, без ограничений
+        <?php elseif ($isMember): ?>
           доступ сотрудника
         <?php elseif (!empty($plan['expires_at'])): ?>
           до <?= date_ru($plan['expires_at'], false) ?>
@@ -52,6 +70,13 @@ if (($user['role'] ?? '') === 'admin') {
         <?= csrf_field() ?>
         <span>Вы в кабинете клиента <b><?= e($user['email'] ?? '') ?></b> (режим администратора).</span>
         <button class="btn btn-sm">Вернуться в админку</button>
+      </form>
+    <?php endif; ?>
+    <?php if ($actingAcc): ?>
+      <form method="post" action="/app/switch" class="alert alert-info row" style="justify-content:space-between">
+        <?= csrf_field() ?><input type="hidden" name="account" value="0">
+        <span>Кабинет клиента <b><?= e($actingAcc['name'] ?: $actingAcc['email']) ?></b> (ID <?= e(client_code((int) $actingAcc['id'])) ?>) — доступ агентства, только просмотр.</span>
+        <button class="btn btn-sm btn-ghost">В свой кабинет</button>
       </form>
     <?php endif; ?>
     <?= App\Core\View::partial('partials/flash') ?>

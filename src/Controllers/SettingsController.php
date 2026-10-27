@@ -5,6 +5,7 @@ namespace App\Controllers;
 
 use App\Core\Auth;
 use App\Core\DB;
+use App\Services\AccountTransfer;
 use App\Services\Max;
 use App\Services\Plans;
 use App\Services\StoreService;
@@ -44,6 +45,11 @@ final class SettingsController
             'myStores' => $visible ? DB::all('SELECT id, name FROM stores WHERE id IN (' . implode(',', $visible) . ') ORDER BY id') : [],
             'allStores'=> Auth::isMember() ? [] : DB::all('SELECT id, name FROM stores WHERE user_id = ? ORDER BY id', [$user['id']]),
             'members'  => Auth::isMember() ? [] : DB::all('SELECT id, email, name, store_access, last_login_at, created_at FROM users WHERE owner_id = ? ORDER BY id', [$user['id']]),
+            // Доступы агентств: выданные владельцем и полученные агентством
+            'grantsGiven' => Auth::isMember() ? [] : DB::all('SELECT g.agency_id, g.expires_at, g.created_at, u.email, u.name FROM account_grants g
+                JOIN users u ON u.id = g.agency_id WHERE g.owner_id = ? ORDER BY g.created_at DESC', [$user['id']]),
+            'grantsReceived' => Auth::grants(),
+            'transferPrice' => AccountTransfer::price($account),
             'tgEnabled'=> Telegram::enabled(),
             'maxEnabled'=> Max::enabled(),
             'nav'      => 'settings',

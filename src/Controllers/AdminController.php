@@ -10,6 +10,7 @@ use App\Core\DB;
 use App\Services\Cron;
 use App\Services\Max;
 use App\Services\Plans;
+use App\Services\Usage;
 use App\Services\Telegram;
 use App\Services\YooKassa;
 
@@ -100,7 +101,9 @@ final class AdminController
         foreach (self::FILTERS as $k => [, $sql]) {
             $counts[$k] = (int) DB::value("SELECT COUNT(*) FROM users u WHERE u.owner_id IS NULL AND $sql");
         }
+        $usage = Usage::byUser();
         return view('admin/users', $this->base($admin) + [
+            'usage' => $usage,
             'title'   => 'Клиенты',
             'users'   => $users,
             'plans'   => Plans::all(),
@@ -192,7 +195,8 @@ final class AdminController
         }
         $expires = (string) input('plan_expires_at', '');
         $expiresAt = $expires !== '' && strtotime($expires) ? date('Y-m-d 23:59:59', strtotime($expires)) : null;
-        $self = (int) $target['id'] === (int) $admin['id'];
+        // Себя и супер-админа (владельца сервиса) нельзя заблокировать или лишить прав администратора
+        $self = (int) $target['id'] === (int) $admin['id'] || !empty($target['is_super']);
         DB::update('users', [
             'plan_code'       => $plan,
             'plan_expires_at' => $plan === 'free' ? null : $expiresAt,
@@ -272,8 +276,8 @@ final class AdminController
     {
         $admin = Auth::requireAdmin();
         $target = $this->find($id);
-        if ((int) $target['id'] === (int) $admin['id']) {
-            flash('error', 'Нельзя удалить самого себя.');
+        if ((int) $target['id'] === (int) $admin['id'] || !empty($target['is_super'])) {
+            flash('error', !empty($target['is_super']) ? 'Супер-админа (владельца сервиса) удалить нельзя.' : 'Нельзя удалить самого себя.');
             redirect('/admin/users/' . $target['id']);
         }
         DB::exec('DELETE FROM users WHERE id = ?', [$target['id']]);
@@ -369,114 +373,135 @@ final class AdminController
         }
     }
 
+    /** Каждая карточка настроек сохраняется отдельно (поле section): реквизиты, контакты, боты MAX и Telegram, ЮKassa. */
     public function saveSettings(): never
     {
         Auth::requireAdmin();
-        $phone = trim((string) input('support_phone', ''));
-        $email = trim((string) input('support_email', ''));
-        if ($phone !== '' && normalize_phone($phone) === null) {
-            flash('error', 'Телефон поддержки указан неверно.');
-            redirect('/admin/settings');
-        }
-        if ($email !== '' && !filter_var($email, FILTER_VALIDATE_EMAIL)) {
-            flash('error', 'Email поддержки указан неверно.');
-            redirect('/admin/settings');
-        }
-        // Реквизиты исполнителя (оферта, политика конфиденциальности, подвал сайта)
-        $inn = preg_replace('/\D/', '', (string) input('company_inn', ''));
-        $ogrn = preg_replace('/\D/', '', (string) input('company_ogrn', ''));
-        if ($inn !== '' && !inn_valid($inn)) {
-            flash('error', 'ИНН указан неверно: 10 цифр для организации или 12 — для ИП, контрольные цифры не сходятся.');
-            redirect('/admin/settings');
-        }
-        if ($ogrn !== '' && !in_array(strlen($ogrn), [13, 15], true)) {
-            flash('error', 'ОГРН — 13 цифр, ОГРНИП — 15 цифр.');
-            redirect('/admin/settings');
-        }
-        DB::setSetting('cfg.company.name', mb_substr(trim((string) input('company_name', '')), 0, 200));
-        DB::setSetting('cfg.company.inn', $inn);
-        DB::setSetting('cfg.company.ogrn', $ogrn);
-        DB::setSetting('cfg.company.address', mb_substr(trim((string) input('company_address', '')), 0, 300));
-        DB::setSetting('cfg.company.bank', mb_substr(trim((string) input('company_bank', '')), 0, 500));
+        $section = (string) input('section', '');
+        $back = '/admin/settings#set-' . preg_replace('/[^a-z]/', '', $section);
+        $fail = static function (string $msg) use ($back): never {
+            flash('error', $msg);
+            redirect($back);
+        };
+        switch ($section) {
+            case 'company':
+                // Реквизиты исполнителя (оферта, политика конфиденциальности, подвал сайта)
+                $inn = preg_replace('/\D/', '', (string) input('company_inn', ''));
+                $ogrn = preg_replace('/\D/', '', (string) input('company_ogrn', ''));
+                if ($inn !== '' && !inn_valid($inn)) {
+                    $fail('ИНН указан неверно: 10 цифр для организации или 12 — для ИП, контрольные цифры не сходятся.');
+                }
+                if ($ogrn !== '' && !in_array(strlen($ogrn), [13, 15], true)) {
+                    $fail('ОГРН — 13 цифр, ОГРНИП — 15 цифр.');
+                }
+                DB::setSetting('cfg.company.name', mb_substr(trim((string) input('company_name', '')), 0, 200));
+                DB::setSetting('cfg.company.inn', $inn);
+                DB::setSetting('cfg.company.ogrn', $ogrn);
+                DB::setSetting('cfg.company.address', mb_substr(trim((string) input('company_address', '')), 0, 300));
+                DB::setSetting('cfg.company.bank', mb_substr(trim((string) input('company_bank', '')), 0, 500));
+                flash('success', 'Реквизиты сохранены.');
+                break;
 
-        DB::setSetting('cfg.app.support_phone', $phone !== '' ? normalize_phone($phone) : '');
-        DB::setSetting('cfg.app.support_email', $email);
-        $channel = preg_replace('~^(https?://)?t\.me/~i', '', ltrim(trim((string) input('support_telegram', '')), '@'));
-        if ($channel !== '' && !preg_match('/^[A-Za-z0-9_]{4,64}$/', $channel)) {
-            flash('error', 'Telegram-канал: укажите имя вида wblinkoz или ссылку t.me/wblinkoz.');
-            redirect('/admin/settings');
-        }
-        DB::setSetting('cfg.app.support_telegram', $channel);
-        $username = ltrim(trim((string) input('bot_username', '')), '@');
-        $username = preg_replace('~^(https?://)?t\.me/~i', '', $username);
-        $token = trim((string) input('bot_token', ''));
-        if ($token !== '' && !preg_match('/^\d{5,15}:[A-Za-z0-9_-]{30,50}$/', $token)) {
-            flash('error', 'Токен бота выглядит неверно. Скопируйте его из @BotFather целиком: 123456789:AA…');
-            redirect('/admin/settings');
-        }
-        if ($token !== '') {
-            Config::set('telegram.bot_token', $token);
-            $me = Telegram::api('getMe');
-            if ($me === null) {
-                flash('error', 'Не удалось проверить токен в Telegram (getMe): ' . Telegram::$lastError . '. Проверьте токен в @BotFather.');
-                redirect('/admin/settings');
-            }
-            $username = (string) ($me['result']['username'] ?? $username);
-            // Привязка аккаунтов работает через getUpdates — снимаем вебхук, если он был установлен
-            Telegram::api('deleteWebhook', ['drop_pending_updates' => false]);
-            DB::setSetting('cfg.telegram.bot_token', Crypto::encrypt($token));
-        }
-        if ($username !== '' && !preg_match('/^[A-Za-z0-9_]{5,32}$/', $username)) {
-            flash('error', 'Имя бота — латиница, цифры и _, например WBLinkoz_bot.');
-            redirect('/admin/settings');
-        }
-        DB::setSetting('cfg.telegram.bot_username', $username);
+            case 'contacts':
+                $phone = trim((string) input('support_phone', ''));
+                $email = trim((string) input('support_email', ''));
+                if ($phone !== '' && normalize_phone($phone) === null) {
+                    $fail('Телефон поддержки указан неверно.');
+                }
+                if ($email !== '' && !filter_var($email, FILTER_VALIDATE_EMAIL)) {
+                    $fail('Email поддержки указан неверно.');
+                }
+                $channel = preg_replace('~^(https?://)?t\.me/~i', '', ltrim(trim((string) input('support_telegram', '')), '@'));
+                if ($channel !== '' && !preg_match('/^[A-Za-z0-9_]{4,64}$/', $channel)) {
+                    $fail('Telegram-канал: укажите имя вида wblinkoz или ссылку t.me/wblinkoz.');
+                }
+                DB::setSetting('cfg.app.support_phone', $phone !== '' ? normalize_phone($phone) : '');
+                DB::setSetting('cfg.app.support_email', $email);
+                DB::setSetting('cfg.app.support_telegram', $channel);
+                flash('success', 'Контакты сохранены.');
+                break;
 
-        // Бот MAX: токен из платформы MAX для партнёров (зашифрован; пусто — не менять), ник бота — из GET /me
-        $maxToken = trim((string) input('max_token', ''));
-        $maxUser = preg_replace('~^(https?://)?max\.ru/~i', '', ltrim(trim((string) input('max_username', '')), '@'));
-        if ($maxToken !== '') {
-            Config::set('max.bot_token', $maxToken);
-            Config::set('max.bot_username', $maxUser !== '' ? $maxUser : 'bot');
-            $me = Max::api('GET', '/me');
-            if ($me === null) {
-                flash('error', 'MAX не принял токен бота (GET /me): ' . Max::$lastError . '. Скопируйте токен в платформе MAX → Чат-боты → Настройки.');
-                redirect('/admin/settings');
-            }
-            $maxUser = (string) (($me['username'] ?? '') ?: $maxUser);
-            DB::setSetting('cfg.max.bot_token', Crypto::encrypt($maxToken));
-        }
-        if ($maxUser !== '' && !preg_match('/^[A-Za-z0-9_.-]{3,64}$/', $maxUser)) {
-            flash('error', 'Ник бота MAX — латиница, цифры, _ . -, например wblinkoz_bot.');
-            redirect('/admin/settings');
-        }
-        DB::setSetting('cfg.max.bot_username', $maxUser);
-        if (!empty($_POST['max_remove'])) {
-            DB::setSetting('cfg.max.bot_token', '');
-        }
+            case 'max':
+                // Бот MAX: токен из платформы MAX для партнёров (зашифрован; пусто — не менять), ник бота — из GET /me
+                if (!empty($_POST['max_remove'])) {
+                    DB::setSetting('cfg.max.bot_token', '');
+                    flash('success', 'Бот MAX отключён.');
+                    break;
+                }
+                $maxToken = trim((string) input('max_token', ''));
+                $maxUser = preg_replace('~^(https?://)?max\.ru/~i', '', ltrim(trim((string) input('max_username', '')), '@'));
+                if ($maxToken !== '') {
+                    Config::set('max.bot_token', $maxToken);
+                    Config::set('max.bot_username', $maxUser !== '' ? $maxUser : 'bot');
+                    $me = Max::api('GET', '/me');
+                    if ($me === null) {
+                        $fail('MAX не принял токен бота (GET /me): ' . Max::$lastError . '. Скопируйте токен в платформе MAX → Чат-боты → Настройки.');
+                    }
+                    $maxUser = (string) (($me['username'] ?? '') ?: $maxUser);
+                    DB::setSetting('cfg.max.bot_token', Crypto::encrypt($maxToken));
+                }
+                if ($maxUser !== '' && !preg_match('/^[A-Za-z0-9_.-]{3,64}$/', $maxUser)) {
+                    $fail('Ник бота MAX — латиница, цифры, _ . -, например wblinkoz_bot.');
+                }
+                DB::setSetting('cfg.max.bot_username', $maxUser);
+                flash('success', $maxToken !== '' ? 'Бот MAX ' . $maxUser . ' подключён.' : 'Настройки бота MAX сохранены.');
+                break;
 
-        // ЮKassa: shopId, секретный ключ (зашифрован; пусто — не менять), чек 54-ФЗ и ставка НДС
-        $shop = preg_replace('/\D/', '', (string) input('yk_shop_id', ''));
-        $secret = trim((string) input('yk_secret', ''));
-        if ($secret !== '' && !preg_match('/^(live|test)_[A-Za-z0-9_-]{20,}$/', $secret)) {
-            flash('error', 'Секретный ключ ЮKassa начинается с live_ или test_. Скопируйте его из личного кабинета ЮKassa → Интеграция → Ключи API.');
-            redirect('/admin/settings');
+            case 'telegram':
+                if (!empty($_POST['bot_remove'])) {
+                    DB::setSetting('cfg.telegram.bot_token', '');
+                    flash('success', 'Бот Telegram отключён.');
+                    break;
+                }
+                $username = preg_replace('~^(https?://)?t\.me/~i', '', ltrim(trim((string) input('bot_username', '')), '@'));
+                $token = trim((string) input('bot_token', ''));
+                if ($token !== '' && !preg_match('/^\d{5,15}:[A-Za-z0-9_-]{30,50}$/', $token)) {
+                    $fail('Токен бота выглядит неверно. Скопируйте его из @BotFather целиком: 123456789:AA…');
+                }
+                if ($token !== '') {
+                    Config::set('telegram.bot_token', $token);
+                    $me = Telegram::api('getMe');
+                    if ($me === null) {
+                        $fail('Не удалось проверить токен в Telegram (getMe): ' . Telegram::$lastError . '. Проверьте токен в @BotFather.');
+                    }
+                    $username = (string) ($me['result']['username'] ?? $username);
+                    // Привязка аккаунтов работает через getUpdates — снимаем вебхук, если он был установлен
+                    Telegram::api('deleteWebhook', ['drop_pending_updates' => false]);
+                    DB::setSetting('cfg.telegram.bot_token', Crypto::encrypt($token));
+                }
+                if ($username !== '' && !preg_match('/^[A-Za-z0-9_]{5,32}$/', $username)) {
+                    $fail('Имя бота — латиница, цифры и _, например WBLinkoz_bot.');
+                }
+                DB::setSetting('cfg.telegram.bot_username', $username);
+                flash('success', $token !== '' ? 'Бот Telegram @' . $username . ' подключён.' : 'Настройки бота Telegram сохранены.');
+                break;
+
+            case 'yookassa':
+                // ЮKassa: shopId, секретный ключ (зашифрован; пусто — не менять), чек 54-ФЗ и ставка НДС
+                if (!empty($_POST['yk_remove'])) {
+                    DB::setSetting('cfg.yookassa.secret_key', '');
+                    DB::setSetting('cfg.yookassa.shop_id', '');
+                    flash('success', 'ЮKassa отключена.');
+                    break;
+                }
+                $shop = preg_replace('/\D/', '', (string) input('yk_shop_id', ''));
+                $secret = trim((string) input('yk_secret', ''));
+                if ($secret !== '' && !preg_match('/^(live|test)_[A-Za-z0-9_-]{20,}$/', $secret)) {
+                    $fail('Секретный ключ ЮKassa начинается с live_ или test_. Скопируйте его из личного кабинета ЮKassa → Интеграция → Ключи API.');
+                }
+                DB::setSetting('cfg.yookassa.shop_id', $shop);
+                if ($secret !== '') {
+                    DB::setSetting('cfg.yookassa.secret_key', Crypto::encrypt($secret));
+                }
+                DB::setSetting('cfg.yookassa.send_receipt', !empty($_POST['yk_receipt']) ? '1' : '0');
+                DB::setSetting('cfg.yookassa.vat_code', (string) max(1, min(10, (int) input('yk_vat', 1))));
+                flash('success', 'Настройки ЮKassa сохранены.');
+                break;
+
+            default:
+                flash('error', 'Неизвестный раздел настроек.');
         }
-        DB::setSetting('cfg.yookassa.shop_id', $shop);
-        if ($secret !== '') {
-            DB::setSetting('cfg.yookassa.secret_key', Crypto::encrypt($secret));
-        }
-        if (!empty($_POST['yk_remove'])) {
-            DB::setSetting('cfg.yookassa.secret_key', '');
-            DB::setSetting('cfg.yookassa.shop_id', '');
-        }
-        DB::setSetting('cfg.yookassa.send_receipt', !empty($_POST['yk_receipt']) ? '1' : '0');
-        DB::setSetting('cfg.yookassa.vat_code', (string) max(1, min(10, (int) input('yk_vat', 1))));
-        if (!empty($_POST['bot_remove'])) {
-            DB::setSetting('cfg.telegram.bot_token', '');
-        }
-        flash('success', 'Настройки сохранены.' . ($token !== '' ? ' Бот Telegram @' . $username . ' подключён.' : '') . ($maxToken !== '' ? ' Бот MAX ' . $maxUser . ' подключён.' : ''));
-        redirect('/admin/settings');
+        redirect($back);
     }
 
     public function runCron(): never

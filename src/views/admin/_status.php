@@ -2,7 +2,9 @@
 /** Бейдж состояния доступа клиента. Ожидает $u (строка users) и $paid (bool). */
 $exp = $u['plan_expires_at'] ? strtotime($u['plan_expires_at']) : null;
 $days = $exp ? (int) ceil(($exp - time()) / 86400) : null;
-if ((int) $u['is_blocked']) {
+if (!empty($u['is_super'])) {
+    echo '<span class="badge badge-accent">Супер-админ · всё бесплатно</span>';
+} elseif ((int) $u['is_blocked']) {
     echo '<span class="badge badge-cancel">Заблокирован</span>';
 } elseif (($u['role'] ?? '') === 'admin') {
     echo '<span class="badge badge-accent">Администратор</span>';

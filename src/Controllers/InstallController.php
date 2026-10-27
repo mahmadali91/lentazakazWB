@@ -98,8 +98,9 @@ final class InstallController
                     $pdo->prepare("UPDATE users SET role = 'admin', password_hash = ? WHERE id = ?")
                         ->execute([password_hash($password, PASSWORD_DEFAULT), $id]);
                 } else {
-                    $pdo->prepare("INSERT INTO users (email, password_hash, name, role, plan_code, plan_expires_at, created_at)
-                        VALUES (?, ?, 'Администратор', 'admin', 'business', ?, ?)")
+                    // Первый администратор — владелец сервиса (супер-админ): всё бесплатно и без ограничений
+                    $pdo->prepare("INSERT INTO users (email, password_hash, name, role, is_super, plan_code, plan_expires_at, created_at)
+                        VALUES (?, ?, 'Администратор', 'admin', IF((SELECT COUNT(*) FROM users u) = 0, 1, 0), 'business', ?, ?)")
                         ->execute([$email, password_hash($password, PASSWORD_DEFAULT), date('Y-m-d H:i:s', strtotime('+10 years')), now()]);
                 }
                 Config::write($config);

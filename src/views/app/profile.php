@@ -1,11 +1,23 @@
 <?php
-$isMember = !empty($user['owner_id']);
+$isMember = App\Core\Auth::isMember();
 $display = $user['name'] ?: $user['email'];
 $initial = mb_strtoupper(mb_substr($display, 0, 1));
 ?>
 <div class="topbar"><h1>Профиль</h1></div>
 
 <div class="stack page-narrow">
+  <?php $grants = App\Core\Auth::grants(); if ($grants): $actingId = App\Core\Auth::acting(); ?>
+    <form method="post" action="/app/switch" class="card acc-switch" style="margin:0">
+      <?= csrf_field() ?>
+      <label class="muted small" for="accSwM">Кабинет (доступ агентства)</label>
+      <select id="accSwM" name="account" onchange="this.form.submit()">
+        <option value="0">Мой кабинет</option>
+        <?php foreach ($grants as $g): ?>
+          <option value="<?= (int) $g['owner_id'] ?>" <?= $actingId === (int) $g['owner_id'] ? 'selected' : '' ?>><?= e(($g['name'] ?: $g['email']) . ' · ID ' . client_code((int) $g['owner_id'])) ?></option>
+        <?php endforeach; ?>
+      </select>
+    </form>
+  <?php endif; ?>
   <div class="card">
     <div class="profile-head">
       <div class="avatar"><?= e($initial) ?></div>
@@ -23,7 +35,7 @@ $initial = mb_strtoupper(mb_substr($display, 0, 1));
         <b>«<?= e($plan['name']) ?>»</b>
         <?php if (!empty($plan['expires_at'])): ?><span class="muted small">до <?= date_ru($plan['expires_at'], false) ?></span><?php endif; ?>
       </div>
-      <?php if (!$isMember): ?><a class="btn btn-sm" href="/app/billing"><?= !empty($plan['expires_at']) ? 'Продлить' : 'Улучшить' ?></a><?php endif; ?>
+      <?php if (!$isMember && empty($plan['super'])): ?><a class="btn btn-sm" href="/app/billing"><?= !empty($plan['expires_at']) ? 'Продлить' : 'Улучшить' ?></a><?php endif; ?>
     </div>
   </div>
 

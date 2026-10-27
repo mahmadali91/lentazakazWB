@@ -66,6 +66,8 @@ $names = ['pending' => 'Ожидает', 'succeeded' => 'Оплачен (ЮKassa
 
     <div class="card">
       <div class="card-title">Магазины (<?= count($stores) ?>)</div>
+      <?php $us = App\Services\Usage::byUser()[(int) $client['id']] ?? null; ?>
+      <?php if ($us): ?><p class="small muted">Ресурсы сервера: <b><?= e(App\Services\Usage::size((float) ($us['bytes'] ?? 0))) ?></b> в базе (<?= number_format((float) ($us['rows'] ?? 0), 0, ',', ' ') ?> строк) · синхронизация <?= number_format((float) ($us['cpu_7d'] ?? 0), 0, ',', ' ') ?> с за 7 дней · <?= number_format((float) ($us['requests_24h'] ?? 0), 0, ',', ' ') ?> запросов к WB за сутки.</p><?php endif; ?>
       <?php if (!$stores): ?><p class="muted small">Клиент ещё не подключил магазин.</p><?php endif; ?>
       <?php foreach ($stores as $s): $scopes = json_decode((string) $s['scopes'], true) ?: []; ?>
         <div class="top-item" style="align-items:flex-start">
@@ -75,7 +77,8 @@ $names = ['pending' => 'Ожидает', 'succeeded' => 'Оплачен (ЮKassa
             <div class="small muted">Категории: <?= e(implode(', ', array_keys(array_filter(array_intersect_key($scopes, App\Services\StoreService::SCOPE_LABELS))))) ?: '—' ?></div>
             <?php if ($s['last_error']): ?><div class="small" style="color:var(--bad)"><?= e($s['last_error']) ?></div><?php endif; ?>
           </div>
-          <div style="text-align:right" class="small"><b><?= number_format((int) $s['orders_7d'], 0, ',', ' ') ?></b> за 7 дн<div class="muted"><?= number_format((int) $s['orders_total'], 0, ',', ' ') ?> всего</div></div>
+          <div style="text-align:right" class="small"><b><?= number_format((int) $s['orders_7d'], 0, ',', ' ') ?></b> за 7 дн<div class="muted"><?= number_format((int) $s['orders_total'], 0, ',', ' ') ?> всего</div>
+            <?php $su = $us['stores'][(int) $s['id']] ?? null; if ($su): ?><div class="muted"><?= e(App\Services\Usage::size((float) ($su['bytes'] ?? 0))) ?> · CPU <?= number_format((float) ($su['cpu_7d'] ?? 0), 0, ',', ' ') ?> с</div><?php endif; ?></div>
         </div>
       <?php endforeach; ?>
     </div>

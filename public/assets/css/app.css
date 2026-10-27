@@ -641,3 +641,6 @@ span.p-thumb img { width: 100%; height: 100%; object-fit: cover; display: block;
 .access-list { display: flex; flex-direction: column; gap: 4px; padding-left: 24px; }
 .access-edit summary { cursor: pointer; color: var(--accent); }
 .access-edit[open] { min-width: 220px; }
+
+.acc-switch { margin: 0 0 14px; display: flex; flex-direction: column; gap: 4px; }
+.acc-switch select { width: 100%; padding: 8px 10px; font-size: 13px; }

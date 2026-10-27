@@ -57,6 +57,13 @@ final class Auth
     public static function account(): ?array
     {
         $user = self::user();
+        if ($user && empty($user['owner_id']) && ($actingId = self::acting()) !== null) {
+            // Агентство работает в кабинете клиента по выданному доступу
+            if (self::$account === null || (int) self::$account['id'] !== $actingId) {
+                self::$account = DB::one('SELECT * FROM users WHERE id = ? AND is_blocked = 0', [$actingId]);
+            }
+            return self::$account ?: $user;
+        }
         if (!$user || empty($user['owner_id'])) {
             return $user;
         }
@@ -82,9 +89,64 @@ final class Auth
         return $user !== null && empty($user['owner_id']) && ($user['role'] ?? '') !== 'admin' && empty($user['phone']);
     }
 
+    /** Сотрудник кабинета или агентство в кабинете клиента — без прав владельца (магазины, тариф, себестоимость). */
     public static function isMember(): bool
     {
-        return !empty(self::user()['owner_id']);
+        return !empty(self::user()['owner_id']) || self::acting() !== null;
+    }
+
+    /**
+     * Активные доступы агентства к кабинетам клиентов (выдаёт владелец кабинета по ID агентства, как в WB Partners).
+     * Доступ действует, пока не истёк срок и у агентства действует тариф «Агентство» (или это супер-админ).
+     */
+    public static function grants(?array $user = null): array
+    {
+        $user ??= self::user();
+        if (!$user || !empty($user['owner_id'])) {
+            return [];
+        }
+        $plan = \App\Services\Plans::forUser($user);
+        if (!in_array($plan['code'], ['business', 'super'], true)) {
+            return [];
+        }
+        return DB::all('SELECT g.owner_id, g.expires_at, u.email, u.name FROM account_grants g JOIN users u ON u.id = g.owner_id
+            WHERE g.agency_id = ? AND (g.expires_at IS NULL OR g.expires_at > NOW()) AND u.is_blocked = 0 ORDER BY u.name, u.email', [(int) $user['id']]);
+    }
+
+    /** id кабинета клиента, в котором сейчас работает агентство (null — в своём кабинете). */
+    public static function acting(): ?int
+    {
+        static $checked = null;
+        $id = (int) ($_SESSION['acting'] ?? 0);
+        if ($id <= 0) {
+            return null;
+        }
+        if ($checked !== $id) {
+            if (!in_array($id, array_map('intval', array_column(self::grants(), 'owner_id')), true)) {
+                // Доступ отозван или истёк — возвращаемся в свой кабинет
+                unset($_SESSION['acting']);
+                self::$account = null;
+                return null;
+            }
+            $checked = $id;
+        }
+        return $id;
+    }
+
+    /** Переключение кабинета агентства: 0 — свой кабинет. */
+    public static function switchAccount(int $ownerId): bool
+    {
+        if ($ownerId === 0) {
+            unset($_SESSION['acting']);
+            self::$account = null;
+            return true;
+        }
+        if (!in_array($ownerId, array_map('intval', array_column(self::grants(), 'owner_id')), true)) {
+            return false;
+        }
+        $_SESSION['acting'] = $ownerId;
+        self::$account = null;
+        return true;
     }
 
     /** Действие доступно только владельцу кабинета (не сотруднику). */
@@ -93,6 +155,10 @@ final class Auth
         $user = self::require();
         if (!empty($user['owner_id'])) {
             flash('error', 'Этот раздел доступен только владельцу кабинета.');
+            redirect('/app');
+        }
+        if (self::acting() !== null) {
+            flash('error', 'Вы работаете в кабинете клиента. Чтобы открыть этот раздел, переключитесь в свой кабинет.');
             redirect('/app');
         }
         return $user;

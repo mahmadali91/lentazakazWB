@@ -28,9 +28,22 @@ final class Plans
         return $plan;
     }
 
+    /** Тариф супер-админа (владелец сервиса): всё включено, без ограничений и бесплатно. */
+    public static function super(): array
+    {
+        $plan = self::get('business');
+        return ['code' => 'super', 'name' => 'Супер-админ', 'tagline' => 'Владелец сервиса: всё бесплатно и без ограничений', 'price' => 0,
+            'stores' => 9999, 'team' => 9999, 'store_price' => 0, 'stores_max' => 9999, 'extra_stores' => 0, 'history_days' => $plan['history_days'],
+            'sync_minutes' => $plan['sync_minutes'], 'telegram' => true, 'export' => true, 'profit' => true, 'finance' => true, 'public' => false,
+            'features' => [], 'expires_at' => null, 'expired_code' => null, 'super' => true];
+    }
+
     /** Действующий тариф пользователя (истёкший → бесплатный). */
     public static function forUser(array $user): array
     {
+        if (!empty($user['is_super'])) {
+            return self::super();
+        }
         $code = (string) $user['plan_code'];
         $expires = $user['plan_expires_at'] ?? null;
         $active = $code !== 'free' && $expires !== null && strtotime((string) $expires) > time();

@@ -21,7 +21,7 @@ final class Cron
         try {
             DB::setSetting('cron_last_run', now());
 
-            $stores = DB::all('SELECT s.*, u.plan_code, u.plan_expires_at, u.extra_stores, u.is_blocked
+            $stores = DB::all('SELECT s.*, u.plan_code, u.plan_expires_at, u.extra_stores, u.is_super, u.is_blocked
                 FROM stores s JOIN users u ON u.id = s.user_id
                 WHERE s.is_active = 1 AND u.is_blocked = 0
                 ORDER BY COALESCE(LEAST(
@@ -39,11 +39,17 @@ final class Cron
                 if (microtime(true) - $started > $budgetSeconds) {
                     break;
                 }
+                $t0 = microtime(true);
                 try {
                     $report['detail'][$store['id']] = (new SyncService($store, $plan))->run();
                     $report['stores']++;
                 } catch (\Throwable $e) {
                     log_message('sync', "store {$store['id']}: " . $e->getMessage());
+                }
+                // Нагрузка магазина на сервер — для раздела «Клиенты» админки
+                try {
+                    Usage::record((int) $store['id'], microtime(true) - $t0);
+                } catch (\Throwable) {
                 }
             }
 

@@ -8,6 +8,7 @@ if (PHP_SAPI === 'cli-server' && is_file(__DIR__ . parse_url($_SERVER['REQUEST_U
 
 require dirname(__DIR__) . '/src/bootstrap.php';
 
+use App\Controllers\AccountController;
 use App\Controllers\AdminController;
 use App\Controllers\ApiController;
 use App\Controllers\ApiKeysController;
@@ -133,6 +134,10 @@ $r->post('/app/team', [SettingsController::class, 'teamAdd']);
 $r->post('/app/team/{id}/password', [SettingsController::class, 'teamPassword']);
 $r->post('/app/team/{id}/delete', [SettingsController::class, 'teamDelete']);
 $r->post('/app/team/{id}/access', [SettingsController::class, 'teamAccess']);
+$r->post('/app/team/{id}/transfer', [AccountController::class, 'transfer']);
+$r->post('/app/switch', [AccountController::class, 'switch']);
+$r->post('/app/grants', [AccountController::class, 'grantAdd']);
+$r->post('/app/grants/{id}/delete', [AccountController::class, 'grantDelete']);
 $r->get('/app/products', [ProductsController::class, 'index']);
 $r->post('/app/products', [ProductsController::class, 'save']);
 $r->post('/app/products/settings', [ProductsController::class, 'settings']);

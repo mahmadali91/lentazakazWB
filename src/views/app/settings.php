@@ -108,7 +108,7 @@ $accessFields = static function (?array $access, array $stores, string $uid): st
     <?php endif; ?>
   </div>
 
-  <?php if (empty($user['owner_id'])): $teamLimit = (int) ($plan['team'] ?? 0); ?>
+  <?php if (!App\Core\Auth::isMember()): $teamLimit = (int) ($plan['team'] ?? 0); ?>
   <div class="card" id="team">
     <div class="card-title"><?= icon('users', 18) ?> Сотрудники и клиенты — доступ к кабинету по логину и паролю</div>
     <p class="muted small">Сотрудник видит ленту заказов, товары и финансы, но не может менять магазины, токены, тариф и себестоимость.
@@ -141,6 +141,12 @@ $accessFields = static function (?array $access, array $stores, string $uid): st
                   <input type="text" name="password" placeholder="Новый пароль" minlength="8" required style="width:150px;padding:6px 10px" autocomplete="new-password">
                   <button class="btn btn-ghost btn-sm">Сменить</button>
                 </form>
+                <?php if ($acc !== null && $acc): ?>
+                  <form method="post" action="/app/team/<?= (int) $m['id'] ?>/transfer"
+                    data-confirm="Передать <?= e($m['email']) ?> отдельный аккаунт вместе с магазинами: <?= e($accNames) ?>? Новый аккаунт сразу перейдёт на тариф «<?= e(App\Services\Plans::get('pro')['name']) ?>» на месяц с сегодняшнего дня<?= $transferPrice > 0 ? ', передача стоит ' . e(rub($transferPrice)) : ' (для вас — бесплатно)' ?>. Оплаченный остаток за эти магазины в вашем кабинете сгорит.">
+                    <?= csrf_field() ?><button class="btn btn-ghost btn-sm" title="Выделить в отдельный аккаунт на тарифе «<?= e(App\Services\Plans::get('pro')['name']) ?>»">Передать аккаунт</button>
+                  </form>
+                <?php endif; ?>
                 <form method="post" action="/app/team/<?= (int) $m['id'] ?>/delete" data-confirm="Удалить доступ сотрудника <?= e($m['email']) ?>?"><?= csrf_field() ?><button class="btn btn-danger btn-sm">Удалить</button></form>
               </div>
             </td>
@@ -169,8 +175,51 @@ $accessFields = static function (?array $access, array $stores, string $uid): st
       <p class="small muted">Лимит сотрудников по тарифу исчерпан. <a href="/app/billing">Увеличить</a></p>
     <?php endif; ?>
   </div>
+
+  <div class="card" id="agency">
+    <div class="card-title"><?= icon('shield', 18) ?> Доступ агентству</div>
+    <p class="muted small">Откройте менеджеру или агентству доступ к своему кабинету по его ID — как в WB Partners. Агентство увидит ленту, товары и финансы
+      и переключится в ваш кабинет в своём меню. Оплата тарифа остаётся за вами, доступ можно закрыть в любой момент. Ваш ID: <b><?= e(client_code((int) $user['id'])) ?></b>.</p>
+    <?php if ($grantsGiven): ?>
+      <div class="table-wrap" style="margin-bottom:14px"><table class="table">
+        <thead><tr><th>Агентство</th><th>Доступ</th><th></th></tr></thead>
+        <tbody>
+        <?php foreach ($grantsGiven as $g): $active = !$g['expires_at'] || strtotime($g['expires_at']) > time(); ?>
+          <tr>
+            <td><b><?= e($g['name'] ?: $g['email']) ?></b><div class="small muted">ID <?= e(client_code((int) $g['agency_id'])) ?></div></td>
+            <td class="small"><?= $active ? ($g['expires_at'] ? 'до ' . date_ru($g['expires_at'], false) : 'бессрочно') : '<span class="badge badge-cancel">истёк ' . date_ru($g['expires_at'], false) . '</span>' ?></td>
+            <td style="text-align:right"><form method="post" action="/app/grants/<?= (int) $g['agency_id'] ?>/delete" data-confirm="Закрыть доступ агентству ID <?= e(client_code((int) $g['agency_id'])) ?>?"><?= csrf_field() ?><button class="btn btn-danger btn-sm">Закрыть доступ</button></form></td>
+          </tr>
+        <?php endforeach; ?>
+        </tbody>
+      </table></div>
+    <?php endif; ?>
+    <form method="post" action="/app/grants" class="row" style="align-items:flex-end">
+      <?= csrf_field() ?>
+      <div class="field" style="margin:0"><label for="agid">ID агентства</label><input id="agid" type="text" name="agency" inputmode="numeric" placeholder="000123" required style="width:140px"></div>
+      <div class="field" style="margin:0"><label for="aguntil">Доступ до <span class="muted small">(необязательно)</span></label><input id="aguntil" type="date" name="until" min="<?= date('Y-m-d') ?>"></div>
+      <button class="btn btn-sm">Открыть доступ</button>
+    </form>
+  </div>
   <?php else: ?>
-  <div class="alert alert-info">Вы вошли как сотрудник кабинета <b><?= e($account['name'] ?: $account['email']) ?></b>.</div>
+  <div class="alert alert-info"><?= App\Core\Auth::acting() ? 'Вы работаете в кабинете клиента' : 'Вы вошли как сотрудник кабинета' ?> <b><?= e($account['name'] ?: $account['email']) ?></b>.</div>
+  <?php endif; ?>
+
+  <?php if ($grantsReceived): ?>
+  <div class="card" id="clients">
+    <div class="card-title"><?= icon('users', 18) ?> Кабинеты клиентов</div>
+    <p class="muted small">Клиенты открыли вашему агентству доступ к своим кабинетам. Переключайтесь между ними здесь или в меню «Кабинет».</p>
+    <?php foreach ($grantsReceived as $g): ?>
+      <form method="post" action="/app/switch" class="top-item">
+        <?= csrf_field() ?><input type="hidden" name="account" value="<?= (int) $g['owner_id'] ?>">
+        <div class="grow"><b><?= e($g['name'] ?: $g['email']) ?></b><div class="small muted">ID <?= e(client_code((int) $g['owner_id'])) ?> · <?= $g['expires_at'] ? 'доступ до ' . date_ru($g['expires_at'], false) : 'бессрочный доступ' ?></div></div>
+        <button class="btn btn-ghost btn-sm"><?= App\Core\Auth::acting() === (int) $g['owner_id'] ? 'Открыт' : 'Открыть' ?></button>
+      </form>
+    <?php endforeach; ?>
+    <?php if (App\Core\Auth::acting()): ?>
+      <form method="post" action="/app/switch" style="margin-top:10px"><?= csrf_field() ?><input type="hidden" name="account" value="0"><button class="btn btn-sm">Вернуться в свой кабинет</button></form>
+    <?php endif; ?>
+  </div>
   <?php endif; ?>
 
   <?php if (($user['role'] ?? '') === 'admin'): ?>
@@ -205,7 +254,7 @@ $accessFields = static function (?array $access, array $stores, string $uid): st
     </form>
   </div>
 
-  <?php if (empty($user['owner_id'])): ?>
+  <?php if (!App\Core\Auth::isMember()): ?>
   <div class="card" id="currency">
     <div class="card-title">Валюта сумм</div>
     <form method="post" action="/app/settings/currency" class="stack">

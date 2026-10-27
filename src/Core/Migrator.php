@@ -9,7 +9,28 @@ namespace App\Core;
  */
 final class Migrator
 {
-    public const VERSION = 17;
+    public const VERSION = 18;
+
+    private const LOAD_DDL = "CREATE TABLE IF NOT EXISTS store_load (
+        store_id INT UNSIGNED NOT NULL,
+        day      DATE NOT NULL,
+        runs     INT UNSIGNED NOT NULL DEFAULT 0,
+        ms       INT UNSIGNED NOT NULL DEFAULT 0,
+        PRIMARY KEY (store_id, day)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci";
+
+    private const GRANTS_DDL = "CREATE TABLE IF NOT EXISTS account_grants (
+        id         INT UNSIGNED NOT NULL AUTO_INCREMENT,
+        owner_id   INT UNSIGNED NOT NULL,
+        agency_id  INT UNSIGNED NOT NULL,
+        expires_at DATETIME NULL,
+        created_at DATETIME NOT NULL,
+        PRIMARY KEY (id),
+        UNIQUE KEY uq_grant (owner_id, agency_id),
+        KEY idx_grant_agency (agency_id),
+        CONSTRAINT fk_grant_owner FOREIGN KEY (owner_id) REFERENCES users (id) ON DELETE CASCADE,
+        CONSTRAINT fk_grant_agency FOREIGN KEY (agency_id) REFERENCES users (id) ON DELETE CASCADE
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci";
 
     public static function ensure(): void
     {
@@ -45,6 +66,17 @@ final class Migrator
                 // Пересчёт сумм в рубли по курсу ЦБ: настройка кабинета и кэш курсов
                 self::addColumn('users', 'show_rub', 'TINYINT(1) NOT NULL DEFAULT 0');
                 self::run(self::FX_DDL);
+            }
+            if ($version < 18) {
+                // Супер-админ (владелец сервиса, ID 000001): всё бесплатно и без ограничений
+                self::addColumn('users', 'is_super', 'TINYINT(1) NOT NULL DEFAULT 0 AFTER role');
+                DB::exec("UPDATE users SET is_super = 1 WHERE id = 1 AND role = 'admin'");
+                // Нагрузка магазинов на сервер: время синхронизации и число запросов к WB по дням
+                self::run(self::LOAD_DDL);
+                // Временный доступ агентства к кабинету клиента (как WB Partners)
+                self::run(self::GRANTS_DDL);
+                // Платёж за передачу аккаунта: id сотрудника, которому передаётся кабинет
+                self::addColumn('payments', 'ref_id', 'INT UNSIGNED NULL AFTER extra_stores');
             }
             if ($version < 17) {
                 // Уведомления в мессенджер MAX (Telegram в России работает со сбоями)

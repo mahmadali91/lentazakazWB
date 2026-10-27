@@ -103,7 +103,7 @@ final class Telegram
     /** Рассылает уведомления о новых заказах и смене статусов. */
     public static function notifyOrders(): void
     {
-        $rows = DB::all("SELECT o.*, s.name AS store_name, s.currency AS store_currency, s.user_id, u.plan_code, u.plan_expires_at,
+        $rows = DB::all("SELECT o.*, s.name AS store_name, s.currency AS store_currency, s.user_id, u.plan_code, u.plan_expires_at, u.is_super, u.extra_stores,
                 p.title AS p_title
             FROM orders o
             JOIN stores s ON s.id = o.store_id
@@ -135,6 +135,16 @@ final class Telegram
                 $rcp['stores'] = self::recipientStores($rcp);
             }
             unset($rcp);
+            // Агентства с доступом к кабинету (как WB Partners) — по всем его магазинам
+            if (($tgOn || $maxOn) && !empty($plan['telegram'])) {
+                foreach (DB::all('SELECT u.* FROM account_grants g JOIN users u ON u.id = g.agency_id
+                        WHERE g.owner_id = ? AND (g.expires_at IS NULL OR g.expires_at > NOW()) AND u.is_blocked = 0
+                          AND (u.tg_chat_id IS NOT NULL OR u.max_user_id IS NOT NULL)', [$ownerId]) as $ag) {
+                    if (in_array(Plans::forUser($ag)['code'], ['business', 'super'], true)) {
+                        $recipients[] = ['id' => $ag['id'], 'tg_chat_id' => $ag['tg_chat_id'], 'max_user_id' => $ag['max_user_id'], 'tg_events' => $ag['tg_events'], 'stores' => null];
+                    }
+                }
+            }
             $messages = array_fill(0, count($recipients), []);
             foreach ($list as $o) {
                 $event = $o['status'] === 'returnDefective' ? 'return' : $o['status'];

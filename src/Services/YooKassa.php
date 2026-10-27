@@ -53,28 +53,30 @@ final class YooKassa
      * Создаёт платёж и возвращает ссылку на оплату.
      * $months > 0 — тариф на срок (с $extra доп. магазинами); $months = 0 — докупка $extra магазинов до конца подписки.
      */
-    public static function createPayment(array $user, string $planCode, int $months, int $extra = 0): string
+    public static function createPayment(array $user, string $planCode, int $months, int $extra = 0, ?array $transfer = null): string
     {
         $plan = Plans::get($planCode);
-        $addon = $months === 0;
-        $amount = $addon ? Plans::addonPrice($user, $extra) : Plans::price($planCode, $months, $extra);
+        $addon = $months === 0 && $transfer === null;
+        $amount = $transfer !== null ? (float) $transfer['amount'] : ($addon ? Plans::addonPrice($user, $extra) : Plans::price($planCode, $months, $extra));
         if ($amount === null) {
             throw new \RuntimeException('Докупить магазины сейчас нельзя: проверьте тариф и лимит магазинов.');
         }
         $paymentId = DB::insert('payments', [
             'user_id'      => $user['id'],
             'plan_code'    => $planCode,
-            'kind'         => $addon ? 'stores' : 'plan',
+            'kind'         => $transfer !== null ? 'transfer' : ($addon ? 'stores' : 'plan'),
             'months'       => $months,
             'extra_stores' => $extra,
+            'ref_id'       => $transfer['member_id'] ?? null,
             'amount'       => $amount,
             'provider'     => 'yookassa',
             'status'       => 'pending',
             'created_at'   => now(),
         ]);
-        $description = $addon
-            ? sprintf('Доп. магазин ×%d к тарифу «%s» до %s — %s', $extra, $plan['name'], date('d.m.Y', strtotime((string) $user['plan_expires_at'])), config('app.name'))
-            : sprintf('Тариф «%s»%s на %d мес. — %s', $plan['name'], $extra ? ' + ' . $extra . ' доп. маг.' : '', $months, config('app.name'));
+        $description = $transfer !== null
+            ? sprintf('Передача аккаунта %s на тариф «%s» — %s', $transfer['login'], $plan['name'], config('app.name'))
+            : ($addon ? sprintf('Доп. магазин ×%d к тарифу «%s» до %s — %s', $extra, $plan['name'], date('d.m.Y', strtotime((string) $user['plan_expires_at'])), config('app.name'))
+            : sprintf('Тариф «%s»%s на %d мес. — %s', $plan['name'], $extra ? ' + ' . $extra . ' доп. маг.' : '', $months, config('app.name')));
         $value = number_format($amount, 2, '.', '');
         $body = [
             'amount'       => ['value' => $value, 'currency' => 'RUB'],
@@ -127,6 +129,13 @@ final class YooKassa
             if ($updated) {
                 if (($payment['kind'] ?? 'plan') === 'stores') {
                     Plans::addStores((int) $payment['user_id'], (int) $payment['extra_stores']);
+                } elseif (($payment['kind'] ?? 'plan') === 'transfer') {
+                    try {
+                        AccountTransfer::execute((int) $payment['user_id'], (int) $payment['ref_id']);
+                    } catch (\Throwable $e) {
+                        // Оплата прошла, но передать не удалось (сотрудника удалили и т. п.) — разбирается администратор
+                        log_message('payments', 'transfer after payment ' . $payment['id'] . ' failed: ' . $e->getMessage());
+                    }
                 } else {
                     Plans::activate((int) $payment['user_id'], $payment['plan_code'], (int) $payment['months'], (int) ($payment['extra_stores'] ?? 0));
                 }

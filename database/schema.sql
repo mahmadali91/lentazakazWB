@@ -11,6 +11,7 @@ CREATE TABLE IF NOT EXISTS users (
   name            VARCHAR(120) NOT NULL DEFAULT '',
   phone           VARCHAR(20) NULL,               -- телефон клиента (обязателен для владельцев кабинетов)
   role            ENUM('user','admin') NOT NULL DEFAULT 'user',
+  is_super        TINYINT(1) NOT NULL DEFAULT 0, -- супер-админ (владелец сервиса): всё бесплатно и без ограничений
   is_blocked      TINYINT(1) NOT NULL DEFAULT 0,
   plan_code       VARCHAR(32) NOT NULL DEFAULT 'free',
   plan_expires_at DATETIME NULL,
@@ -161,9 +162,10 @@ CREATE TABLE IF NOT EXISTS payments (
   id          INT UNSIGNED NOT NULL AUTO_INCREMENT,
   user_id     INT UNSIGNED NOT NULL,
   plan_code   VARCHAR(32) NOT NULL,
-  kind        VARCHAR(16) NOT NULL DEFAULT 'plan', -- plan — тариф | stores — доп. магазины к действующему тарифу
+  kind        VARCHAR(16) NOT NULL DEFAULT 'plan', -- plan — тариф | stores — доп. магазины | transfer — передача аккаунта
   months      TINYINT UNSIGNED NOT NULL,
   extra_stores SMALLINT UNSIGNED NOT NULL DEFAULT 0, -- доп. магазинов в платеже
+  ref_id      INT UNSIGNED NULL,           -- передача аккаунта: id сотрудника, которому передаётся кабинет
   amount      DECIMAL(10,2) NOT NULL,
   provider    VARCHAR(20) NOT NULL DEFAULT 'yookassa',
   provider_id VARCHAR(64) NULL,
@@ -410,4 +412,27 @@ CREATE TABLE IF NOT EXISTS fx_rates (
   day   DATE NOT NULL,
   rate  DECIMAL(16,8) NOT NULL,
   PRIMARY KEY (code, day)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Нагрузка магазина на сервер: время синхронизации (мс) и число проходов cron по дням
+CREATE TABLE IF NOT EXISTS store_load (
+  store_id INT UNSIGNED NOT NULL,
+  day      DATE NOT NULL,
+  runs     INT UNSIGNED NOT NULL DEFAULT 0,
+  ms       INT UNSIGNED NOT NULL DEFAULT 0,
+  PRIMARY KEY (store_id, day)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Временный доступ агентства к кабинету клиента (выдаёт владелец по ID агентства)
+CREATE TABLE IF NOT EXISTS account_grants (
+  id         INT UNSIGNED NOT NULL AUTO_INCREMENT,
+  owner_id   INT UNSIGNED NOT NULL,
+  agency_id  INT UNSIGNED NOT NULL,
+  expires_at DATETIME NULL,
+  created_at DATETIME NOT NULL,
+  PRIMARY KEY (id),
+  UNIQUE KEY uq_grant (owner_id, agency_id),
+  KEY idx_grant_agency (agency_id),
+  CONSTRAINT fk_grant_owner FOREIGN KEY (owner_id) REFERENCES users (id) ON DELETE CASCADE,
+  CONSTRAINT fk_grant_agency FOREIGN KEY (agency_id) REFERENCES users (id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

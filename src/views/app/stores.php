@@ -5,7 +5,7 @@ $canAdd = count($stores) < (int) $plan['stores'];
 ?>
 <div class="topbar">
   <h1>Магазины</h1>
-  <span class="muted small">Подключено <?= count($stores) ?> из <?= (int) $plan['stores'] ?></span>
+  <span class="muted small">Подключено <?= count($stores) ?><?= (int) $plan['stores'] >= 1000 ? ', без ограничений' : ' из ' . (int) $plan['stores'] ?></span>
 </div>
 
 <div class="stack page-narrow">

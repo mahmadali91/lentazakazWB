@@ -9,6 +9,9 @@ $back = '/admin/users?' . http_build_query(['f' => $filter, 'q' => $q]);
   <button class="btn btn-sm" type="button" onclick="document.getElementById('newClient').classList.toggle('hidden')"><?= icon('plus', 16) ?> Создать клиента</button>
 </div>
 <?= View::partial('admin/_nav', ['tab' => 'users']) ?>
+<?php $allBytes = array_sum(array_map(static fn($x) => (float) ($x['bytes'] ?? 0), $usage)); $allCpu = array_sum(array_map(static fn($x) => (float) ($x['cpu_7d'] ?? 0), $usage)); ?>
+<p class="small muted" style="margin:-4px 0 14px">Ресурсы сервера: база данных — <b><?= e(App\Services\Usage::size(App\Services\Usage::dbTotal())) ?></b>, из них данные магазинов — <?= e(App\Services\Usage::size($allBytes)) ?>;
+  фоновая синхронизация — <?= number_format($allCpu / 7 / 864, 1, ',', ' ') ?>% времени сервера за 7 дней (<?= number_format($allCpu / 60, 0, ',', ' ') ?> мин). Обновляется раз в 10 минут.</p>
 
 <div class="card hidden" id="newClient" style="margin-bottom:16px">
   <div class="card-title">Новый клиент — доступ по логину и паролю</div>
@@ -45,7 +48,7 @@ $back = '/admin/users?' . http_build_query(['f' => $filter, 'q' => $q]);
 <div class="card" style="padding:0">
   <div class="table-wrap">
     <table class="table">
-      <thead><tr><th>Клиент</th><th>Тариф</th><th>Доступ</th><th>Магазины</th><th>Заказов 7 дн</th><th>Оплачено</th><th>Продлить</th></tr></thead>
+      <thead><tr><th>Клиент</th><th>Тариф</th><th>Доступ</th><th>Магазины</th><th>Заказов 7 дн</th><th title="Оценка: объём данных клиента в базе, время фоновой синхронизации за 7 дней и запросы к WB за сутки">Ресурсы сервера</th><th>Оплачено</th><th>Продлить</th></tr></thead>
       <tbody>
       <?php foreach ($users as $u): ?>
         <tr>
@@ -60,6 +63,12 @@ $back = '/admin/users?' . http_build_query(['f' => $filter, 'q' => $q]);
           <td class="nowrap"><?= View::partial('admin/_status', ['u' => $u, 'paid' => (bool) $u['has_paid']]) ?></td>
           <td><?= (int) $u['stores_count'] ?><?= (int) $u['members_count'] ? '<div class="small muted">+' . (int) $u['members_count'] . ' сотр.</div>' : '' ?></td>
           <td><?= number_format((int) $u['orders_7d'], 0, ',', ' ') ?></td>
+          <td class="small nowrap"><?php $us = $usage[(int) $u['id']] ?? null; ?>
+            <?php if ($us): ?>
+              <b><?= e(App\Services\Usage::size((float) ($us['bytes'] ?? 0))) ?></b> в базе
+              <div class="muted">CPU <?= number_format((float) ($us['cpu_7d'] ?? 0), 0, ',', ' ') ?> с / 7 дн · <?= number_format((float) ($us['requests_24h'] ?? 0), 0, ',', ' ') ?> запр. WB / сут</div>
+            <?php else: ?><span class="muted">—</span><?php endif; ?>
+          </td>
           <td class="nowrap"><?= rub($u['paid_total']) ?></td>
           <td>
             <div class="row" style="gap:4px;min-width:150px">
