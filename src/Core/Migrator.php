@@ -54,6 +54,16 @@ final class Migrator
                 // Тариф «Агентство» — магазинов без ограничений
                 self::run('ALTER TABLE users MODIFY extra_stores SMALLINT UNSIGNED NOT NULL DEFAULT 0');
                 self::run('ALTER TABLE payments MODIFY extra_stores SMALLINT UNSIGNED NOT NULL DEFAULT 0');
+                // Уже подключённые магазины сверх включённых в тариф остаются работать до конца оплаченного срока (как доп. магазины)
+                foreach (\App\Services\Plans::all() as $code => $p) {
+                    if (empty($p['store_price'])) {
+                        continue;
+                    }
+                    $max = \App\Services\Plans::maxExtra($p + ['code' => $code]);
+                    DB::exec("UPDATE users u SET u.extra_stores = LEAST(?, GREATEST(u.extra_stores,
+                            (SELECT COUNT(*) FROM stores s WHERE s.user_id = u.id AND s.is_active = 1) - ?))
+                        WHERE u.plan_code = ? AND u.owner_id IS NULL", [$max, (int) $p['stores'], $code]);
+                }
             }
             if ($version < 15) {
                 // Дополнительные магазины к тарифу (покупаются отдельно до конца подписки)
