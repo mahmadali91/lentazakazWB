@@ -9,7 +9,21 @@ namespace App\Core;
  */
 final class Migrator
 {
-    public const VERSION = 18;
+    public const VERSION = 19;
+
+    private const AD_PAYMENTS_DDL = "CREATE TABLE IF NOT EXISTS wb_ad_payments (
+        store_id    INT UNSIGNED NOT NULL,
+        payment_id  BIGINT NOT NULL,
+        day         DATE NOT NULL,
+        paid_at     DATETIME NULL,
+        amount      DECIMAL(12,2) NOT NULL DEFAULT 0,
+        type        TINYINT NOT NULL,
+        status_id   TINYINT NULL,
+        card_status VARCHAR(20) NULL,
+        PRIMARY KEY (store_id, payment_id),
+        KEY idx_adpay_day (store_id, day),
+        CONSTRAINT fk_adpay_store FOREIGN KEY (store_id) REFERENCES stores (id) ON DELETE CASCADE
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci";
 
     private const LOAD_DDL = "CREATE TABLE IF NOT EXISTS store_load (
         store_id INT UNSIGNED NOT NULL,
@@ -66,6 +80,12 @@ final class Migrator
                 // Пересчёт сумм в рубли по курсу ЦБ: настройка кабинета и кэш курсов
                 self::addColumn('users', 'show_rub', 'TINYINT(1) NOT NULL DEFAULT 0');
                 self::run(self::FX_DDL);
+            }
+            if ($version < 19) {
+                // Пополнения рекламного счёта (картой / по счёту / с баланса) — реклама считается по деньгам, а не по затратам кабинета
+                self::run(self::AD_PAYMENTS_DDL);
+                // Перечитать историю рекламы, чтобы загрузить пополнения
+                DB::exec('UPDATE stores SET ads_state = NULL, ads_next_at = NULL');
             }
             if ($version < 18) {
                 // Супер-админ (владелец сервиса, ID 000001): всё бесплатно и без ограничений

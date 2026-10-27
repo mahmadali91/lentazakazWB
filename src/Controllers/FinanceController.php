@@ -525,21 +525,24 @@ final class FinanceController
             return $html;
         }
         $camps = $bySku = [];
+        $money = null;
         if ($ctx['storeIds']) {
+            // Реклама по деньгам (как в прибыли): удержания WB + пополнения картой / по счёту; по товарам — разнесённая
+            $res = Finance::compute($ctx['account'], $ctx['storeIds'], $ctx['from'], $ctx['to'], ['group' => 'none', 'sku' => true]);
+            $money = ['total' => $res['total']['ads'], 'info' => $res['info']['ads'] ?? []];
             $in = implode(',', $ctx['storeIds']);
             $camps = DB::all("SELECT c.store_id, c.advert_id, MAX(c.camp_name) camp_name, MAX(c.payment_type) payment_type, SUM(c.amount) amount, COUNT(*) cnt,
                     MIN(c.day) first_day, MAX(c.day) last_day,
                     (SELECT GROUP_CONCAT(n.nm_id) FROM wb_ad_nms n WHERE n.store_id = c.store_id AND n.advert_id = c.advert_id AND n.nm_id > 0) nms
                 FROM wb_ad_costs c WHERE c.store_id IN ($in) AND c.day BETWEEN ? AND ? GROUP BY c.store_id, c.advert_id ORDER BY amount DESC", [$ctx['from'], $ctx['to']]);
-            foreach ($camps as $c) {
-                $nms = array_filter(explode(',', (string) $c['nms']));
-                foreach ($nms as $nm) {
-                    $bySku[(int) $nm] = ($bySku[(int) $nm] ?? 0) + (float) $c['amount'] / count($nms);
+            foreach ($res['bySku'] as $nm => $s) {
+                if (abs((float) $s['ads']) >= 0.01) {
+                    $bySku[(int) $nm] = (float) $s['ads'];
                 }
             }
             arsort($bySku);
         }
-        return $this->render('ads', $ctx, ['camps' => $camps, 'bySku' => $bySku, 'photos' => $this->photos($ctx['storeIds'], array_keys($bySku))]);
+        return $this->render('ads', $ctx, ['camps' => $camps, 'bySku' => $bySku, 'money' => $money, 'photos' => $this->photos($ctx['storeIds'], array_keys($bySku))]);
     }
 
     // ------------------------------------------------------------------ Прочие расходы

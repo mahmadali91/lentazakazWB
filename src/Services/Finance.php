@@ -170,9 +170,10 @@ final class Finance
         $m['penalty'] = (float) $r['penalty'];
         $m['deduction'] = (float) $r['deduction'];
         $m['additional'] = (float) $r['additional'];
-        // Удержание за продвижение — это расходы на рекламу, они уже есть в «Реклама» (история затрат WB).
-        // Переносим, только если реклама магазина загружена, иначе расход потерялся бы.
-        $m['ads_deducted'] = $adsLoaded && $m['deduction'] != 0.0 && preg_match('/продвиж|реклам/u', $bonus) ? $m['deduction'] : 0.0;
+        // Удержание «Оказание услуг WB Продвижение» — оплата рекламы деньгами (взаиморасчёт с баланса, пополнение счёта
+        // продвижения из выплат). Это расход на рекламу в неделю отчёта: переносим его из удержаний в «Рекламу».
+        $m['ads_deducted'] = $m['deduction'] != 0.0 && preg_match('/продвиж|реклам/u', $bonus) ? $m['deduction'] : 0.0;
+        $m['ads'] = $m['ads_deducted'];
 
         // Налоговая база (DT), НДС (EA), налог (DB)
         $comp = $m['defect_qty'] + $m['lost_qty'];
@@ -561,24 +562,43 @@ final class Finance
             $in = $ids ? implode(',', array_map('intval', $ids)) : '0';
             $nullExp = $nullExp && (self::$nullExpCurrency === null || self::$nullExpCurrency === self::$currency);
         }
-        // Реклама: списание кампании делим поровну между её товарами; без товаров — общий расход.
-        // Удержания WB за продвижение (оплата со счёта, пополнение рекламного баланса) в прибыль не идут — см. ads_deducted.
-        $nms = [];
-        foreach (DB::all("SELECT store_id, advert_id, nm_id FROM wb_ad_nms WHERE store_id IN ($in) AND nm_id > 0") as $n) {
-            $nms[$n['store_id'] . ':' . $n['advert_id']][] = (int) $n['nm_id'];
-        }
-        foreach (DB::all("SELECT store_id, advert_id, day, amount FROM wb_ad_costs WHERE store_id IN ($in) AND day BETWEEN ? AND ?", [$from, $to]) as $a) {
-            $amount = (float) $a['amount'];
-            $pk = self::periodKey(self::weekStart((string) $a['day']), $group);
+        // Реклама — по деньгам, как в отчётах WB и Excel-шаблонах:
+        //  1) удержания «WB Продвижение» в отчётах реализации (уже учтены в строках отчёта, см. ads_deducted);
+        //  2) пополнения счёта продвижения картой или по счёту (/adv/v1/payments) — этих денег в отчёте нет.
+        // Бонусы и промо-бонусы (кэшбэк) — не деньги продавца, расходом не считаются. Затраты кабинета (/adv/v1/upd)
+        // нужны только чтобы разнести рекламу по товарам.
+        $topups = 0.0;
+        foreach (DB::all("SELECT day, amount FROM wb_ad_payments WHERE store_id IN ($in) AND day BETWEEN ? AND ? AND type IN (0, 3)
+                AND COALESCE(status_id, 1) = 1 AND COALESCE(card_status, '') NOT IN ('fail', 'pending', 'unknown')", [$from, $to]) as $p) {
+            $pk = self::periodKey(self::weekStart((string) $p['day']), $group);
             $res['periods'][$pk] ??= self::empty();
-            $res['periods'][$pk]['ads'] += $amount;
-            $res['total']['ads'] += $amount;
-            $list = $nms[$a['store_id'] . ':' . $a['advert_id']] ?? [];
-            if ($withSku && $list) {
+            $res['periods'][$pk]['ads'] += (float) $p['amount'];
+            $res['total']['ads'] += (float) $p['amount'];
+            $topups += (float) $p['amount'];
+        }
+        $spend = DB::all("SELECT payment_type, SUM(amount) s FROM wb_ad_costs WHERE store_id IN ($in) AND day BETWEEN ? AND ? GROUP BY payment_type", [$from, $to]);
+        $res['info']['ads'] = ['deducted' => round($res['total']['ads_deducted'], 2), 'topups' => round($topups, 2),
+            'spend' => array_map(static fn($x) => round((float) $x, 2), array_column($spend, 's', 'payment_type'))];
+        if ($withSku && $res['total']['ads'] != 0.0) {
+            // Доли товаров — по затратам кампаний за деньги (без бонусов), кампания делится поровну между её товарами
+            $nms = [];
+            foreach (DB::all("SELECT store_id, advert_id, nm_id FROM wb_ad_nms WHERE store_id IN ($in) AND nm_id > 0") as $n) {
+                $nms[$n['store_id'] . ':' . $n['advert_id']][] = (int) $n['nm_id'];
+            }
+            $weights = [];
+            foreach (DB::all("SELECT store_id, advert_id, SUM(amount) amount FROM wb_ad_costs WHERE store_id IN ($in) AND day BETWEEN ? AND ?
+                    AND COALESCE(payment_type, '') NOT IN ('Бонусы', 'Кэшбэк') GROUP BY store_id, advert_id", [$from, $to]) as $a) {
+                $list = array_values(array_filter($nms[$a['store_id'] . ':' . $a['advert_id']] ?? [], static fn($nm) => isset($res['bySku'][$nm])));
                 foreach ($list as $nm) {
-                    if (isset($res['bySku'][$nm])) {
-                        $res['bySku'][$nm]['ads'] += $amount / count($list);
-                    }
+                    $weights[$nm] = ($weights[$nm] ?? 0) + (float) $a['amount'] / count($list);
+                }
+            }
+            $sum = array_sum($weights);
+            // Разносим только то, что ещё не попало на товары (удержание с артикулом уже учтено в его строке)
+            $left = $res['total']['ads'] - array_sum(array_map(static fn($x) => (float) $x['ads'], $res['bySku']));
+            if ($sum > 0 && abs($left) >= 0.01) {
+                foreach ($weights as $nm => $w) {
+                    $res['bySku'][$nm]['ads'] += $left * $w / $sum;
                 }
             }
         }

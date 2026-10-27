@@ -299,6 +299,15 @@ final class WbClient
         return $this->request('advert', 'GET', '/adv/v1/upd', ['from' => $from, 'to' => $to]);
     }
 
+    /**
+     * Пополнения счёта WB Продвижения: GET /adv/v1/payments?from&to (период до 31 дня).
+     * type: 0 — счёт (оплата по счёту), 1 — баланс (удержание из продаж — попадает в отчёт реализации), 3 — картой.
+     */
+    public function adPayments(string $from, string $to): array
+    {
+        return $this->request('advert', 'GET', '/adv/v1/payments', ['from' => $from, 'to' => $to]);
+    }
+
     /** Кампании с их товарами: GET /api/advert/v2/adverts?ids= (до 50 ID). */
     public function adverts(array $ids): array
     {

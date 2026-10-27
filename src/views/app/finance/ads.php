@@ -6,9 +6,13 @@ $advertOff = array_filter($status, static fn($s) => $s['advert'] === false);
 <?php if ($advertOff): ?>
   <div class="alert alert-warn">У токена нет категории «Продвижение» — расходы на рекламу не загружаются. Добавьте категорию в новый токен или внесите рекламу вручную на вкладке <a href="/app/finance/expenses<?= $qs() ?>">«Прочие расходы»</a> (статья «Внешняя реклама», с артикулом — попадёт на товар).</div>
 <?php endif; ?>
+<?php $mi = $money['info'] ?? []; $spend = $mi['spend'] ?? []; $free = (float) ($spend['Бонусы'] ?? 0) + (float) ($spend['Кэшбэк'] ?? 0); ?>
 <div class="kpis">
-  <div class="card kpi"><div class="k-label">Реклама WB за период</div><div class="k-value"><?= money($total) ?></div><div class="k-sub"><?= count($camps) ?> <?= plural(count($camps), 'кампания', 'кампании', 'кампаний') ?></div></div>
-  <div class="card kpi"><div class="k-label">Разнесено по товарам</div><div class="k-value"><?= money(array_sum($bySku)) ?></div><div class="k-sub"><?= count($bySku) ?> <?= plural(count($bySku), 'товар', 'товара', 'товаров') ?></div></div>
+  <div class="card kpi k-accent" title="Входит в чистую прибыль: удержания «WB Продвижение» в отчётах реализации + пополнения рекламного счёта картой и по счёту"><div class="k-label">Расход на рекламу (деньгами)</div><div class="k-value"><?= money($money['total'] ?? 0) ?></div><div class="k-sub">учтено в чистой прибыли</div></div>
+  <div class="card kpi" title="«Оказание услуг WB Продвижение» в отчётах реализации — оплата с баланса и пополнение счёта из выплат; по неделе отчёта"><div class="k-label">Удержано WB в отчётах</div><div class="k-value"><?= money($mi['deducted'] ?? 0) ?></div><div class="k-sub">«WB Продвижение»</div></div>
+  <div class="card kpi" title="Пополнения счёта продвижения картой и по счёту — этих денег нет в отчётах реализации"><div class="k-label">Пополнения картой и по счёту</div><div class="k-value"><?= money($mi['topups'] ?? 0) ?></div><div class="k-sub">вне отчётов WB</div></div>
+  <div class="card kpi" title="Сколько списано с кампаний в рекламном кабинете за период, по способу оплаты. Бонусы и промо-бонусы — не деньги продавца"><div class="k-label">Потрачено в кабинете</div><div class="k-value"><?= money($total) ?></div>
+    <div class="k-sub"><?= e(implode(' · ', array_map(static fn($k, $v) => ($k ?: 'без типа') . ' ' . money($v), array_keys($spend), $spend))) ?: count($camps) . ' ' . plural(count($camps), 'кампания', 'кампании', 'кампаний') ?></div></div>
 </div>
 <?php if (!$camps): ?>
   <div class="card empty"><h3>Нет списаний за рекламу</h3><p>Списания загружаются из WB раз в 6 часов (метод «История затрат»).</p></div>

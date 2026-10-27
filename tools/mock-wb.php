@@ -332,6 +332,11 @@ switch ($path) {
              'boxDeliveryMarketplaceBase' => '82,8', 'boxDeliveryMarketplaceLiter' => '25,2', 'boxDeliveryMarketplaceCoefExpr' => '180', 'boxStorageBase' => '0,14', 'boxStorageLiter' => '0,14', 'boxStorageCoefExpr' => '100'],
         ]]]]);
 
+    case '/adv/v1/payments':
+        // Пополнения счёта продвижения: картой (учитывается в рекламе) и с баланса (уже удержано в отчёте)
+        out([['id' => 9001, 'date' => date('Y-m-d', strtotime('monday last week') + 86400) . 'T10:00:00', 'sum' => 1500, 'type' => 3, 'statusId' => 1, 'cardStatus' => 'success', 'currency' => 'RUB'],
+            ['id' => 9002, 'date' => date('Y-m-d', strtotime('monday last week') + 2 * 86400) . 'T10:00:00', 'sum' => 5000, 'type' => 1, 'statusId' => 1, 'cardStatus' => '', 'currency' => 'RUB']]);
+
     case '/api/v1/warehouse_remains':
         out(['data' => ['taskId' => 'task-' . date('His')]]);
 

@@ -330,6 +330,27 @@ final class FinanceSync
             $count++;
         }
 
+        // Пополнения рекламного счёта: картой и по счёту — расход деньгами вне отчёта реализации
+        usleep(1100000);
+        try {
+            foreach ($this->wb->adPayments($from, $to) as $p) {
+                if (empty($p['id'])) {
+                    continue;
+                }
+                $time = self::dt($p['date'] ?? null);
+                DB::exec('INSERT INTO wb_ad_payments (store_id, payment_id, day, paid_at, amount, type, status_id, card_status) VALUES (?,?,?,?,?,?,?,?)
+                    ON DUPLICATE KEY UPDATE amount = VALUES(amount), status_id = VALUES(status_id), card_status = VALUES(card_status)', [
+                    $storeId, (int) $p['id'], $time ? substr($time, 0, 10) : $to, $time, round(self::num($p['sum'] ?? 0), 2), (int) ($p['type'] ?? -1),
+                    isset($p['statusId']) ? (int) $p['statusId'] : null, mb_substr((string) ($p['cardStatus'] ?? ''), 0, 20),
+                ]);
+            }
+        } catch (\App\Wb\WbException $e) {
+            // История пополнений недоступна (нет данных за период) — не мешаем загрузке затрат
+            if ($e->status !== 204) {
+                log_message('sync', "store $storeId: /adv/v1/payments: " . $e->getMessage());
+            }
+        }
+
         // Товары кампаний — чтобы разнести расходы на рекламу по артикулам (до 50 кампаний за запрос)
         $unknown = array_column(DB::all('SELECT DISTINCT c.advert_id FROM wb_ad_costs c
             LEFT JOIN wb_ad_nms n ON n.store_id = c.store_id AND n.advert_id = c.advert_id

@@ -436,3 +436,18 @@ CREATE TABLE IF NOT EXISTS account_grants (
   CONSTRAINT fk_grant_owner FOREIGN KEY (owner_id) REFERENCES users (id) ON DELETE CASCADE,
   CONSTRAINT fk_grant_agency FOREIGN KEY (agency_id) REFERENCES users (id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Пополнения счёта WB Продвижения (/adv/v1/payments): type 0 — по счёту, 1 — с баланса (удерживается в отчёте реализации), 3 — картой
+CREATE TABLE IF NOT EXISTS wb_ad_payments (
+  store_id    INT UNSIGNED NOT NULL,
+  payment_id  BIGINT NOT NULL,
+  day         DATE NOT NULL,
+  paid_at     DATETIME NULL,
+  amount      DECIMAL(12,2) NOT NULL DEFAULT 0,
+  type        TINYINT NOT NULL,
+  status_id   TINYINT NULL,
+  card_status VARCHAR(20) NULL,
+  PRIMARY KEY (store_id, payment_id),
+  KEY idx_adpay_day (store_id, day),
+  CONSTRAINT fk_adpay_store FOREIGN KEY (store_id) REFERENCES stores (id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
