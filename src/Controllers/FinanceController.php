@@ -103,7 +103,7 @@ final class FinanceController
         $status = $this->status($ctx['storeIds'], $ctx['stores']);
         return view('app/finance', $ctx + $data + [
             'title' => 'Финансы — ' . self::TABS[$tab], 'tab' => $tab, 'status' => $status, 'nav' => 'finance',
-            'locked' => empty($ctx['plan']['profit']),
+            'locked' => !Plans::finance($ctx['plan']),
         ], 'app');
     }
 
@@ -131,7 +131,7 @@ final class FinanceController
 
     private function locked(array $ctx, string $tab): ?string
     {
-        return empty($ctx['plan']['profit']) ? $this->render($tab, $ctx) : null;
+        return !Plans::finance($ctx['plan']) ? $this->render($tab, $ctx) : null;
     }
 
     private function photos(array $storeIds, array $nmIds): array
@@ -333,7 +333,7 @@ final class FinanceController
     public function export(): never
     {
         $ctx = $this->ctx();
-        if (empty($ctx['plan']['profit']) || !$ctx['storeIds']) {
+        if (!Plans::finance($ctx['plan']) || !$ctx['storeIds']) {
             redirect('/app/finance');
         }
         $this->exportRows('WHERE store_id IN (' . implode(',', $ctx['storeIds']) . ') AND date_from BETWEEN ' . DB::pdo()->quote($ctx['from']) . ' AND ' . DB::pdo()->quote($ctx['to']),
@@ -574,7 +574,7 @@ final class FinanceController
     {
         Auth::requireOwner();
         $ctx = $this->ctx();
-        if (empty($ctx['plan']['profit'])) {
+        if (!Plans::finance($ctx['plan'])) {
             flash('error', 'Раздел «Финансы» доступен на платных тарифах.');
             redirect('/app/billing');
         }

@@ -163,7 +163,7 @@ final class ApiTools
         return [
             'account' => ['id' => (int) $account['id'], 'login' => $account['email'], 'name' => $account['name'], 'role' => $account['role']],
             'plan' => ['code' => $plan['code'] ?? $account['plan_code'], 'name' => $plan['name'], 'expires_at' => $plan['expires_at'] ?? null,
-                'history_days' => $plan['history_days'], 'sync_minutes' => $plan['sync_minutes'], 'profit' => (bool) $plan['profit'], 'stores_limit' => $plan['stores']],
+                'history_days' => $plan['history_days'], 'sync_minutes' => $plan['sync_minutes'], 'profit' => (bool) $plan['profit'], 'finance' => Plans::finance($plan), 'stores_limit' => $plan['stores']],
             'profit_settings' => Profit::settings($account),
             'stores' => $stores,
             'server_time' => date('c'),
@@ -254,8 +254,8 @@ final class ApiTools
 
     private static function requireProfit(array $plan): void
     {
-        if (empty($plan['profit'])) {
-            throw new \InvalidArgumentException('Раздел «Финансы» доступен на платных тарифах.');
+        if (!Plans::finance($plan)) {
+            throw new \InvalidArgumentException('Раздел «Финансы» доступен на тарифах «Про» и «Бизнес».');
         }
     }
 

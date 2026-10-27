@@ -40,6 +40,12 @@ final class Plans
         return $plan;
     }
 
+    /** Доступен ли раздел «Финансы» (отчёты реализации WB). */
+    public static function finance(array $plan): bool
+    {
+        return (bool) ($plan['finance'] ?? $plan['profit'] ?? false);
+    }
+
     public static function price(string $code, int $months): float
     {
         $base = (float) (self::get($code)['price'] ?? 0);

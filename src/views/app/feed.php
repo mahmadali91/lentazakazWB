@@ -95,7 +95,7 @@ $cronStale = !$cronLast || strtotime($cronLast) < time() - 600;
       <?php if (empty($plan['telegram'])): ?>
         <div class="card" style="background:var(--accent-soft);border-color:transparent">
           <div class="card-title"><?= icon('send', 18) ?> Уведомления в Telegram</div>
-          <p class="small muted">Получайте сообщение о каждом новом заказе. Доступно на платных тарифах.</p>
+          <p class="small muted">Получайте сообщение о каждом новом заказе. Доступно на тарифах «Про» и «Бизнес».</p>
           <a class="btn btn-sm" href="/app/billing">Выбрать тариф</a>
         </div>
       <?php elseif (!$user['tg_chat_id'] && App\Services\Telegram::enabled()): ?>

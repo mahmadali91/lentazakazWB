@@ -16,7 +16,7 @@ $events = array_filter(explode(',', (string) $user['tg_events']));
         <p class="muted">Уведомления в Telegram скоро заработают — администратор подключает бота.</p>
       <?php endif; ?>
     <?php elseif (empty($plan['telegram'])): ?>
-      <p class="muted">Уведомления доступны на платных тарифах.</p>
+      <p class="muted">Уведомления доступны на тарифах «Про» и «Бизнес».</p>
       <a class="btn" href="/app/billing">Выбрать тариф</a>
     <?php elseif ($user['tg_chat_id']): ?>
       <div class="alert alert-success">Telegram подключён. Уведомления приходят в чат с ботом @<?= e(config('telegram.bot_username')) ?>.</div>
@@ -53,7 +53,7 @@ $events = array_filter(explode(',', (string) $user['tg_events']));
   <div class="card" id="team">
     <div class="card-title"><?= icon('users', 18) ?> Сотрудники — доступ к кабинету по логину и паролю</div>
     <p class="muted small">Сотрудник видит ленту заказов, сводку и товары вашего кабинета, но не может менять магазины, токены, тариф и себестоимость.
-      Доступно на тарифе: <b><?= $teamLimit ?></b> <?= plural($teamLimit, 'сотрудник', 'сотрудника', 'сотрудников') ?>.</p>
+      <?php if ($teamLimit > 0): ?>Доступно на тарифе: <b><?= $teamLimit ?></b> <?= plural($teamLimit, 'сотрудник', 'сотрудника', 'сотрудников') ?>.<?php endif; ?></p>
     <?php if ($members): ?>
       <div class="table-wrap" style="margin-bottom:16px"><table class="table">
         <thead><tr><th>Логин</th><th>Имя</th><th>Последний вход</th><th></th></tr></thead>
@@ -90,7 +90,7 @@ $events = array_filter(explode(',', (string) $user['tg_events']));
         <div class="hint small muted" style="margin-top:8px">Вход: <?= e(url('/login')) ?> — логин и пароль, которые вы задали.</div>
       </form>
     <?php elseif ($teamLimit === 0): ?>
-      <a class="btn btn-sm" href="/app/billing">Доступно на платных тарифах</a>
+      <a class="btn btn-sm" href="/app/billing">Доступно на тарифах «Про» и «Бизнес»</a>
     <?php else: ?>
       <p class="small muted">Лимит сотрудников по тарифу исчерпан. <a href="/app/billing">Увеличить</a></p>
     <?php endif; ?>

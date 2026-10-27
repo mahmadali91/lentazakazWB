@@ -68,7 +68,7 @@ final class SyncService
             $done['remains'] = $this->safe('remains', fn() => $this->syncRemains());
         }
 
-        if (!empty($this->plan['profit']) && (int) $this->store['initial_done']) {
+        if (Plans::finance($this->plan) && (int) $this->store['initial_done']) {
             $fin = new FinanceSync($this->store, $this->wb);
             if (($this->scopes['finance'] ?? null) !== false && $this->due('fin_next_at', $now)) {
                 $done['fin'] = $this->safe('fin', fn() => $fin->reports());
