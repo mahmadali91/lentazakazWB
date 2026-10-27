@@ -35,15 +35,21 @@ $canAddon = !empty($plan['store_price']) && $plan['expires_at'] && $plan['extra_
 if ($canAddon): $left = Plans::maxExtra($plan) - $plan['extra_stores']; $days = Plans::daysLeft($plan); ?>
   <div class="card addon-card" id="add-store" style="margin-bottom:20px">
     <div class="card-title"><?= icon('plus', 18) ?> Добавить магазин к тарифу «<?= e($plan['name']) ?>»</div>
-    <p class="muted small">Сейчас магазинов: <b><?= (int) $plan['stores'] ?></b> из <?= (int) $plan['stores_max'] ?> возможных. Дополнительный магазин — <?= rub($plan['store_price']) ?> в месяц;
+    <p class="muted small">Сейчас магазинов: <b><?= (int) $plan['stores'] ?></b><?= $left > 50 ? ', без ограничений' : ' из ' . (int) $plan['stores_max'] . ' возможных' ?>. Дополнительный магазин — <?= rub($plan['store_price']) ?> в месяц;
       оплата — только за оставшийся срок подписки (<?= $days ?> <?= plural($days, 'день', 'дня', 'дней') ?>, до <?= date_ru($plan['expires_at'], false) ?>). При продлении тарифа доп. магазины продлеваются вместе с ним.</p>
     <form method="post" action="/app/billing/stores" class="row" style="gap:10px;flex-wrap:wrap;align-items:center">
       <?= csrf_field() ?>
-      <select name="qty" style="width:auto" id="addonQty">
-        <?php for ($q = 1; $q <= $left; $q++): ?>
-          <option value="<?= $q ?>" data-price="<?= e(number_format((float) Plans::addonPrice($user, $q), 0, ',', ' ')) ?>">+<?= $q ?> <?= plural($q, 'магазин', 'магазина', 'магазинов') ?></option>
-        <?php endfor; ?>
-      </select>
+      <?php if ($left > 10): ?>
+        <label class="small muted">Сколько магазинов добавить:
+          <input type="number" name="qty" id="addonQty" min="1" max="<?= $left ?>" value="1" style="width:90px;margin-left:6px"
+            data-unit="<?= e((string) Plans::addonPrice($user, 1)) ?>" data-each="<?= e((string) ((float) $plan['store_price'] * Plans::daysLeft($plan) / 30)) ?>"></label>
+      <?php else: ?>
+        <select name="qty" style="width:auto" id="addonQty">
+          <?php for ($q = 1; $q <= $left; $q++): ?>
+            <option value="<?= $q ?>" data-price="<?= e(number_format((float) Plans::addonPrice($user, $q), 0, ',', ' ')) ?>">+<?= $q ?> <?= plural($q, 'магазин', 'магазина', 'магазинов') ?></option>
+          <?php endfor; ?>
+        </select>
+      <?php endif; ?>
       <span style="font-weight:700;font-size:18px"><span id="addonPrice"><?= number_format((float) Plans::addonPrice($user, 1), 0, ',', ' ') ?></span> ₽</span>
       <button class="btn" <?= $payEnabled ? '' : 'disabled' ?>>Оплатить</button>
     </form>
@@ -77,7 +83,11 @@ if ($canAddon): $left = Plans::maxExtra($plan) - $plan['extra_stores']; $days = 
         <?= csrf_field() ?>
         <input type="hidden" name="plan" value="<?= e($code) ?>">
         <input type="hidden" name="months" value="1" class="months-input">
-        <?php if ($maxExtra): ?>
+        <?php if ($maxExtra > 10): ?>
+          <label class="small muted" style="display:block;margin-bottom:10px">Магазинов:
+            <input type="number" name="stores" class="plan-stores" min="<?= (int) $p['stores'] ?>" max="<?= (int) $p['stores'] + $maxExtra ?>" value="<?= $selStores ?>" style="width:90px;margin-left:6px">
+          </label>
+        <?php elseif ($maxExtra): ?>
           <label class="small muted" style="display:block;margin-bottom:10px">Магазинов:
             <select name="stores" class="plan-stores" style="width:auto;margin-left:6px">
               <?php for ($n = (int) $p['stores']; $n <= (int) $p['stores'] + $maxExtra; $n++): ?>
@@ -126,13 +136,18 @@ if ($canAddon): $left = Plans::maxExtra($plan) - $plan['extra_stores']; $days = 
   // Цена тарифа с доп. магазинами: (цена + доп. магазины × цена магазина) × месяцы − скидка
   function planPrice(card) {
     var sel = card.querySelector('.plan-stores'); if (!sel) return;
-    var extra = Math.max(0, +sel.value - +card.dataset.incl), month = +card.dataset.base + extra * +card.dataset.store;
+    var extra = Math.max(0, Math.min(+sel.max || 1e9, +sel.value || 0) - +card.dataset.incl), month = +card.dataset.base + extra * +card.dataset.store;
     card.querySelectorAll('.price-for').forEach(function (el) {
       var m = +el.dataset.months, d = +el.dataset.discount;
       el.querySelector('.pv').textContent = Math.round(month * m * (100 - d) / 100).toLocaleString('ru-RU');
     });
   }
-  document.querySelectorAll('.plan-stores').forEach(function (s) { s.addEventListener('change', function () { planPrice(s.closest('.plan')); }); });
+  document.querySelectorAll('.plan-stores').forEach(function (s) { s.addEventListener('input', function () { planPrice(s.closest('.plan')); }); });
   var aq = document.getElementById('addonQty');
-  if (aq) aq.addEventListener('change', function () { document.getElementById('addonPrice').textContent = aq.selectedOptions[0].dataset.price; });
+  if (aq) aq.addEventListener('input', function () {
+    // Как на сервере: цена магазина × дни / 30 × количество, с округлением вверх
+    var price = aq.tagName === 'SELECT' ? aq.selectedOptions[0].dataset.price
+      : Math.max(1, Math.ceil(+aq.dataset.each * Math.max(1, Math.min(+aq.max, +aq.value || 1)))).toLocaleString('ru-RU');
+    document.getElementById('addonPrice').textContent = price;
+  });
 </script>

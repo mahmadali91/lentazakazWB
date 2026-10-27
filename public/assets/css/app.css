@@ -637,3 +637,7 @@ span.p-thumb img { width: 100%; height: 100%; object-fit: cover; display: block;
 .fx-note button { border: 0; background: none; padding: 0; color: var(--accent); font: inherit; font-weight: 600; cursor: pointer; }
 .fx-note button:hover { text-decoration: underline; }
 @media (max-width: 600px) { .fx-note { padding: 6px 10px; font-size: 12px; } .fx-note form { margin-left: 0; } }
+.access-pick { display: flex; flex-direction: column; gap: 4px; }
+.access-list { display: flex; flex-direction: column; gap: 4px; padding-left: 24px; }
+.access-edit summary { cursor: pointer; color: var(--accent); }
+.access-edit[open] { min-width: 220px; }

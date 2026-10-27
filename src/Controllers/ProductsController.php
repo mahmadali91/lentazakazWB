@@ -18,7 +18,7 @@ final class ProductsController
         Auth::require();
         $account = Auth::account();
         $plan = Plans::forUser($account);
-        return [$account, $plan, StoreService::activeIds((int) $account['id'], $plan)];
+        return [$account, $plan, StoreService::visibleIds((int) $account['id'], $plan)];
     }
 
     private function storeIn(array $ids, string $alias = 'p'): string

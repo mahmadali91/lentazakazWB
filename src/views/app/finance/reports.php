@@ -6,7 +6,7 @@
         <div class="muted small"><?= num_ru($count) ?> строк · к перечислению за товар <?= money($report['for_pay']) ?> · итого к оплате <?= money($report['bank_payment']) ?></div>
       </div>
       <div class="row">
-        <a class="btn btn-ghost btn-sm" href="/app/finance/reports/<?= (int) $report['store_id'] ?>/<?= (int) $report['report_id'] ?>?export=1"><?= icon('download', 16) ?> CSV</a>
+        <?php if (!empty($plan['export'])): ?><a class="btn btn-ghost btn-sm" href="/app/finance/reports/<?= (int) $report['store_id'] ?>/<?= (int) $report['report_id'] ?>?export=1"><?= icon('download', 16) ?> CSV</a><?php endif; ?>
         <a class="btn btn-ghost btn-sm" href="/app/finance/reports<?= $qs() ?>">← Все отчёты</a>
       </div>
     </div>
@@ -75,7 +75,7 @@
 <div class="card" style="padding:0">
     <div class="row" style="justify-content:space-between;padding:14px 16px 0">
       <div class="card-title" style="margin:0">Еженедельные отчёты реализации</div>
-      <a class="btn btn-ghost btn-sm" href="/app/finance/export<?= $qs() ?>"><?= icon('download', 16) ?> Строки за период (CSV)</a>
+      <?php if (!empty($plan['export'])): ?><a class="btn btn-ghost btn-sm" href="/app/finance/export<?= $qs() ?>"><?= icon('download', 16) ?> Строки за период (CSV)</a><?php endif; ?>
     </div>
     <?php if (!$reports): ?>
       <p class="muted" style="padding:16px">Отчётов пока нет. Они загружаются автоматически из WB (1 отчёт в минуту) или из файла — форма справа.</p>

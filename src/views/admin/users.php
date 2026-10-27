@@ -50,7 +50,7 @@ $back = '/admin/users?' . http_build_query(['f' => $filter, 'q' => $q]);
       <?php foreach ($users as $u): ?>
         <tr>
           <td style="min-width:220px">
-            <a href="/admin/users/<?= (int) $u['id'] ?>"><b><?= e($u['email']) ?></b></a>
+            <a href="/admin/users/<?= (int) $u['id'] ?>"><b><?= e($u['email']) ?></b></a> <span class="small muted">ID <?= e(client_code((int) $u['id'])) ?></span>
             <?= $u['role'] === 'admin' ? '<span class="badge badge-accent">админ</span>' : '' ?>
             <div class="small muted"><?= e($u['name']) ?><?= $u['name'] ? ' · ' : '' ?>с <?= date_ru($u['created_at'], false) ?> · вход <?= $u['last_login_at'] ? date_ru($u['last_login_at']) : '—' ?></div>
             <?php if (!empty($u['phone'])): ?><div class="small"><a href="tel:<?= e($u['phone']) ?>"><?= e(phone_ru($u['phone'])) ?></a></div><?php elseif (!$u['owner_id'] && $u['role'] !== 'admin'): ?><div class="small" style="color:var(--warn)">телефон не указан</div><?php endif; ?>

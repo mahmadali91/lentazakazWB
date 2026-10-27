@@ -83,9 +83,10 @@ final class AdminController
         $where = 'u.owner_id IS NULL AND ' . self::FILTERS[$filter][1];
         $params = [];
         if ($q !== '') {
-            $where .= ' AND (u.email LIKE :q1 OR u.name LIKE :q2 OR u.note LIKE :q3 OR u.phone LIKE :q7 OR EXISTS (SELECT 1 FROM stores s2 WHERE s2.user_id = u.id AND (s2.name LIKE :q4 OR s2.seller_name LIKE :q5 OR s2.seller_tin = :q6)))';
+            $where .= ' AND (u.email LIKE :q1 OR u.name LIKE :q2 OR u.note LIKE :q3 OR u.phone LIKE :q7 OR u.id = :q8 OR EXISTS (SELECT 1 FROM stores s2 WHERE s2.user_id = u.id AND (s2.name LIKE :q4 OR s2.seller_name LIKE :q5 OR s2.seller_tin = :q6)))';
             $like = '%' . $q . '%';
-            $params = ['q1' => $like, 'q2' => $like, 'q3' => $like, 'q4' => $like, 'q5' => $like, 'q6' => $q, 'q7' => ($d = preg_replace('/\D/', '', $q)) !== '' ? '%' . $d . '%' : '-'];
+            $params = ['q1' => $like, 'q2' => $like, 'q3' => $like, 'q4' => $like, 'q5' => $like, 'q6' => $q, 'q7' => ($d = preg_replace('/\D/', '', $q)) !== '' ? '%' . $d . '%' : '-',
+                'q8' => ctype_digit(ltrim($q, '#')) ? (int) ltrim($q, '#') : -1];
         }
         $users = DB::all("SELECT u.*,
                 (SELECT COUNT(*) FROM stores s WHERE s.user_id = u.id) AS stores_count,

@@ -11,7 +11,7 @@ $initial = mb_strtoupper(mb_substr($display, 0, 1));
       <div class="avatar"><?= e($initial) ?></div>
       <div style="min-width:0">
         <div style="font-weight:700;font-size:18px;overflow:hidden;text-overflow:ellipsis"><?= e($display) ?></div>
-        <div class="muted small" style="overflow:hidden;text-overflow:ellipsis"><?= e($user['email']) ?></div>
+        <div class="muted small" style="overflow:hidden;text-overflow:ellipsis"><?= e($user['email']) ?> · ID клиента <b><?= e(client_code((int) $user['id'])) ?></b></div>
         <?php if ($isMember): ?>
           <div class="small">Сотрудник кабинета <b><?= e($account['name'] ?: $account['email']) ?></b></div>
         <?php endif; ?>

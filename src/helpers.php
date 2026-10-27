@@ -420,3 +420,9 @@ function ini_bytes(string $v): int
         default => $n,
     } ?: PHP_INT_MAX;
 }
+
+/** Уникальный ID клиента для поддержки и контроля: 6 цифр, например 000123. */
+function client_code(int $id): string
+{
+    return str_pad((string) $id, 6, '0', STR_PAD_LEFT);
+}

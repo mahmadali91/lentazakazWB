@@ -39,7 +39,9 @@ final class FinanceController
         $user = Auth::require();
         $account = Auth::account();
         $plan = Plans::forUser($account);
-        $active = StoreService::activeIds((int) $account['id'], $plan);
+        $active = StoreService::visibleIds((int) $account['id'], $plan);
+        // Клиенту менеджера с доступом к отдельным магазинам не показываем общие расходы кабинета
+        Finance::$commonExpenses = StoreService::memberAccess($user) === null;
         $storeId = (int) input('store', 0);
         $ids = $storeId && in_array($storeId, $active, true) ? [$storeId] : $active;
         // Валюта: отчёты WB приходят в валюте продавца; при разных валютах считаем по одной (выбор ?cur=)
@@ -213,6 +215,7 @@ final class FinanceController
         $sort = in_array(input('sort'), ['revenue', 'profit', 'sales_qty', 'margin', 'cost'], true) ? (string) input('sort') : 'revenue';
         uasort($skus, static fn($a, $b) => ($b[$sort] ?? -INF) <=> ($a[$sort] ?? -INF));
         if ((string) input('export') === '1') {
+            $this->requireExport($ctx);
             $this->exportSku($skus, $ctx);
         }
         return $this->render('sku', $ctx, ['res' => $res, 'skus' => $skus, 'sort' => $sort, 'photos' => $this->photos($ctx['storeIds'], array_keys($skus))]);
@@ -324,9 +327,19 @@ final class FinanceController
             [(int) $storeId, (int) $reportId]);
         $count = (int) DB::value('SELECT COUNT(*) FROM wb_report_rows WHERE store_id = ? AND report_id = ?', [(int) $storeId, (int) $reportId]);
         if ((string) input('export') === '1') {
+            $this->requireExport($ctx);
             $this->exportRows('WHERE store_id = ' . (int) $storeId . ' AND report_id = ' . (int) $reportId, 'otchet_' . $report['date_from'] . '_' . (int) $reportId);
         }
         return $this->render('reports', $ctx, ['report' => $report, 'rows' => $rows, 'count' => $count, 'page' => $page]);
+    }
+
+    /** Выгрузка отчётов WB в Excel/CSV — только на тарифах с выгрузкой. */
+    private function requireExport(array $ctx): void
+    {
+        if (empty($ctx['plan']['export'])) {
+            flash('error', 'Выгрузка отчётов в Excel доступна на тарифе ' . Plans::namesWith('export') . '.');
+            redirect('/app/finance/reports');
+        }
     }
 
     /** Все строки периода в CSV (для сверки с Excel). */
@@ -336,6 +349,7 @@ final class FinanceController
         if (!Plans::finance($ctx['plan']) || !$ctx['storeIds']) {
             redirect('/app/finance');
         }
+        $this->requireExport($ctx);
         $this->exportRows('WHERE store_id IN (' . implode(',', $ctx['storeIds']) . ') AND date_from BETWEEN ' . DB::pdo()->quote($ctx['from']) . ' AND ' . DB::pdo()->quote($ctx['to']),
             'detalizaciya_' . $ctx['from'] . '_' . $ctx['to']);
     }
@@ -536,8 +550,9 @@ final class FinanceController
         if ($html = $this->locked($ctx, 'expenses')) {
             return $html;
         }
+        $only = Finance::$commonExpenses ? '' : ' AND e.store_id IN (' . (implode(',', $ctx['activeIds']) ?: '0') . ')';
         $items = DB::all('SELECT e.*, s.name store_name FROM fin_expenses e LEFT JOIN stores s ON s.id = e.store_id
-            WHERE e.user_id = ? AND e.day BETWEEN ? AND ? ORDER BY e.day DESC, e.id DESC', [(int) $ctx['account']['id'], $ctx['from'], $ctx['to']]);
+            WHERE e.user_id = ? AND e.day BETWEEN ? AND ?' . $only . ' ORDER BY e.day DESC, e.id DESC', [(int) $ctx['account']['id'], $ctx['from'], $ctx['to']]);
         return $this->render('expenses', $ctx, ['items' => $items]);
     }
 

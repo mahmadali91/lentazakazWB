@@ -2,7 +2,7 @@
 declare(strict_types=1);
 
 define('BASE_PATH', dirname(__DIR__));
-define('APP_VERSION', '1.9.2');
+define('APP_VERSION', '2.0.0');
 
 spl_autoload_register(static function (string $class): void {
     if (strncmp($class, 'App\\', 4) !== 0) {

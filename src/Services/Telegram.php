@@ -122,10 +122,15 @@ final class Telegram
         }
         foreach ($byOwner as $ownerId => $list) {
             $plan = Plans::forUser($list[0]);
-            // Получатели: владелец кабинета и его сотрудники с подключённым Telegram
+            // Получатели: владелец кабинета и его сотрудники с подключённым Telegram — каждый по своим магазинам
+            // (клиент менеджера — только по магазинам, к которым у него есть доступ) и по выбранным для уведомлений
             $recipients = self::enabled() && !empty($plan['telegram'])
-                ? DB::all('SELECT tg_chat_id, tg_events FROM users WHERE (id = ? OR owner_id = ?) AND tg_chat_id IS NOT NULL AND is_blocked = 0', [$ownerId, $ownerId])
+                ? DB::all('SELECT id, owner_id, store_access, tg_chat_id, tg_events, tg_stores FROM users WHERE (id = ? OR owner_id = ?) AND tg_chat_id IS NOT NULL AND is_blocked = 0', [$ownerId, $ownerId])
                 : [];
+            foreach ($recipients as &$rcp) {
+                $rcp['stores'] = self::recipientStores($rcp);
+            }
+            unset($rcp);
             $messages = array_fill(0, count($recipients), []);
             foreach ($list as $o) {
                 $event = $o['status'] === 'returnDefective' ? 'return' : $o['status'];
@@ -133,7 +138,8 @@ final class Telegram
                 $fresh = strtotime((string) $o['order_created_at']) > time() - 86400 || $o['status'] !== 'created';
                 if ($fresh) {
                     foreach ($recipients as $i => $rcp) {
-                        if (in_array($event, array_filter(explode(',', (string) $rcp['tg_events'])), true)) {
+                        if (in_array($event, array_filter(explode(',', (string) $rcp['tg_events'])), true)
+                            && ($rcp['stores'] === null || in_array((int) $o['store_id'], $rcp['stores'], true))) {
                             $messages[$i][] = self::format($o);
                         }
                     }
@@ -144,6 +150,20 @@ final class Telegram
                 self::sendBatch($rcp['tg_chat_id'], $messages[$i]);
             }
         }
+    }
+
+    /**
+     * Магазины, по которым получатель получает уведомления: доступ сотрудника ∩ выбранные в настройках. null — все магазины кабинета.
+     * @return int[]|null
+     */
+    public static function recipientStores(array $user): ?array
+    {
+        $access = StoreService::memberAccess($user);
+        $chosen = $user['tg_stores'] !== null && $user['tg_stores'] !== '' ? array_map('intval', json_decode((string) $user['tg_stores'], true) ?: []) : null;
+        if ($access === null) {
+            return $chosen;
+        }
+        return $chosen === null ? $access : array_values(array_intersect($access, $chosen));
     }
 
     /** Отправляет пачку уведомлений, укладываясь в лимит Telegram (4096 символов на сообщение). */

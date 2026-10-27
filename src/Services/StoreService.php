@@ -68,10 +68,42 @@ final class StoreService
             'weekly_expense' => $num($in['weekly_expense'] ?? '', 100000000)];
     }
 
+    /**
+     * Один кабинет WB подключается в сервис только один раз. Если он уже подключён — сообщаем, к какому кабинету сервиса (ID клиента),
+     * и предупреждаем владельца этого кабинета в Telegram.
+     */
+    private static function ensureUnique(int $userId, array $seller, ?int $exceptStoreId = null): void
+    {
+        $sid = trim((string) ($seller['sid'] ?? ''));
+        if ($sid === '') {
+            return;
+        }
+        $dup = DB::one('SELECT s.id, s.name, s.user_id, u.tg_chat_id FROM stores s JOIN users u ON u.id = s.user_id WHERE s.seller_sid = ? AND s.id <> ? LIMIT 1',
+            [$sid, (int) $exceptStoreId]);
+        if (!$dup) {
+            return;
+        }
+        if ((int) $dup['user_id'] === $userId) {
+            if ($exceptStoreId !== null) {
+                return; // замена токена у магазина, который уже есть в этом же кабинете
+            }
+            throw new \InvalidArgumentException('Этот кабинет WB уже подключён в вашем кабинете — магазин «' . $dup['name'] . '».');
+        }
+        log_message('stores', 'повторное подключение кабинета WB ' . $sid . ' (' . ($seller['name'] ?? '') . '): клиент ' . client_code($userId)
+            . ', уже подключён у клиента ' . client_code((int) $dup['user_id']) . ', магазин ' . $dup['id']);
+        if ($dup['tg_chat_id'] && Telegram::enabled()) {
+            Telegram::send($dup['tg_chat_id'], '⚠️ Кто-то попытался подключить ваш кабинет WB «' . e((string) ($seller['name'] ?? $dup['name'])) . '» в другой аккаунт сервиса (ID клиента '
+                . client_code($userId) . '). Подключение отклонено. Если это не вы — перевыпустите токен WB.');
+        }
+        throw new \InvalidArgumentException('Этот кабинет WB уже подключён в сервисе к кабинету клиента ID ' . client_code((int) $dup['user_id'])
+            . '. Один кабинет WB можно подключить только один раз. Если это ваш кабинет — напишите в поддержку.');
+    }
+
     public static function create(int $userId, string $name, string $token, array $finance = []): int
     {
         $info = self::inspectToken($token);
         $seller = $info['seller'];
+        self::ensureUnique($userId, $seller);
         $token = trim($token);
         return DB::insert('stores', [
             'user_id'          => $userId,
@@ -91,6 +123,8 @@ final class StoreService
     public static function updateToken(array $store, string $token): void
     {
         $info = self::inspectToken($token);
+        // Новый токен — от того же кабинета WB или от кабинета, ещё не подключённого в сервисе
+        self::ensureUnique((int) $store['user_id'], $info['seller'], (int) $store['id']);
         $token = trim($token);
         DB::update('stores', [
             'token_enc'        => Crypto::encrypt($token),
@@ -98,6 +132,7 @@ final class StoreService
             'token_expires_at' => $info['expires_at'],
             'scopes'           => json_encode($info['scopes']),
             'seller_name'      => mb_substr((string) ($info['seller']['name'] ?? $store['seller_name']), 0, 255),
+            'seller_sid'       => (string) (($info['seller']['sid'] ?? '') ?: $store['seller_sid']),
             'last_error'       => null,
             'last_error_at'    => null,
             'feed_next_at'     => null,
@@ -122,6 +157,26 @@ final class StoreService
     public static function findForUser(int $userId, int $storeId): ?array
     {
         return DB::one('SELECT * FROM stores WHERE id = ? AND user_id = ?', [$storeId, $userId]);
+    }
+
+    /**
+     * Магазины, к которым у сотрудника ограничен доступ (клиент менеджера видит только свои). null — все магазины кабинета.
+     * @return int[]|null
+     */
+    public static function memberAccess(?array $user): ?array
+    {
+        if (!$user || empty($user['owner_id']) || $user['store_access'] === null || $user['store_access'] === '') {
+            return null;
+        }
+        return array_values(array_map('intval', json_decode((string) $user['store_access'], true) ?: []));
+    }
+
+    /** Магазины кабинета, которые видит текущий пользователь: по тарифу и, для сотрудника, по выданному доступу. */
+    public static function visibleIds(int $accountId, array $plan, ?array $user = null): array
+    {
+        $ids = self::activeIds($accountId, $plan);
+        $access = self::memberAccess($user ?? (PHP_SAPI === 'cli' ? null : \App\Core\Auth::user()));
+        return $access === null ? $ids : array_values(array_intersect($ids, $access));
     }
 
     /** Магазины, доступные пользователю по тарифу (лишние — на паузе). */

@@ -14,11 +14,13 @@ CREATE TABLE IF NOT EXISTS users (
   is_blocked      TINYINT(1) NOT NULL DEFAULT 0,
   plan_code       VARCHAR(32) NOT NULL DEFAULT 'free',
   plan_expires_at DATETIME NULL,
-  extra_stores    TINYINT UNSIGNED NOT NULL DEFAULT 0, -- доп. магазины к тарифу, оплаченные до конца подписки
+  extra_stores    SMALLINT UNSIGNED NOT NULL DEFAULT 0, -- доп. магазины к тарифу, оплаченные до конца подписки
   tg_chat_id      BIGINT NULL,
   tg_link_code    VARCHAR(32) NULL,
   tg_events       VARCHAR(64) NOT NULL DEFAULT 'created',
+  tg_stores       TEXT NULL,                  -- JSON: id магазинов для уведомлений Telegram (NULL — все доступные)
   owner_id        INT UNSIGNED NULL,          -- сотрудник: id владельца кабинета
+  store_access    TEXT NULL,                  -- сотрудник: JSON id магазинов, к которым есть доступ (NULL — все магазины кабинета)
   note            VARCHAR(500) NULL,          -- заметка администратора о клиенте
   profit_settings TEXT NULL,                  -- JSON: комиссия, логистика, налог, прочие расходы
   show_rub        TINYINT(1) NOT NULL DEFAULT 0, -- показывать суммы в рублях по курсу ЦБ
@@ -81,6 +83,7 @@ CREATE TABLE IF NOT EXISTS stores (
   last_error_at   DATETIME NULL,
   created_at      DATETIME NOT NULL,
   PRIMARY KEY (id),
+  KEY idx_stores_seller_sid (seller_sid),
   KEY idx_stores_user (user_id),
   CONSTRAINT fk_stores_user FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
@@ -158,7 +161,7 @@ CREATE TABLE IF NOT EXISTS payments (
   plan_code   VARCHAR(32) NOT NULL,
   kind        VARCHAR(16) NOT NULL DEFAULT 'plan', -- plan — тариф | stores — доп. магазины к действующему тарифу
   months      TINYINT UNSIGNED NOT NULL,
-  extra_stores TINYINT UNSIGNED NOT NULL DEFAULT 0, -- доп. магазинов в платеже
+  extra_stores SMALLINT UNSIGNED NOT NULL DEFAULT 0, -- доп. магазинов в платеже
   amount      DECIMAL(10,2) NOT NULL,
   provider    VARCHAR(20) NOT NULL DEFAULT 'yookassa',
   provider_id VARCHAR(64) NULL,

@@ -14,7 +14,7 @@ $thumb = static function ($nm) use ($photos) {
   <div class="seg">
     <?php foreach ($sorts as $k => $label): ?><a href="/app/finance/sku<?= $qs(['sort' => $k]) ?>" class="<?= $sort === $k ? 'on' : '' ?>">по <?= $label ?></a><?php endforeach; ?>
   </div>
-  <a class="btn btn-ghost btn-sm" href="/app/finance/sku<?= $qs(['export' => 1, 'sort' => $sort]) ?>"><?= icon('download', 16) ?> CSV для Excel</a>
+  <?php if (!empty($plan['export'])): ?><a class="btn btn-ghost btn-sm" href="/app/finance/sku<?= $qs(['export' => 1, 'sort' => $sort]) ?>"><?= icon('download', 16) ?> CSV для Excel</a><?php endif; ?>
   <span class="muted small"><?= count($skus) ?> <?= plural(count($skus), 'товар', 'товара', 'товаров') ?></span>
 </div>
 

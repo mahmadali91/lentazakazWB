@@ -9,7 +9,7 @@ namespace App\Core;
  */
 final class Migrator
 {
-    public const VERSION = 15;
+    public const VERSION = 16;
 
     public static function ensure(): void
     {
@@ -45,6 +45,15 @@ final class Migrator
                 // Пересчёт сумм в рубли по курсу ЦБ: настройка кабинета и кэш курсов
                 self::addColumn('users', 'show_rub', 'TINYINT(1) NOT NULL DEFAULT 0');
                 self::run(self::FX_DDL);
+            }
+            if ($version < 16) {
+                // Тариф для менеджеров: клиенту-сотруднику — доступ только к своим магазинам; уведомления Telegram по выбранным магазинам
+                self::addColumn('users', 'store_access', 'TEXT NULL AFTER owner_id');
+                self::addColumn('users', 'tg_stores', 'TEXT NULL AFTER tg_events');
+                self::run('ALTER TABLE stores ADD KEY idx_stores_seller_sid (seller_sid)');
+                // Тариф «Агентство» — магазинов без ограничений
+                self::run('ALTER TABLE users MODIFY extra_stores SMALLINT UNSIGNED NOT NULL DEFAULT 0');
+                self::run('ALTER TABLE payments MODIFY extra_stores SMALLINT UNSIGNED NOT NULL DEFAULT 0');
             }
             if ($version < 15) {
                 // Дополнительные магазины к тарифу (покупаются отдельно до конца подписки)

@@ -18,7 +18,7 @@ final class FeedController
      */
     public static function filters(array $account, array $plan): array
     {
-        $activeIds = StoreService::activeIds((int) $account['id'], $plan);
+        $activeIds = StoreService::visibleIds((int) $account['id'], $plan);
         $storeId = (int) input('store', 0);
         $storeIds = $storeId && in_array($storeId, $activeIds, true) ? [$storeId] : $activeIds;
 
@@ -72,9 +72,10 @@ final class FeedController
         $user = Auth::require();
         $account = Auth::account();
         $plan = Plans::forUser($account);
-        $stores = StoreService::forUser((int) $account['id']);
         [$storeIds, $f] = self::filters($account, $plan);
-        $activeIds = StoreService::activeIds((int) $account['id'], $plan);
+        $activeIds = StoreService::visibleIds((int) $account['id'], $plan);
+        $access = StoreService::memberAccess($user);
+        $stores = array_values(array_filter(StoreService::forUser((int) $account['id']), static fn($s) => $access === null || in_array((int) $s['id'], $access, true)));
         $fxOn = fx_feed($account, $activeIds);
         return view('app/feed', [
             'fxOn'     => $fxOn,

@@ -6,6 +6,7 @@ namespace App\Controllers;
 use App\Core\Auth;
 use App\Core\DB;
 use App\Services\Plans;
+use App\Services\StoreService;
 use App\Services\Telegram;
 
 final class SettingsController
@@ -26,12 +27,17 @@ final class SettingsController
             $user['tg_link_code'] = $code;
         }
         $account = Auth::account();
+        $plan = Plans::forUser($account);
+        $visible = StoreService::visibleIds((int) $account['id'], $plan, $user);
         return view('app/settings', [
             'title'    => 'Настройки',
             'user'     => $user,
             'account'  => $account,
-            'plan'     => Plans::forUser($account),
-            'members'  => Auth::isMember() ? [] : DB::all('SELECT id, email, name, last_login_at, created_at FROM users WHERE owner_id = ? ORDER BY id', [$user['id']]),
+            'plan'     => $plan,
+            // Магазины, доступные пользователю, — для выбора уведомлений; все магазины кабинета — для выдачи доступа сотрудникам
+            'myStores' => $visible ? DB::all('SELECT id, name FROM stores WHERE id IN (' . implode(',', $visible) . ') ORDER BY id') : [],
+            'allStores'=> Auth::isMember() ? [] : DB::all('SELECT id, name FROM stores WHERE user_id = ? ORDER BY id', [$user['id']]),
+            'members'  => Auth::isMember() ? [] : DB::all('SELECT id, email, name, store_access, last_login_at, created_at FROM users WHERE owner_id = ? ORDER BY id', [$user['id']]),
             'tgEnabled'=> Telegram::enabled(),
             'nav'      => 'settings',
         ], 'app');
@@ -81,6 +87,7 @@ final class SettingsController
             'password_hash' => password_hash($password, PASSWORD_DEFAULT),
             'name'          => mb_substr((string) input('name', ''), 0, 120),
             'owner_id'      => $owner['id'],
+            'store_access'  => self::accessInput((int) $owner['id']),
             'plan_code'     => 'free',
             'created_at'    => now(),
         ]);
@@ -110,6 +117,25 @@ final class SettingsController
             flash('success', 'Пароль сотрудника ' . $m['email'] . ' изменён.');
         }
         redirect('/app/settings#team');
+    }
+
+    /** Доступ сотрудника (клиента менеджера) к магазинам кабинета. */
+    public function teamAccess(string $id): never
+    {
+        $m = $this->member($id);
+        DB::exec('UPDATE users SET store_access = ? WHERE id = ?', [self::accessInput((int) $m['owner_id']), $m['id']]);
+        flash('success', 'Доступ ' . $m['email'] . ' к магазинам сохранён.');
+        redirect('/app/settings#team');
+    }
+
+    /** Из формы: «все магазины» → NULL, иначе JSON выбранных магазинов кабинета. */
+    private static function accessInput(int $ownerId): ?string
+    {
+        if (($_POST['access'] ?? 'all') === 'all') {
+            return null;
+        }
+        $own = array_map('intval', array_column(DB::all('SELECT id FROM stores WHERE user_id = ?', [$ownerId]), 'id'));
+        return json_encode(array_values(array_intersect($own, array_map('intval', (array) ($_POST['stores'] ?? [])))));
     }
 
     public function teamDelete(string $id): never
@@ -164,7 +190,15 @@ final class SettingsController
     {
         $user = Auth::require();
         $events = array_values(array_intersect(array_keys(self::TG_EVENTS), (array) ($_POST['events'] ?? [])));
-        DB::exec('UPDATE users SET tg_events = ? WHERE id = ?', [implode(',', $events), $user['id']]);
+        // Магазины для уведомлений: все отмеченные доступные — значит «все» (NULL), чтобы новые магазины тоже попадали
+        $tgStores = null;
+        if (isset($_POST['tg_stores_on'])) {
+            $account = Auth::account();
+            $visible = StoreService::visibleIds((int) $account['id'], Plans::forUser($account), $user);
+            $chosen = array_values(array_intersect($visible, array_map('intval', (array) ($_POST['tg_stores'] ?? []))));
+            $tgStores = count($chosen) === count($visible) ? null : json_encode($chosen);
+        }
+        DB::exec('UPDATE users SET tg_events = ?, tg_stores = ? WHERE id = ?', [implode(',', $events), $tgStores, $user['id']]);
         flash('success', 'Настройки уведомлений сохранены.');
         redirect('/app/settings');
     }

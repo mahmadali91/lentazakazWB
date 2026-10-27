@@ -230,7 +230,10 @@ switch ($path) {
         out(['TS' => date('c'), 'Status' => 'OK']);
 
     case '/api/v1/seller-info':
-        out(['name' => 'ИП Тестов Тест Тестович', 'sid' => 'e8923014-e233-47q8-898e-3ad63ab4a8f7', 'tin' => '7700000000', 'tradeMark' => 'Тестовый бренд', 'country' => 'RU']);
+        // Разные тестовые кабинеты: токен с «seller-N» — свой sid
+        $auth = (string) ($_SERVER['HTTP_AUTHORIZATION'] ?? '');
+        $sid = preg_match('/seller-(\w+)/', $auth, $mm) ? substr(md5($mm[1]), 0, 8) . '-0000-4000-8000-' . substr(md5($mm[1]), 8, 12) : 'e8923014-e233-47q8-898e-3ad63ab4a8f7';
+        out(['name' => 'ИП Тестов Тест Тестович', 'sid' => $sid, 'tin' => '7700000000', 'tradeMark' => 'Тестовый бренд', 'country' => 'RU']);
 
     case '/api/analytics/v1/order-feed':
         if (str_contains($token, 'nofeed')) {

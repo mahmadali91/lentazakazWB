@@ -95,6 +95,8 @@ final class Finance
     public static bool $fxFailed = false;
     /** Валюта, в которой учитываются общие «Прочие расходы» без магазина при расчёте по валютам. */
     private static ?string $nullExpCurrency = null;
+    /** Учитывать общие расходы кабинета без магазина (false — для клиента менеджера с доступом к отдельным магазинам). */
+    public static bool $commonExpenses = true;
     private const QTY = ['sales_qty', 'deliveries', 'back_deliveries', 'returns_qty', 'defect_qty', 'lost_qty'];
 
     public static function empty(): array
@@ -271,7 +273,7 @@ final class Finance
         }
         $ids = array_map('intval', $storeIds);
         sort($ids);
-        $key = sha1(json_encode([APP_VERSION, filemtime(__FILE__), (int) $account['id'], $ids, $from, $to, $opt, self::$currency, self::$toRub,
+        $key = sha1(json_encode([APP_VERSION, filemtime(__FILE__), (int) $account['id'], $ids, $from, $to, $opt, self::$currency, self::$toRub, self::$commonExpenses,
             $account['profit_settings'] ?? '', self::dataVersion((int) $account['id'], implode(',', $ids))]));
         $dir = BASE_PATH . '/storage/cache/fin';
         $file = "$dir/$key.ser";
@@ -551,11 +553,11 @@ final class Finance
     {
         // Расчёт по одной валюте: реклама, хранение и расходы — только магазинов в этой валюте,
         // общие расходы без магазина — в одной валюте (рубли, если есть), чтобы не учесть их дважды
-        $nullExp = true;
+        $nullExp = self::$commonExpenses;
         if (self::$currency !== null) {
             $ids = array_column(DB::all("SELECT id FROM stores WHERE id IN ($in) AND UPPER(COALESCE(NULLIF(currency, ''), 'RUB')) = ?", [self::$currency]), 'id');
             $in = $ids ? implode(',', array_map('intval', $ids)) : '0';
-            $nullExp = self::$nullExpCurrency === null || self::$nullExpCurrency === self::$currency;
+            $nullExp = $nullExp && (self::$nullExpCurrency === null || self::$nullExpCurrency === self::$currency);
         }
         // Реклама: списание кампании делим поровну между её товарами; без товаров — общий расход.
         // Удержания WB за продвижение (оплата со счёта, пополнение рекламного баланса) в прибыль не идут — см. ads_deducted.

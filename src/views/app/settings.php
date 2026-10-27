@@ -3,6 +3,19 @@ use App\Controllers\SettingsController;
 use App\Services\Telegram;
 
 $events = array_filter(explode(',', (string) $user['tg_events']));
+$tgStores = Telegram::recipientStores($user);
+// Выбор магазинов: «все» или отмеченные (для формы сотрудника и уведомлений)
+$accessFields = static function (?array $access, array $stores, string $uid): string {
+    $all = $access === null;
+    $h = '<div class="access-pick" data-access>'
+        . '<label class="check"><input type="radio" name="access" value="all" ' . ($all ? 'checked' : '') . '> все магазины кабинета</label>'
+        . '<label class="check"><input type="radio" name="access" value="some" ' . ($all ? '' : 'checked') . '> только выбранные:</label>'
+        . '<div class="access-list' . ($all ? ' hidden' : '') . '">';
+    foreach ($stores as $s) {
+        $h .= '<label class="check"><input type="checkbox" name="stores[]" value="' . (int) $s['id'] . '" ' . (!$all && in_array((int) $s['id'], $access, true) ? 'checked' : '') . '> ' . e($s['name']) . '</label>';
+    }
+    return $h . '</div></div>';
+};
 ?>
 <div class="topbar"><h1>Настройки</h1></div>
 
@@ -28,6 +41,15 @@ $events = array_filter(explode(',', (string) $user['tg_events']));
             <label class="check"><input type="checkbox" name="events[]" value="<?= $k ?>" <?= in_array($k, $events, true) ? 'checked' : '' ?>> <?= e($label) ?></label>
           <?php endforeach; ?>
         </div>
+        <?php if (count($myStores) > 1): ?>
+          <input type="hidden" name="tg_stores_on" value="1">
+          <label>По каким магазинам</label>
+          <div class="row" style="margin-bottom:14px">
+            <?php foreach ($myStores as $s): ?>
+              <label class="check"><input type="checkbox" name="tg_stores[]" value="<?= (int) $s['id'] ?>" <?= $tgStores === null || in_array((int) $s['id'], $tgStores, true) ? 'checked' : '' ?>> <?= e($s['name']) ?></label>
+            <?php endforeach; ?>
+          </div>
+        <?php endif; ?>
         <button class="btn btn-sm">Сохранить</button>
       </form>
       <div class="row" style="margin-top:14px">
@@ -51,17 +73,29 @@ $events = array_filter(explode(',', (string) $user['tg_events']));
 
   <?php if (empty($user['owner_id'])): $teamLimit = (int) ($plan['team'] ?? 0); ?>
   <div class="card" id="team">
-    <div class="card-title"><?= icon('users', 18) ?> Сотрудники — доступ к кабинету по логину и паролю</div>
-    <p class="muted small">Сотрудник видит ленту заказов, сводку и товары вашего кабинета, но не может менять магазины, токены, тариф и себестоимость.
-      <?php if ($teamLimit > 0): ?>Доступно на тарифе: <b><?= $teamLimit ?></b> <?= plural($teamLimit, 'сотрудник', 'сотрудника', 'сотрудников') ?>.<?php endif; ?></p>
+    <div class="card-title"><?= icon('users', 18) ?> Сотрудники и клиенты — доступ к кабинету по логину и паролю</div>
+    <p class="muted small">Сотрудник видит ленту заказов, товары и финансы, но не может менять магазины, токены, тариф и себестоимость.
+      Клиенту можно открыть только его магазины — он не увидит остальные кабинеты, а уведомления в Telegram будет получать только по своим магазинам.
+      <?php if ($teamLimit >= 100): ?>На вашем тарифе — без ограничений.<?php elseif ($teamLimit > 0): ?>Доступно на тарифе: <b><?= $teamLimit ?></b> <?= plural($teamLimit, 'сотрудник', 'сотрудника', 'сотрудников') ?>.<?php endif; ?></p>
     <?php if ($members): ?>
       <div class="table-wrap" style="margin-bottom:16px"><table class="table">
-        <thead><tr><th>Логин</th><th>Имя</th><th>Последний вход</th><th></th></tr></thead>
+        <thead><tr><th>Логин</th><th>Имя</th><th>Магазины</th><th>Последний вход</th><th></th></tr></thead>
         <tbody>
-        <?php foreach ($members as $m): ?>
+        <?php foreach ($members as $m): $acc = App\Services\StoreService::memberAccess($m + ['owner_id' => 1]);
+          $accNames = $acc === null ? 'все' : implode(', ', array_column(array_filter($allStores, static fn($s) => in_array((int) $s['id'], $acc, true)), 'name')); ?>
           <tr>
-            <td><b><?= e($m['email']) ?></b></td>
+            <td><b><?= e($m['email']) ?></b><div class="small muted">ID <?= e(client_code((int) $m['id'])) ?></div></td>
             <td><?= e($m['name']) ?></td>
+            <td class="small">
+              <details class="access-edit">
+                <summary><?= e($accNames !== '' ? $accNames : 'нет доступа') ?></summary>
+                <form method="post" action="/app/team/<?= (int) $m['id'] ?>/access">
+                  <?= csrf_field() ?>
+                  <?= $accessFields($acc, $allStores, (string) $m['id']) ?>
+                  <button class="btn btn-sm" style="margin-top:8px">Сохранить доступ</button>
+                </form>
+              </details>
+            </td>
             <td class="small muted nowrap"><?= date_ru($m['last_login_at']) ?></td>
             <td>
               <div class="row" style="gap:6px;justify-content:flex-end">
@@ -86,7 +120,10 @@ $events = array_filter(explode(',', (string) $user['tg_events']));
           <div class="field grow" style="min-width:160px"><label for="tname">Имя</label><input id="tname" type="text" name="name" placeholder="Анна, менеджер"></div>
           <div class="field grow" style="min-width:160px"><label for="tpass">Пароль</label><input id="tpass" type="text" name="password" minlength="8" required autocomplete="new-password"></div>
         </div>
-        <button class="btn btn-sm"><?= icon('plus', 14) ?> Добавить сотрудника</button>
+        <?php if (count($allStores) > 1): ?>
+          <div class="field"><label>Доступ к магазинам</label><?= $accessFields(null, $allStores, 'new') ?></div>
+        <?php endif; ?>
+        <button class="btn btn-sm"><?= icon('plus', 14) ?> Добавить сотрудника или клиента</button>
         <div class="hint small muted" style="margin-top:8px">Вход: <?= e(url('/login')) ?> — логин и пароль, которые вы задали.</div>
       </form>
     <?php elseif ($teamLimit === 0): ?>
@@ -148,3 +185,12 @@ $events = array_filter(explode(',', (string) $user['tg_events']));
     <button class="btn btn-ghost" id="themeBtn" type="button"><?= icon('moon', 16) ?> Переключить светлую / тёмную тему</button>
   </div>
 </div>
+<script>
+  // «Только выбранные магазины» — показываем список магазинов
+  document.querySelectorAll('[data-access]').forEach(function (box) {
+    box.addEventListener('change', function () {
+      var some = box.querySelector('input[name=access][value=some]').checked;
+      box.querySelector('.access-list').classList.toggle('hidden', !some);
+    });
+  });
+</script>

@@ -137,6 +137,16 @@ final class Auth
         if ($user && !empty($user['owner_id']) && !self::account()) {
             $user = null;
         }
+        // Сотрудник или клиент работает, пока тариф владельца допускает столько сотрудников (по порядку добавления)
+        if ($user && !empty($user['owner_id']) && !self::impersonator()) {
+            $limit = (int) (\App\Services\Plans::forUser((array) self::account())['team'] ?? 0);
+            $rank = (int) DB::value('SELECT COUNT(*) FROM users WHERE owner_id = ? AND id <= ?', [$user['owner_id'], $user['id']]);
+            if ($rank > $limit) {
+                self::logout();
+                flash('error', 'Доступ сотрудников и клиентов приостановлен: тариф владельца кабинета его не включает. Обратитесь к владельцу кабинета.');
+                $user = null;
+            }
+        }
         if (!$user) {
             if (self::wantsJson()) {
                 json_response(['error' => 'unauthorized'], 401);
