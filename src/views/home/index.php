@@ -138,6 +138,7 @@ $shot = static fn(string $name, string $alt, string $cls = '') => '<figure class
         <div class="card plan <?= !empty($p['popular']) ? 'popular' : '' ?>">
           <?php if (!empty($p['popular'])): ?><span class="badge badge-accent tag">Популярный</span><?php endif; ?>
           <div class="plan-name"><?= e($p['name']) ?></div>
+          <?php if (!empty($p['tagline'])): ?><div class="plan-tagline"><?= e($p['tagline']) ?></div><?php endif; ?>
           <div class="plan-price"><?= $p['price'] > 0 ? number_format($p['price'], 0, ',', ' ') . ' ₽' : '0 ₽' ?> <small>/ мес</small></div>
           <ul>
             <?php foreach ($p['features'] as $feat): ?><li><?= e($feat) ?></li><?php endforeach; ?>

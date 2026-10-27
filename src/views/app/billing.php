@@ -66,6 +66,7 @@ if ($canAddon): $left = Plans::maxExtra($plan) - $plan['extra_stores']; $days = 
     <div class="card plan <?= !empty($p['popular']) ? 'popular' : '' ?>" <?= $maxExtra ? 'data-base="' . (int) $p['price'] . '" data-store="' . (int) $p['store_price'] . '" data-incl="' . (int) $p['stores'] . '"' : '' ?>>
       <?php if (!empty($p['popular'])): ?><span class="badge badge-accent tag">Популярный</span><?php endif; ?>
       <div class="plan-name"><?= e($p['name']) ?> <?= $current ? '<span class="badge badge-buyout">Ваш тариф</span>' : '' ?></div>
+      <?php if (!empty($p['tagline'])): ?><div class="plan-tagline"><?= e($p['tagline']) ?></div><?php endif; ?>
       <div class="plan-price">
         <?php foreach (Plans::PERIODS as $m => $d): ?>
           <span class="price-for <?= $m === 1 ? '' : 'hidden' ?>" data-months="<?= $m ?>" data-discount="<?= (int) $d ?>"><b class="pv"><?= number_format(Plans::price($code, $m, $selStores - (int) $p['stores']), 0, ',', ' ') ?></b> ₽ <small><?= $m === 1 ? '/ мес' : "за $m мес" ?></small></span>

@@ -66,7 +66,7 @@ $back = '/admin/users?' . http_build_query(['f' => $filter, 'q' => $q]);
               <?php foreach (['7d' => '+7 дн', '1m' => '+1 мес', '3m' => '+3 мес'] as $per => $lbl): ?>
                 <form method="post" action="/admin/users/<?= (int) $u['id'] ?>/extend">
                   <?= csrf_field() ?><input type="hidden" name="period" value="<?= $per ?>"><input type="hidden" name="back" value="<?= e($back) ?>">
-                  <button class="btn btn-ghost btn-sm" title="Продлить текущий тариф (или «Старт», если бесплатный)"><?= $lbl ?></button>
+                  <button class="btn btn-ghost btn-sm" title="Продлить текущий тариф (или «<?= e(App\Services\Plans::get('start')['name']) ?>», если бесплатный)"><?= $lbl ?></button>
                 </form>
               <?php endforeach; ?>
             </div>
