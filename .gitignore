@@ -8,3 +8,10 @@
 .DS_Store
 .idea/
 .vscode/
+# Файлы клиентов, загруженные в корень сайта для сверки
+/*.xlsb
+/*.xlsx
+/*.xls
+/*.zip
+/*.csv
+/storage/uploads/

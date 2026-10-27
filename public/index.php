@@ -199,6 +199,7 @@ $r->post('/admin/cron', [AdminController::class, 'runCron']);
 // Системное
 $r->post('/webhook/yookassa', [SystemController::class, 'yookassa']);
 $r->get('/cron-run', [SystemController::class, 'cron']);
+$r->get('/f/{token}', [SystemController::class, 'file']);
 $r->get('/install', [InstallController::class, 'form']);
 $r->post('/install', [InstallController::class, 'install']);
 

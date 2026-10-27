@@ -111,6 +111,20 @@ final class ApiTools
                 'description' => 'Только для администратора: клиенты и их тарифы/сроки, магазины всех клиентов с ошибками, платежи, cron.',
                 'properties' => ['limit' => ['type' => 'integer', 'minimum' => 1, 'maximum' => 500, 'description' => 'Клиентов в списке (по умолчанию 100)']],
             ];
+            $tools['admin_finance'] = [
+                'title' => 'Админ: финансы любого магазина',
+                'description' => 'Только для администратора: итоги раздела «Финансы» (как на сайте у клиента) для любого магазина сервиса за период — для сверки с Excel клиента. Суммы в валюте магазина.',
+                'properties' => ['store_id' => ['type' => 'integer', 'description' => 'ID магазина (из admin_overview → stores)'],
+                    'date_from' => ['type' => 'string', 'description' => 'Начало периода, YYYY-MM-DD (неделя отчёта — по дате начала)'],
+                    'date_to' => ['type' => 'string', 'description' => 'Конец периода, YYYY-MM-DD'],
+                    'by_week' => ['type' => 'boolean', 'description' => 'Добавить разбивку по неделям отчётов']],
+                'required' => ['store_id', 'date_from', 'date_to'],
+            ];
+            $tools['admin_file_link'] = [
+                'title' => 'Админ: временная ссылка на файл',
+                'description' => 'Только для администратора: одноразовая ссылка (30 минут) на файл Excel/архив, загруженный в корень сайта или storage/uploads, — чтобы забрать файл клиента для сверки. Без имени — список таких файлов.',
+                'properties' => ['name' => ['type' => 'string', 'description' => 'Имя файла (из списка)']],
+            ];
         }
         $out = [];
         foreach ($tools as $name => $t) {
@@ -134,7 +148,8 @@ final class ApiTools
         $plan = Plans::forUser($account);
         $active = StoreService::activeIds((int) $account['id'], $plan);
         $storeIds = $active;
-        if (!empty($args['store_id'])) {
+        // Инструменты администратора работают с магазинами любых клиентов — store_id проверяют сами
+        if (!empty($args['store_id']) && !str_starts_with($name, 'admin_')) {
             if (!in_array((int) $args['store_id'], $active, true)) {
                 throw new \InvalidArgumentException('Магазин ' . (int) $args['store_id'] . ' не найден или на паузе. Список — в account_info.');
             }
@@ -650,6 +665,54 @@ final class ApiTools
             array_shift($out);
         }
         return array_map(static fn($l) => mb_substr($l, 0, 600), array_slice($out, -$lines));
+    }
+
+    private static function toolAdminFinance(array $a, array $account, array $plan, array $storeIds): array
+    {
+        if (($account['role'] ?? '') !== 'admin') {
+            throw new \InvalidArgumentException('Только для администратора.');
+        }
+        $store = DB::one('SELECT id, user_id, name, currency FROM stores WHERE id = ?', [(int) ($a['store_id'] ?? 0)]);
+        $from = (string) ($a['date_from'] ?? '');
+        $to = (string) ($a['date_to'] ?? '');
+        if (!$store || !preg_match('/^\d{4}-\d{2}-\d{2}$/', $from) || !preg_match('/^\d{4}-\d{2}-\d{2}$/', $to)) {
+            throw new \InvalidArgumentException('Укажите store_id из admin_overview и даты YYYY-MM-DD.');
+        }
+        $owner = DB::one('SELECT * FROM users WHERE id = ?', [$store['user_id']]);
+        Finance::$currency = null;
+        $res = Finance::compute($owner, [(int) $store['id']], $from, $to, ['group' => !empty($a['by_week']) ? 'week' : 'none']);
+        $rep = DB::one('SELECT COUNT(*) reports, SUM(detail_done) loaded, COALESCE(SUM(rows_loaded), 0) rows_count, COALESCE(SUM(retail_amount), 0) retail_amount,
+                COALESCE(SUM(for_pay), 0) for_pay, COALESCE(SUM(bank_payment), 0) bank_payment, MIN(date_from) first_week, MAX(date_from) last_week
+            FROM wb_reports WHERE store_id = ? AND date_from BETWEEN ? AND ?', [$store['id'], $from, $to]);
+        $out = ['store' => self::typed($store), 'period' => [$from, $to], 'labels' => Finance::LABELS, 'total' => $res['total'], 'wb_reports_in_period' => self::typed($rep),
+            'reports' => array_map([self::class, 'typed'], DB::all('SELECT report_id, date_from, date_to, report_type, currency, retail_amount, for_pay, delivery, storage, acceptance,
+                deduction, penalty, additional, bank_payment, rows_loaded, detail_done FROM wb_reports WHERE store_id = ? AND date_from BETWEEN ? AND ? ORDER BY date_from', [$store['id'], $from, $to]))];
+        if (!empty($a['by_week'])) {
+            $out['periods'] = $res['periods'];
+        }
+        return $out;
+    }
+
+    private static function toolAdminFileLink(array $a, array $account, array $plan, array $storeIds): array
+    {
+        if (($account['role'] ?? '') !== 'admin') {
+            throw new \InvalidArgumentException('Только для администратора.');
+        }
+        $files = [];
+        foreach ([BASE_PATH, BASE_PATH . '/storage/uploads'] as $dir) {
+            foreach (glob($dir . '/*.{xlsb,xlsx,xls,zip,csv}', GLOB_BRACE) ?: [] as $f) {
+                $files[basename($f)] = ['path' => $f, 'size_mb' => round(filesize($f) / 1048576, 1), 'modified' => date('Y-m-d H:i:s', filemtime($f))];
+            }
+        }
+        $name = (string) ($a['name'] ?? '');
+        if ($name === '' || !isset($files[$name])) {
+            return ['files' => array_map(static fn($f) => ['size_mb' => $f['size_mb'], 'modified' => $f['modified']], $files),
+                'hint' => $name !== '' ? 'Файл не найден — выберите имя из списка.' : 'Укажите name, чтобы получить ссылку.'];
+        }
+        $token = bin2hex(random_bytes(20));
+        DB::setSetting('flink.' . $token, json_encode(['path' => $files[$name]['path'], 'exp' => time() + 1800]));
+        return ['url' => url('/f/' . $token), 'expires_in_min' => 30, 'size_mb' => $files[$name]['size_mb'],
+            'note' => 'Ссылка действует 30 минут. После сверки удалите файл с сервера.'];
     }
 
     /** Числа из БД (строки) — в числа, чтобы JSON был удобен для разбора. */

@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 namespace App\Controllers;
 
+use App\Core\DB;
 use App\Services\Cron;
 use App\Services\YooKassa;
 
@@ -42,5 +43,25 @@ final class SystemController
         }
         @set_time_limit(60);
         json_response(Cron::run(45));
+    }
+
+    /** Временная ссылка администратора на файл клиента (выдаёт инструмент admin_file_link, действует 30 минут). */
+    public function file(string $token): never
+    {
+        $row = preg_match('/^[a-f0-9]{40}$/', $token) ? json_decode((string) DB::setting('flink.' . $token, ''), true) : null;
+        if (!is_array($row) || ($row['exp'] ?? 0) < time() || !is_file((string) ($row['path'] ?? ''))) {
+            http_response_code(404);
+            exit('Ссылка недействительна или истекла.');
+        }
+        log_message('files', 'выдан файл ' . basename($row['path']) . ' по временной ссылке, IP ' . ($_SERVER['REMOTE_ADDR'] ?? '-'));
+        while (ob_get_level()) {
+            ob_end_clean();
+        }
+        header('Content-Type: application/octet-stream');
+        header('Content-Length: ' . filesize($row['path']));
+        header("Content-Disposition: attachment; filename*=UTF-8''" . rawurlencode(basename($row['path'])));
+        header('Cache-Control: no-store');
+        readfile($row['path']);
+        exit;
     }
 }
