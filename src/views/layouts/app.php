@@ -8,7 +8,9 @@ $actingAcc = $actingId ? App\Core\Auth::account() : null;
 $items = [['feed', '/app', 'Лента заказов', 'Лента', 'feed'], ['products', '/app/products', 'Товары и прибыль', 'Товары', 'box'], ['finance', '/app/finance', 'Финансы', 'Финансы', 'chart']];
 if (!$isMember) {
     $items[] = ['stores', '/app/stores', 'Магазины', 'Магазины', 'store'];
-    $items[] = ['billing', '/app/billing', 'Тариф и оплата', 'Тариф', 'card'];
+    if (empty($user['is_super'])) {
+        $items[] = ['billing', '/app/billing', 'Тариф и оплата', 'Тариф', 'card'];
+    }
 }
 $items[] = ['settings', '/app/settings', 'Настройки', 'Настройки', 'settings'];
 if (($user['role'] ?? '') === 'admin') {

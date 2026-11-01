@@ -13,6 +13,9 @@ final class BillingController
     public function index(): string
     {
         $user = Auth::requireOwner();
+        if (!empty($user['is_super'])) {
+            redirect('/admin/billing');
+        }
         return view('app/billing', [
             'title'    => 'Тариф и оплата',
             'user'     => $user,

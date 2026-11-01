@@ -41,7 +41,11 @@ $initial = mb_strtoupper(mb_substr($display, 0, 1));
 
   <div class="card menu-list">
     <?php if (!$isMember): ?>
-      <a href="/app/billing"><?= icon('card') ?> Тариф и оплата <span class="chev"><?= icon('chevron', 18) ?></span></a>
+      <?php if (!empty($user['is_super'])): ?>
+        <a href="/admin/billing"><?= icon('card') ?> Тарифы — вид клиента <span class="chev"><?= icon('chevron', 18) ?></span></a>
+      <?php else: ?>
+        <a href="/app/billing"><?= icon('card') ?> Тариф и оплата <span class="chev"><?= icon('chevron', 18) ?></span></a>
+      <?php endif; ?>
       <a href="/app/stores"><?= icon('store') ?> Магазины WB <span class="chev"><?= icon('chevron', 18) ?></span></a>
     <?php endif; ?>
     <a href="/app/settings"><?= icon('settings') ?> Настройки, Telegram<?= $isMember ? '' : ', сотрудники' ?> <span class="chev"><?= icon('chevron', 18) ?></span></a>

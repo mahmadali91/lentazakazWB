@@ -191,6 +191,7 @@ $r->post('/admin/users/{id}/delete', [AdminController::class, 'delete']);
 $r->post('/admin/users/{id}/login', [AdminController::class, 'impersonate']);
 $r->post('/admin/impersonate/stop', [AdminController::class, 'stopImpersonate']);
 $r->get('/admin/payments', [AdminController::class, 'payments']);
+$r->get('/admin/billing', [AdminController::class, 'billing']);
 $r->get('/admin/help', [AdminController::class, 'help']);
 $r->get('/admin/settings', [AdminController::class, 'settings']);
 $r->post('/admin/settings', [AdminController::class, 'saveSettings']);

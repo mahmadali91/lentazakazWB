@@ -2,8 +2,11 @@
 use App\Services\Plans;
 
 $statusNames = ['pending' => 'Ожидает оплаты', 'succeeded' => 'Оплачен', 'canceled' => 'Отменён', 'manual' => 'Выдан администратором'];
+// Просмотр из админ-панели: страница как у клиента, но без оплаты
+$preview = !empty($preview);
+$off = !$payEnabled || $preview ? 'disabled' : '';
 ?>
-<div class="topbar"><h1>Тариф и оплата</h1></div>
+<?php if (!$preview): ?><div class="topbar"><h1>Тариф и оплата</h1></div><?php endif; ?>
 
 <div class="card" style="margin-bottom:20px">
   <div class="row">
@@ -28,7 +31,7 @@ $statusNames = ['pending' => 'Ожидает оплаты', 'succeeded' => 'Оп
 </div>
 
 <?php if (!empty($plan['super'])) { return; } ?>
-<?php if (!$payEnabled): ?>
+<?php if (!$payEnabled && !$preview): ?>
   <div class="alert alert-info">Онлайн-оплата скоро появится. Чтобы подключить тариф сейчас, свяжитесь с нами: <?php if (support_telegram() !== ''): ?><a href="https://t.me/<?= e(support_telegram()) ?>" target="_blank" rel="noopener">Telegram @<?= e(support_telegram()) ?></a> · <?php endif; ?><a href="mailto:<?= e(config('app.support_email')) ?>"><?= e(config('app.support_email')) ?></a></div>
 <?php endif; ?>
 
@@ -54,7 +57,7 @@ if ($canAddon): $left = Plans::maxExtra($plan) - $plan['extra_stores']; $days = 
         </select>
       <?php endif; ?>
       <span style="font-weight:700;font-size:18px"><span id="addonPrice"><?= number_format((float) Plans::addonPrice($user, 1), 0, ',', ' ') ?></span> ₽</span>
-      <button class="btn" <?= $payEnabled ? '' : 'disabled' ?>>Оплатить</button>
+      <button class="btn" <?= $off ?>>Оплатить</button>
     </form>
   </div>
 <?php endif; ?>
@@ -100,7 +103,7 @@ if ($canAddon): $left = Plans::maxExtra($plan) - $plan['extra_stores']; $days = 
           </label>
         <?php endif; ?>
         <?php if ($current): ?><div class="plan-current"><span class="badge badge-buyout">Ваш тариф</span></div><?php endif; ?>
-        <button class="btn btn-block <?= !empty($p['popular']) ? '' : 'btn-ghost' ?>" <?= $payEnabled ? '' : 'disabled' ?>><?= $current ? 'Продлить' : 'Оплатить' ?></button>
+        <button class="btn btn-block <?= !empty($p['popular']) ? '' : 'btn-ghost' ?>" <?= $off ?>><?= $current ? 'Продлить' : 'Оплатить' ?></button>
       </form>
     </div>
   <?php endforeach; ?>

@@ -321,6 +321,41 @@ final class AdminController
         ], 'app');
     }
 
+    /**
+     * «Тариф и оплата» глазами клиента: страница клиента в режиме просмотра (без оплаты) для выбранного
+     * тарифа, состояния подписки и числа магазинов — чтобы проверить цены, докупку магазинов, историю и условия возврата.
+     */
+    public function billing(): string
+    {
+        $admin = Auth::requireAdmin();
+        $code = (string) input('plan', 'pro');
+        if ($code !== 'free' && !isset(Plans::paid()[$code])) {
+            $code = 'pro';
+        }
+        $state = in_array(input('state'), ['active', 'expiring', 'expired'], true) ? (string) input('state') : 'active';
+        $days = ['active' => 20, 'expiring' => 2, 'expired' => -3][$state];
+        $base = Plans::get($code);
+        $stores = max((int) $base['stores'], min((int) $base['stores'] + Plans::maxExtra($base), (int) input('stores', $base['stores'])));
+        $client = ['id' => 0, 'email' => 'client@example.com', 'plan_code' => $code, 'is_super' => 0, 'owner_id' => null,
+            'plan_expires_at' => $code === 'free' ? null : date('Y-m-d H:i:s', time() + $days * 86400), 'extra_stores' => $stores - (int) $base['stores']];
+        // Примеры записей истории — как они выглядят у клиента
+        $demo = $code === 'free' ? [] : [
+            ['created_at' => date('Y-m-d H:i:s', time() - 10 * 86400), 'paid_at' => date('Y-m-d H:i:s', time() - 10 * 86400), 'plan_code' => $code, 'kind' => 'plan', 'months' => 1,
+                'extra_stores' => $client['extra_stores'], 'amount' => Plans::price($code, 1, $client['extra_stores']), 'provider' => 'yookassa', 'status' => 'succeeded',
+                'card' => 'Mir •••• 1234, до 03/29', 'period_from' => date('Y-m-d H:i:s', time() - 10 * 86400), 'period_to' => $client['plan_expires_at']],
+            ['created_at' => date('Y-m-d H:i:s', time() - 40 * 86400), 'paid_at' => date('Y-m-d H:i:s', time() - 40 * 86400), 'plan_code' => $code, 'kind' => 'plan', 'months' => 0,
+                'extra_stores' => 0, 'amount' => 0, 'provider' => 'admin', 'status' => 'manual', 'card' => null,
+                'period_from' => date('Y-m-d H:i:s', time() - 40 * 86400), 'period_to' => date('Y-m-d H:i:s', time() - 10 * 86400)],
+        ];
+        return view('admin/billing', $this->base($admin) + [
+            'title'   => 'Тарифы — вид клиента',
+            'tab'     => 'billing',
+            'pv'      => ['plan' => $code, 'state' => $state, 'stores' => $stores, 'max' => (int) $base['stores'] + Plans::maxExtra($base), 'min' => (int) $base['stores']],
+            'client'  => $client,
+            'demo'    => $demo,
+        ], 'app');
+    }
+
     public function help(): string
     {
         $admin = Auth::requireAdmin();
