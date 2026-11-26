@@ -213,6 +213,40 @@ final class AdminController
         redirect($this->back('/admin/users/' . $target['id']));
     }
 
+    /**
+     * Ручная смена тарифа из списка клиентов: тариф, дата окончания, доп. магазины, сумма оплаты (необязательно).
+     * Меняет только тариф — роль, блокировка и заметки клиента не трогаются. Супер-админу тариф не нужен.
+     */
+    public function setPlan(string $id): never
+    {
+        Auth::requireAdmin();
+        $target = $this->find($id);
+        $back = $this->back('/admin/users');
+        if (!empty($target['is_super'])) {
+            flash('error', 'У супер-админа всё бесплатно — тариф менять не нужно.');
+            redirect($back);
+        }
+        $plan = (string) input('plan_code', 'free');
+        if (!isset(Plans::all()[$plan])) {
+            flash('error', 'Неизвестный тариф.');
+            redirect($back);
+        }
+        $until = (string) input('plan_expires_at', '');
+        $expiresAt = $plan !== 'free' && preg_match('/^\d{4}-\d{2}-\d{2}$/', $until) ? $until . ' 23:59:59' : null;
+        if ($plan !== 'free' && !$expiresAt) {
+            flash('error', 'Укажите, до какой даты действует тариф.');
+            redirect($back);
+        }
+        $extra = min(Plans::maxExtra(Plans::get($plan)), max(0, (int) input('extra_stores', 0)));
+        DB::exec('UPDATE users SET plan_code = ?, plan_expires_at = ?, extra_stores = ? WHERE id = ?', [$plan, $expiresAt, $extra, $target['id']]);
+        if ($plan !== 'free') {
+            $this->manualPayment((int) $target['id'], $plan, 0, (float) str_replace([',', ' '], ['.', ''], (string) input('amount', '0')), [now(), $expiresAt]);
+        }
+        flash('success', $target['email'] . ': тариф «' . Plans::get($plan)['name'] . '»' . ($expiresAt ? ' до ' . date_ru($expiresAt, false) : '')
+            . ($extra ? ', доп. магазинов: ' . $extra : '') . '.');
+        redirect($back);
+    }
+
     /** Быстрое продление: +N дней или месяцев к текущему сроку (или от сегодня, если срок истёк / тариф другой). */
     public function extend(string $id): never
     {

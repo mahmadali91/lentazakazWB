@@ -186,6 +186,7 @@ $r->post('/admin/users/create', [AdminController::class, 'create']);
 $r->get('/admin/users/{id}', [AdminController::class, 'show']);
 $r->post('/admin/users/{id}', [AdminController::class, 'update']);
 $r->post('/admin/users/{id}/extend', [AdminController::class, 'extend']);
+$r->post('/admin/users/{id}/plan', [AdminController::class, 'setPlan']);
 $r->post('/admin/users/{id}/password', [AdminController::class, 'password']);
 $r->post('/admin/users/{id}/delete', [AdminController::class, 'delete']);
 $r->post('/admin/users/{id}/login', [AdminController::class, 'impersonate']);

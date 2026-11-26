@@ -493,7 +493,8 @@ final class Migrator
         } catch (\PDOException $e) {
             $code = (int) ($e->errorInfo[1] ?? 0);
             // 1060 — колонка уже есть, 1061 — индекс уже есть, 1826/121 — внешний ключ уже есть
-            if (!in_array($code, [1060, 1061, 1826, 121], true)) {
+            // (MariaDB сообщает о повторном внешнем ключе как 1005 с errno 121)
+            if (!in_array($code, [1060, 1061, 1826, 121], true) && !($code === 1005 && str_contains($e->getMessage(), 'errno: 121'))) {
                 throw $e;
             }
         }

@@ -454,3 +454,22 @@ CREATE TABLE IF NOT EXISTS wb_ad_payments (
   KEY idx_adpay_day (store_id, day),
   CONSTRAINT fk_adpay_store FOREIGN KEY (store_id) REFERENCES stores (id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Продажи и возвраты из Статистики WB (supplier/sales): выкуп и возврат — отдельные события со своей датой
+CREATE TABLE IF NOT EXISTS wb_sales (
+  store_id       INT UNSIGNED NOT NULL,
+  sale_id        VARCHAR(40) NOT NULL,
+  srid           VARCHAR(80) NULL,
+  nm_id          BIGINT NULL,
+  is_return      TINYINT(1) NOT NULL DEFAULT 0,
+  sale_dt        DATETIME NOT NULL,
+  last_change    DATETIME NULL,
+  price_with_disc DECIMAL(12,2) NULL,
+  finished_price DECIMAL(12,2) NULL,
+  for_pay        DECIMAL(12,2) NULL,
+  is_mp          TINYINT(1) NOT NULL DEFAULT 0,
+  PRIMARY KEY (store_id, sale_id),
+  KEY idx_sales_dt (store_id, sale_dt),
+  KEY idx_sales_srid (store_id, srid),
+  CONSTRAINT fk_sales_store FOREIGN KEY (store_id) REFERENCES stores (id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

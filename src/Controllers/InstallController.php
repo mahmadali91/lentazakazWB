@@ -79,6 +79,10 @@ final class InstallController
                 foreach (array_filter(array_map('trim', explode(';', $sql))) as $statement) {
                     $pdo->exec($statement);
                 }
+                // schema.sql — актуальная схема: отмечаем её версию, чтобы миграции не применялись заново
+                $pdo->prepare("INSERT INTO settings (name, value) VALUES ('schema_version', ?) ON DUPLICATE KEY UPDATE value = VALUES(value)")
+                    ->execute([(string) \App\Core\Migrator::VERSION]);
+                $pdo->prepare("INSERT INTO settings (name, value) VALUES ('cfg.app.support_telegram', 'wblinkoz') ON DUPLICATE KEY UPDATE value = value")->execute();
                 $host = parse_url($siteUrl, PHP_URL_HOST) ?: 'localhost';
                 $config = require BASE_PATH . '/config/config.example.php';
                 $config['app']['url'] = $siteUrl;
