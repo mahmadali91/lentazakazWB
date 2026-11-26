@@ -393,7 +393,7 @@ final class AdminController
     public function help(): string
     {
         $admin = Auth::requireAdmin();
-        return view('admin/help', $this->base($admin) + ['title' => 'Инструкция администратора', 'tab' => 'help']);
+        return view('admin/help', $this->base($admin) + ['title' => 'Инструкция администратора', 'tab' => 'help'], 'app');
     }
 
     /** Настройки сервиса: контакты поддержки и Telegram-бот (хранятся в БД поверх config.php, токен — зашифрованным). */
