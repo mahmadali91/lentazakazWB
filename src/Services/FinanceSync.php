@@ -333,7 +333,9 @@ final class FinanceSync
         // Пополнения рекламного счёта: картой и по счёту — расход деньгами вне отчёта реализации
         usleep(1100000);
         try {
-            foreach ($this->wb->adPayments($from, $to) as $p) {
+            // WB требует период пополнений не короче суток: «сегодня — сегодня» расширяем на день назад
+            $payFrom = min($from, date('Y-m-d', strtotime($to) - 86400));
+            foreach ($this->wb->adPayments($payFrom, $to) as $p) {
                 if (empty($p['id'])) {
                     continue;
                 }
