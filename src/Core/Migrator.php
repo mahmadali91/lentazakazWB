@@ -9,7 +9,7 @@ namespace App\Core;
  */
 final class Migrator
 {
-    public const VERSION = 20;
+    public const VERSION = 21;
 
     private const AD_PAYMENTS_DDL = "CREATE TABLE IF NOT EXISTS wb_ad_payments (
         store_id    INT UNSIGNED NOT NULL,
@@ -23,6 +23,20 @@ final class Migrator
         PRIMARY KEY (store_id, payment_id),
         KEY idx_adpay_day (store_id, day),
         CONSTRAINT fk_adpay_store FOREIGN KEY (store_id) REFERENCES stores (id) ON DELETE CASCADE
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci";
+
+    private const REQUESTS_DDL = "CREATE TABLE IF NOT EXISTS member_requests (
+        id         INT UNSIGNED NOT NULL AUTO_INCREMENT,
+        owner_id   INT UNSIGNED NOT NULL,
+        member_id  INT UNSIGNED NOT NULL,
+        kind       VARCHAR(16) NOT NULL DEFAULT 'store',
+        message    VARCHAR(500) NULL,
+        created_at DATETIME NOT NULL,
+        done_at    DATETIME NULL,
+        PRIMARY KEY (id),
+        KEY idx_req_owner (owner_id, done_at),
+        CONSTRAINT fk_req_owner FOREIGN KEY (owner_id) REFERENCES users (id) ON DELETE CASCADE,
+        CONSTRAINT fk_req_member FOREIGN KEY (member_id) REFERENCES users (id) ON DELETE CASCADE
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci";
 
     private const LOAD_DDL = "CREATE TABLE IF NOT EXISTS store_load (
@@ -80,6 +94,13 @@ final class Migrator
                 // Пересчёт сумм в рубли по курсу ЦБ: настройка кабинета и кэш курсов
                 self::addColumn('users', 'show_rub', 'TINYINT(1) NOT NULL DEFAULT 0');
                 self::run(self::FX_DDL);
+            }
+            if ($version < 21) {
+                // Клиенты агентства: уровень доступа (просмотр / ведёт себестоимость и расходы своих магазинов),
+                // контакты владельца кабинета для его клиентов и запросы клиентов («подключить ещё магазин», продление)
+                self::addColumn('users', 'member_role', "VARCHAR(16) NOT NULL DEFAULT 'viewer' AFTER store_access");
+                self::addColumn('users', 'contacts', 'TEXT NULL AFTER note');
+                self::run(self::REQUESTS_DDL);
             }
             if ($version < 20) {
                 // История платежей в кабинете: способ оплаты (карта) и период, за который оплачено

@@ -89,14 +89,8 @@ final class AccountController
         }
     }
 
-    /** Сообщение пользователю в MAX и Telegram (что подключено). */
     private static function notify(array $user, string $html): void
     {
-        if (!empty($user['max_user_id']) && Max::enabled()) {
-            Max::send($user['max_user_id'], $html);
-        }
-        if (!empty($user['tg_chat_id']) && Telegram::enabled()) {
-            Telegram::send($user['tg_chat_id'], $html);
-        }
+        \App\Services\Contacts::notify($user, $html);
     }
 }

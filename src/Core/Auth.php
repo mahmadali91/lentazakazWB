@@ -149,6 +149,30 @@ final class Auth
         return true;
     }
 
+    /**
+     * Может ли пользователь менять данные учёта (себестоимость, налог, расходы, отчёты из файла):
+     * владелец кабинета или его клиент с уровнем «клиент» (только по своим магазинам). Агентство в кабинете клиента — только просмотр.
+     */
+    public static function canEdit(): bool
+    {
+        $user = self::user();
+        if (!$user || self::acting() !== null) {
+            return false;
+        }
+        return empty($user['owner_id']) || ($user['member_role'] ?? 'viewer') === 'client';
+    }
+
+    /** Действие доступно владельцу или его клиенту с правом вести учёт своих магазинов. */
+    public static function requireEditor(): array
+    {
+        $user = self::require();
+        if (!self::canEdit()) {
+            flash('error', 'Изменять данные может владелец кабинета. Попросите его открыть вам доступ «Клиент».');
+            redirect('/app');
+        }
+        return $user;
+    }
+
     /** Действие доступно только владельцу кабинета (не сотруднику). */
     public static function requireOwner(): array
     {
@@ -208,8 +232,10 @@ final class Auth
             $limit = (int) (\App\Services\Plans::forUser((array) self::account())['team'] ?? 0);
             $rank = (int) DB::value('SELECT COUNT(*) FROM users WHERE owner_id = ? AND id <= ?', [$user['owner_id'], $user['id']]);
             if ($rank > $limit) {
+                $contact = \App\Services\Contacts::text((array) self::account());
                 self::logout();
-                flash('error', 'Доступ сотрудников и клиентов приостановлен: тариф владельца кабинета его не включает. Обратитесь к владельцу кабинета.');
+                flash('error', 'Доступ сотрудников и клиентов приостановлен: тариф владельца кабинета его не включает. Обратитесь к владельцу кабинета'
+                    . ($contact !== '' ? ' — ' . $contact : '') . '.');
                 $user = null;
             }
         }

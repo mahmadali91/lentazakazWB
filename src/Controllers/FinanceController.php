@@ -67,7 +67,7 @@ final class FinanceController
             'user' => $user, 'account' => $account, 'plan' => $plan, 'activeIds' => $active, 'storeIds' => $ids, 'storeId' => $storeId,
             'stores' => $active ? DB::all('SELECT * FROM stores WHERE id IN (' . implode(',', $active) . ') ORDER BY id') : [],
             'periods' => $periods, 'from' => $from, 'to' => $to, 'preset' => $preset,
-            'canEdit' => !Auth::isMember(), 'settings' => Profit::settings($account),
+            'canEdit' => Auth::canEdit(), 'settings' => Profit::settings($account),
             'currencies' => $currencies, 'currency' => $cur, 'fxOn' => $fxOn,
         ];
     }
@@ -438,6 +438,7 @@ final class FinanceController
     /** Загрузить историю отчётов глубже (до 29.01.2024 — с этой даты WB отдаёт данные). */
     public function history(): never
     {
+        Auth::requireOwner();
         $ctx = $this->requireEdit();
         $months = max(1, min(36, (int) input('months', 6)));
         $from = max(FinanceSync::WB_DATA_START, date('Y-m-d', strtotime("-$months months")));
@@ -570,6 +571,11 @@ final class FinanceController
             $this->back('expenses');
         }
         $storeId = (int) input('store_id', 0);
+        // Клиент с доступом к отдельным магазинам добавляет расходы только по своим магазинам (без «общих» расходов кабинета)
+        if (!Finance::$commonExpenses && !in_array($storeId, $ctx['activeIds'], true)) {
+            flash('error', 'Выберите магазин, к которому относится расход.');
+            $this->back('expenses');
+        }
         $nm = preg_replace('/\D/', '', (string) input('nm_id', ''));
         DB::insert('fin_expenses', [
             'user_id' => (int) $ctx['account']['id'], 'store_id' => in_array($storeId, $ctx['activeIds'], true) ? $storeId : null, 'day' => $day,
@@ -583,14 +589,16 @@ final class FinanceController
     public function deleteExpense(string $id): never
     {
         $ctx = $this->requireEdit();
-        DB::exec('DELETE FROM fin_expenses WHERE id = ? AND user_id = ?', [(int) $id, (int) $ctx['account']['id']]);
+        $only = Finance::$commonExpenses ? '' : ' AND store_id IN (' . (implode(',', $ctx['activeIds']) ?: '0') . ')';
+        DB::exec('DELETE FROM fin_expenses WHERE id = ? AND user_id = ?' . $only, [(int) $id, (int) $ctx['account']['id']]);
         flash('success', 'Расход удалён.');
         $this->back('expenses');
     }
 
+    /** Изменение данных учёта: владелец или клиент с уровнем доступа «Клиент» (по своим магазинам — activeIds уже ограничены). */
     private function requireEdit(): array
     {
-        Auth::requireOwner();
+        Auth::requireEditor();
         $ctx = $this->ctx();
         if (!Plans::finance($ctx['plan'])) {
             flash('error', 'Раздел «Финансы» доступен на платных тарифах.');

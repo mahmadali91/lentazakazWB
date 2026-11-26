@@ -88,13 +88,23 @@ final class StoreController
     }
 
     /** Налог, НДС и фиксированные расходы магазина (для расчёта прибыли). */
+    /** Налог, НДС и фиксированные расходы магазина: владелец или его клиент с уровнем «Клиент» (по своим магазинам). */
     public function finance(string $id): never
     {
-        Auth::requireOwner();
-        $store = $this->own($id);
+        $user = Auth::requireEditor();
+        if (empty($user['owner_id'])) {
+            $store = $this->own($id);
+        } else {
+            $account = Auth::account();
+            if (!in_array((int) $id, StoreService::visibleIds((int) $account['id'], \App\Services\Plans::forUser($account)), true)) {
+                redirect('/app/finance');
+            }
+            $store = ['id' => (int) $id];
+        }
         DB::update('stores', StoreService::financeInput($_POST), 'id = :id', ['id' => $store['id']]);
         flash('success', 'Налог и расходы магазина сохранены — прибыль пересчитана.');
-        redirect('/app/stores');
+        $back = (string) input('back', '');
+        redirect(preg_match('#^/app/[a-z/]*(\?[\w=&%.\-]*)?$#', $back) ? $back : '/app/stores');
     }
 
     public function toggle(string $id): never

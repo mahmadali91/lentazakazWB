@@ -16,6 +16,16 @@ $accessFields = static function (?array $access, array $stores, string $uid): st
     }
     return $h . '</div></div>';
 };
+// Уровень доступа сотрудника / клиента
+$roles = ['viewer' => 'Только просмотр', 'client' => 'Клиент — ведёт себестоимость, налог и расходы своих магазинов'];
+$roleField = static function (string $role) use ($roles): string {
+    $h = '<div class="field" style="margin:10px 0 0"><label>Уровень доступа</label><select name="member_role">';
+    foreach ($roles as $k => $label) {
+        $h .= '<option value="' . $k . '"' . ($k === $role ? ' selected' : '') . '>' . e($label) . '</option>';
+    }
+    return $h . '</select></div>';
+};
+$contacts = App\Services\Contacts::of($user);
 ?>
 <div class="topbar"><h1>Настройки</h1></div>
 
@@ -111,12 +121,34 @@ $accessFields = static function (?array $access, array $stores, string $uid): st
   <?php if (!App\Core\Auth::isMember()): $teamLimit = (int) ($plan['team'] ?? 0); ?>
   <div class="card" id="team">
     <div class="card-title"><?= icon('users', 18) ?> Сотрудники и клиенты — доступ к кабинету по логину и паролю</div>
-    <p class="muted small">Сотрудник видит ленту заказов, товары и финансы, но не может менять магазины, токены, тариф и себестоимость.
-      Клиенту можно открыть только его магазины — он не увидит остальные кабинеты, а уведомления в Telegram будет получать только по своим магазинам.
+    <p class="muted small">Сотрудник видит ленту заказов, товары и финансы. Уровень <b>«Только просмотр»</b> ничего не меняет;
+      уровень <b>«Клиент»</b> сам ведёт себестоимость, налог, НДС, фиксированные и прочие расходы — только по открытым ему магазинам.
+      Магазины, токены, тариф, загрузку истории и общие параметры расчёта меняете только вы.
+      Клиенту можно открыть только его магазины — он не увидит остальные кабинеты, а уведомления будет получать только по своим магазинам.
+      Подключить ещё магазин клиент просит у вас кнопкой в своих настройках — запрос придёт сюда и в MAX/Telegram.
       <?php if ($teamLimit >= 100): ?>На вашем тарифе — без ограничений.<?php elseif ($teamLimit > 0): ?>Доступно на тарифе: <b><?= $teamLimit ?></b> <?= plural($teamLimit, 'сотрудник', 'сотрудника', 'сотрудников') ?>.<?php endif; ?></p>
+    <?php if ($requests): ?>
+      <div id="requests" class="req-list">
+        <div class="card-subtitle">Запросы клиентов</div>
+        <?php foreach ($requests as $q): ?>
+          <div class="req-item<?= $q['done_at'] ? ' done' : '' ?>">
+            <div class="grow">
+              <b><?= $q['kind'] === 'renew' ? 'Продлить доступ' : 'Подключить ещё магазин' ?></b> — <?= e($q['name'] ?: $q['email']) ?> <span class="muted small">(<?= e($q['email']) ?>, <?= date_ru($q['created_at']) ?>)</span>
+              <?php if ($q['message']): ?><div class="small">«<?= e($q['message']) ?>»</div><?php endif; ?>
+            </div>
+            <?php if ($q['done_at']): ?>
+              <span class="badge badge-buyout">выполнен</span>
+            <?php else: ?>
+              <form method="post" action="/app/requests/<?= (int) $q['id'] ?>/done"><?= csrf_field() ?><button class="btn btn-sm">Готово</button></form>
+            <?php endif; ?>
+          </div>
+        <?php endforeach; ?>
+        <p class="small muted">Подключите магазин клиента в разделе <a href="/app/stores">«Магазины»</a> и откройте ему доступ ниже — в колонке «Магазины и доступ».</p>
+      </div>
+    <?php endif; ?>
     <?php if ($members): ?>
       <div class="table-wrap" style="margin-bottom:16px"><table class="table">
-        <thead><tr><th>Логин</th><th>Имя</th><th>Магазины</th><th>Последний вход</th><th></th></tr></thead>
+        <thead><tr><th>Логин</th><th>Имя</th><th>Магазины и доступ</th><th>Последний вход</th><th></th></tr></thead>
         <tbody>
         <?php foreach ($members as $m): $acc = App\Services\StoreService::memberAccess($m + ['owner_id' => 1]);
           $accNames = $acc === null ? 'все' : implode(', ', array_column(array_filter($allStores, static fn($s) => in_array((int) $s['id'], $acc, true)), 'name')); ?>
@@ -125,10 +157,11 @@ $accessFields = static function (?array $access, array $stores, string $uid): st
             <td><?= e($m['name']) ?></td>
             <td class="small">
               <details class="access-edit">
-                <summary><?= e($accNames !== '' ? $accNames : 'нет доступа') ?></summary>
+                <summary><?= e($accNames !== '' ? $accNames : 'нет доступа') ?> · <span class="<?= ($m['member_role'] ?? '') === 'client' ? '' : 'muted' ?>"><?= ($m['member_role'] ?? '') === 'client' ? 'клиент' : 'просмотр' ?></span></summary>
                 <form method="post" action="/app/team/<?= (int) $m['id'] ?>/access">
                   <?= csrf_field() ?>
                   <?= $accessFields($acc, $allStores, (string) $m['id']) ?>
+                  <?= $roleField((string) ($m['member_role'] ?? 'viewer')) ?>
                   <button class="btn btn-sm" style="margin-top:8px">Сохранить доступ</button>
                 </form>
               </details>
@@ -166,6 +199,7 @@ $accessFields = static function (?array $access, array $stores, string $uid): st
         <?php if (count($allStores) > 1): ?>
           <div class="field"><label>Доступ к магазинам</label><?= $accessFields(null, $allStores, 'new') ?></div>
         <?php endif; ?>
+        <div style="max-width:520px;margin-bottom:14px"><?= $roleField('viewer') ?></div>
         <button class="btn btn-sm"><?= icon('plus', 14) ?> Добавить сотрудника или клиента</button>
         <div class="hint small muted" style="margin-top:8px">Вход: <?= e(url('/login')) ?> — логин и пароль, которые вы задали.</div>
       </form>
@@ -175,6 +209,28 @@ $accessFields = static function (?array $access, array $stores, string $uid): st
       <p class="small muted">Лимит сотрудников по тарифу исчерпан. <a href="/app/billing">Увеличить</a></p>
     <?php endif; ?>
   </div>
+
+  <?php if ($teamLimit > 0 || $members): ?>
+  <div class="card" id="contacts">
+    <div class="card-title"><?= icon('send', 18) ?> Ваши контакты для клиентов</div>
+    <p class="muted small">Сотрудники и клиенты вашего кабинета видят эти контакты в настройках и профиле, в запросе «Подключить ещё магазин»
+      и в напоминании, когда подходит срок продления. Пишут вам — подключение и продление идут через вас, а не через оплату в сервисе.</p>
+    <form method="post" action="/app/settings/contacts">
+      <?= csrf_field() ?>
+      <div class="row" style="align-items:flex-start">
+        <div class="field grow" style="min-width:200px"><label for="cname">Имя или название</label><input id="cname" type="text" name="name" maxlength="120" value="<?= e($contacts['name'] ?? '') ?>" placeholder="Агентство «Старт», менеджер Анна"></div>
+        <div class="field grow" style="min-width:180px"><label for="cphone">Телефон</label><input id="cphone" type="tel" name="phone" maxlength="120" value="<?= e($contacts['phone'] ?? '') ?>" placeholder="+7 900 123-45-67"></div>
+      </div>
+      <div class="row" style="align-items:flex-start">
+        <div class="field grow" style="min-width:160px"><label for="ctg">Telegram</label><input id="ctg" type="text" name="telegram" maxlength="120" value="<?= e($contacts['telegram'] ?? '') ?>" placeholder="@username" autocapitalize="none"></div>
+        <div class="field grow" style="min-width:160px"><label for="cmax">MAX <span class="muted small">(ссылка или номер)</span></label><input id="cmax" type="text" name="max" maxlength="120" value="<?= e($contacts['max'] ?? '') ?>" placeholder="https://max.ru/…" autocapitalize="none"></div>
+        <div class="field grow" style="min-width:180px"><label for="cemail">Email</label><input id="cemail" type="email" name="email" maxlength="120" value="<?= e($contacts['email'] ?? '') ?>" placeholder="manager@example.ru"></div>
+      </div>
+      <div class="field"><label for="cnote">Комментарий для клиентов</label><textarea id="cnote" name="note" maxlength="300" rows="2" placeholder="Например: отвечаем с 10 до 19, продление — по счёту"><?= e($contacts['note'] ?? '') ?></textarea></div>
+      <button class="btn btn-sm">Сохранить контакты</button>
+    </form>
+  </div>
+  <?php endif; ?>
 
   <div class="card" id="agency">
     <div class="card-title"><?= icon('shield', 18) ?> Доступ агентству</div>
@@ -201,8 +257,27 @@ $accessFields = static function (?array $access, array $stores, string $uid): st
       <button class="btn btn-sm">Открыть доступ</button>
     </form>
   </div>
-  <?php else: ?>
-  <div class="alert alert-info"><?= App\Core\Auth::acting() ? 'Вы работаете в кабинете клиента' : 'Вы вошли как сотрудник кабинета' ?> <b><?= e($account['name'] ?: $account['email']) ?></b>.</div>
+  <?php elseif (App\Core\Auth::acting()): ?>
+  <div class="alert alert-info">Вы работаете в кабинете клиента <b><?= e($account['name'] ?: $account['email']) ?></b>.</div>
+  <?php else: $isClient = ($user['member_role'] ?? '') === 'client'; ?>
+  <div class="card" id="request">
+    <div class="card-title"><?= icon('users', 18) ?> Ваш кабинет ведёт <?= e(App\Services\Contacts::of($owner)['name'] ?? ($account['name'] ?: $account['email'])) ?></div>
+    <p class="muted small">Вы вошли по доступу от владельца кабинета. Ваш уровень доступа: <b><?= $isClient ? 'клиент' : 'только просмотр' ?></b><?= $isClient
+      ? ' — вы сами ведёте себестоимость, налог и расходы своих магазинов.' : ' — изменения вносит владелец кабинета.' ?>
+      Подключение магазинов и продление — через владельца кабинета, напишите ему:</p>
+    <div class="contact-box"><?= $owner ? App\Services\Contacts::html($owner) : '' ?></div>
+    <?php if ($myRequest): ?>
+      <div class="alert alert-success" style="margin-top:12px">Запрос «<?= $myRequest['kind'] === 'renew' ? 'Продлить доступ' : 'Подключить ещё магазин' ?>» отправлен <?= date_ru($myRequest['created_at']) ?>. Владелец кабинета свяжется с вами.</div>
+    <?php else: ?>
+      <form method="post" action="/app/settings/request" style="margin-top:12px">
+        <?= csrf_field() ?><input type="hidden" name="kind" value="store">
+        <div class="field"><label for="rmsg">Какой магазин подключить <span class="muted small">(необязательно)</span></label>
+          <input id="rmsg" type="text" name="message" maxlength="500" placeholder="Например: ИП Иванов, второй кабинет WB"></div>
+        <button class="btn btn-sm"><?= icon('plus', 14) ?> Подключить ещё магазин</button>
+        <div class="hint small muted" style="margin-top:6px">Запрос придёт владельцу кабинета. Токен WB не пишите в комментарии — передайте его владельцу лично.</div>
+      </form>
+    <?php endif; ?>
+  </div>
   <?php endif; ?>
 
   <?php if ($grantsReceived): ?>

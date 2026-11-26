@@ -6,6 +6,7 @@ namespace App\Controllers;
 use App\Core\Auth;
 use App\Core\DB;
 use App\Services\AccountTransfer;
+use App\Services\Contacts;
 use App\Services\Max;
 use App\Services\Plans;
 use App\Services\StoreService;
@@ -44,7 +45,13 @@ final class SettingsController
             // Магазины, доступные пользователю, — для выбора уведомлений; все магазины кабинета — для выдачи доступа сотрудникам
             'myStores' => $visible ? DB::all('SELECT id, name FROM stores WHERE id IN (' . implode(',', $visible) . ') ORDER BY id') : [],
             'allStores'=> Auth::isMember() ? [] : DB::all('SELECT id, name FROM stores WHERE user_id = ? ORDER BY id', [$user['id']]),
-            'members'  => Auth::isMember() ? [] : DB::all('SELECT id, email, name, store_access, last_login_at, created_at FROM users WHERE owner_id = ? ORDER BY id', [$user['id']]),
+            'members'  => Auth::isMember() ? [] : DB::all('SELECT id, email, name, store_access, member_role, last_login_at, created_at FROM users WHERE owner_id = ? ORDER BY id', [$user['id']]),
+            // Запросы клиентов владельцу («подключить ещё магазин»): открытые и последние выполненные
+            'requests' => Auth::isMember() ? [] : DB::all('SELECT r.*, u.email, u.name FROM member_requests r JOIN users u ON u.id = r.member_id
+                WHERE r.owner_id = ? AND (r.done_at IS NULL OR r.done_at > NOW() - INTERVAL 14 DAY) ORDER BY r.done_at IS NULL DESC, r.id DESC LIMIT 30', [$user['id']]),
+            // Для сотрудника/клиента — владелец кабинета с контактами и его открытый запрос
+            'owner'    => Contacts::ownerOf($user),
+            'myRequest'=> !empty($user['owner_id']) ? DB::one('SELECT * FROM member_requests WHERE member_id = ? AND done_at IS NULL ORDER BY id DESC LIMIT 1', [$user['id']]) : null,
             // Доступы агентств: выданные владельцем и полученные агентством
             'grantsGiven' => Auth::isMember() ? [] : DB::all('SELECT g.agency_id, g.expires_at, g.created_at, u.email, u.name FROM account_grants g
                 JOIN users u ON u.id = g.agency_id WHERE g.owner_id = ? ORDER BY g.created_at DESC', [$user['id']]),
@@ -101,6 +108,7 @@ final class SettingsController
             'name'          => mb_substr((string) input('name', ''), 0, 120),
             'owner_id'      => $owner['id'],
             'store_access'  => self::accessInput((int) $owner['id']),
+            'member_role'   => self::roleInput(),
             'plan_code'     => 'free',
             'created_at'    => now(),
         ]);
@@ -136,8 +144,8 @@ final class SettingsController
     public function teamAccess(string $id): never
     {
         $m = $this->member($id);
-        DB::exec('UPDATE users SET store_access = ? WHERE id = ?', [self::accessInput((int) $m['owner_id']), $m['id']]);
-        flash('success', 'Доступ ' . $m['email'] . ' к магазинам сохранён.');
+        DB::exec('UPDATE users SET store_access = ?, member_role = ? WHERE id = ?', [self::accessInput((int) $m['owner_id']), self::roleInput(), $m['id']]);
+        flash('success', 'Доступ ' . $m['email'] . ' сохранён.');
         redirect('/app/settings#team');
     }
 
@@ -149,6 +157,60 @@ final class SettingsController
         }
         $own = array_map('intval', array_column(DB::all('SELECT id FROM stores WHERE user_id = ?', [$ownerId]), 'id'));
         return json_encode(array_values(array_intersect($own, array_map('intval', (array) ($_POST['stores'] ?? [])))));
+    }
+
+    /** Уровень доступа: viewer — только просмотр, client — ведёт себестоимость, налог и расходы своих магазинов. */
+    private static function roleInput(): string
+    {
+        return ($_POST['member_role'] ?? '') === 'client' ? 'client' : 'viewer';
+    }
+
+    /** Контакты владельца кабинета — их видят его сотрудники и клиенты (подключение магазина, продление). */
+    public function contacts(): never
+    {
+        $owner = Auth::requireOwner();
+        DB::exec('UPDATE users SET contacts = ? WHERE id = ?', [Contacts::input($_POST), $owner['id']]);
+        flash('success', 'Контакты сохранены — клиенты увидят их в настройках и при продлении.');
+        redirect('/app/settings#contacts');
+    }
+
+    /** Клиент просит владельца подключить ещё магазин: запрос в списке у владельца + уведомление в MAX/Telegram. */
+    public function memberRequest(): never
+    {
+        $user = Auth::require();
+        if (empty($user['owner_id'])) {
+            redirect('/app/stores');
+        }
+        $kind = ($_POST['kind'] ?? '') === 'renew' ? 'renew' : 'store';
+        $open = DB::value('SELECT id FROM member_requests WHERE member_id = ? AND kind = ? AND done_at IS NULL', [$user['id'], $kind]);
+        $message = mb_substr(trim((string) input('message', '')), 0, 500);
+        if ($open) {
+            if ($message !== '') {
+                DB::exec('UPDATE member_requests SET message = ? WHERE id = ?', [$message, $open]);
+            }
+            flash('success', 'Запрос уже отправлен — владелец кабинета видит его в настройках.');
+            redirect('/app/settings#request');
+        }
+        DB::insert('member_requests', [
+            'owner_id' => (int) $user['owner_id'], 'member_id' => (int) $user['id'], 'kind' => $kind,
+            'message' => $message !== '' ? $message : null, 'created_at' => now(),
+        ]);
+        $owner = Contacts::ownerOf($user);
+        if ($owner) {
+            Contacts::notify($owner, ($kind === 'renew' ? '🔁 Клиент просит продлить доступ' : '➕ Клиент просит подключить ещё магазин') . ': <b>'
+                . e($user['name'] ?: $user['email']) . '</b> (логин ' . e($user['email']) . ')'
+                . ($message !== '' ? "\n«" . e($message) . '»' : '') . "\nЗапросы — в «Настройках» → «Сотрудники и клиенты»: " . e(url('/app/settings#requests')));
+        }
+        flash('success', 'Запрос отправлен владельцу кабинета. Он свяжется с вами — контакты ниже.');
+        redirect('/app/settings#request');
+    }
+
+    public function requestDone(string $id): never
+    {
+        $owner = Auth::requireOwner();
+        DB::exec('UPDATE member_requests SET done_at = NOW() WHERE id = ? AND owner_id = ? AND done_at IS NULL', [(int) $id, $owner['id']]);
+        flash('success', 'Запрос отмечен выполненным.');
+        redirect('/app/settings#requests');
     }
 
     public function teamDelete(string $id): never

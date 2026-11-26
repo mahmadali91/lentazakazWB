@@ -39,6 +39,13 @@ $initial = mb_strtoupper(mb_substr($display, 0, 1));
     </div>
   </div>
 
+  <?php if ($isMember && !App\Core\Auth::acting()): ?>
+    <div class="card">
+      <div class="card-title">Ваш менеджер</div>
+      <div class="contact-box"><?= App\Services\Contacts::html($account) ?></div>
+      <a class="btn btn-ghost btn-sm" style="margin-top:12px" href="/app/settings#request"><?= icon('plus', 14) ?> Подключить ещё магазин</a>
+    </div>
+  <?php endif; ?>
   <div class="card menu-list">
     <?php if (!$isMember): ?>
       <?php if (!empty($user['is_super'])): ?>

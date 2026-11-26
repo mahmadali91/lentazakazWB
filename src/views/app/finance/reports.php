@@ -46,7 +46,7 @@
         </div>
       <?php endforeach; ?>
       <p class="muted small">Новые отчёты WB формирует по понедельникам — сервис проверяет их каждые 6 часов. Нужен токен «Персональный» с категориями «Финансы», «Аналитика» и «Продвижение».</p>
-      <?php if ($canEdit): ?>
+      <?php if ($canEdit && !\App\Core\Auth::isMember()): ?>
         <form method="post" action="/app/finance/history" class="row" style="gap:8px">
           <?= csrf_field() ?>
           <select name="months" style="width:auto">

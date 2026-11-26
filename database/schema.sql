@@ -24,7 +24,9 @@ CREATE TABLE IF NOT EXISTS users (
   tg_stores       TEXT NULL,                  -- JSON: id магазинов для уведомлений Telegram (NULL — все доступные)
   owner_id        INT UNSIGNED NULL,          -- сотрудник: id владельца кабинета
   store_access    TEXT NULL,                  -- сотрудник: JSON id магазинов, к которым есть доступ (NULL — все магазины кабинета)
+  member_role     VARCHAR(16) NOT NULL DEFAULT 'viewer', -- сотрудник: viewer — просмотр, client — ведёт себестоимость, налог и расходы своих магазинов
   note            VARCHAR(500) NULL,          -- заметка администратора о клиенте
+  contacts        TEXT NULL,                  -- JSON: контакты владельца кабинета для его сотрудников и клиентов
   profit_settings TEXT NULL,                  -- JSON: комиссия, логистика, налог, прочие расходы
   show_rub        TINYINT(1) NOT NULL DEFAULT 0, -- показывать суммы в рублях по курсу ЦБ
   remind_sent_for DATETIME NULL,              -- для какого срока тарифа уже отправлено напоминание
@@ -472,4 +474,19 @@ CREATE TABLE IF NOT EXISTS wb_sales (
   KEY idx_sales_dt (store_id, sale_dt),
   KEY idx_sales_srid (store_id, srid),
   CONSTRAINT fk_sales_store FOREIGN KEY (store_id) REFERENCES stores (id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Запросы сотрудников и клиентов владельцу кабинета: «подключить ещё магазин», продление
+CREATE TABLE IF NOT EXISTS member_requests (
+  id         INT UNSIGNED NOT NULL AUTO_INCREMENT,
+  owner_id   INT UNSIGNED NOT NULL,
+  member_id  INT UNSIGNED NOT NULL,
+  kind       VARCHAR(16) NOT NULL DEFAULT 'store',
+  message    VARCHAR(500) NULL,
+  created_at DATETIME NOT NULL,
+  done_at    DATETIME NULL,
+  PRIMARY KEY (id),
+  KEY idx_req_owner (owner_id, done_at),
+  CONSTRAINT fk_req_owner FOREIGN KEY (owner_id) REFERENCES users (id) ON DELETE CASCADE,
+  CONSTRAINT fk_req_member FOREIGN KEY (member_id) REFERENCES users (id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

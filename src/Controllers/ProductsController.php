@@ -88,7 +88,8 @@ final class ProductsController
             'products'  => $products,
             'settings'  => $settings,
             'sources'   => $sources,
-            'canEdit'   => !Auth::isMember() && !empty($plan['profit']),
+            'canEdit'   => Auth::canEdit() && !empty($plan['profit']),
+            'canSettings' => !Auth::isMember() && !empty($plan['profit']),
             'q'         => $q,
             'onlyEmpty' => $onlyEmpty,
             'total'     => $total,
@@ -98,15 +99,16 @@ final class ProductsController
         ], 'app');
     }
 
+    /** Себестоимость и комиссия: владелец или клиент с уровнем «Клиент» — только по своим магазинам. */
     private function requireEdit(): array
     {
-        $owner = Auth::requireOwner();
-        $plan = Plans::forUser($owner);
+        Auth::requireEditor();
+        [$account, $plan, $storeIds] = $this->context();
         if (empty($plan['profit'])) {
             flash('error', 'Себестоимость и расчёт прибыли доступны на платных тарифах.');
             redirect('/app/billing');
         }
-        return [$owner, StoreService::activeIds((int) $owner['id'], $plan)];
+        return [$account, $storeIds];
     }
 
     private static function num(mixed $v): ?float
@@ -138,6 +140,8 @@ final class ProductsController
 
     public function settings(): never
     {
+        // Параметры расчёта общие для всего кабинета — меняет только владелец
+        Auth::requireOwner();
         [$owner] = $this->requireEdit();
         Profit::save((int) $owner['id'], $_POST);
         flash('success', 'Параметры расчёта прибыли сохранены.');

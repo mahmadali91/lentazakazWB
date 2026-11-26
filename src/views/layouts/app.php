@@ -82,6 +82,14 @@ if (($user['role'] ?? '') === 'admin') {
       </form>
     <?php endif; ?>
     <?= App\Core\View::partial('partials/flash') ?>
+    <?php if ($isMember && !$actingAcc && ($ownerAcc = App\Core\Auth::account())):
+      // Клиенту агентства: срок доступа подходит к концу — продление через владельца кабинета, его контакты
+      $ownerPlan = App\Services\Plans::forUser($ownerAcc);
+      $leftDays = $ownerPlan['expires_at'] ? (int) ceil((strtotime($ownerPlan['expires_at']) - time()) / 86400) : null;
+      if ($ownerPlan['expired_code'] || ($leftDays !== null && $leftDays <= 7)): $ownerContacts = App\Services\Contacts::html($ownerAcc, true); ?>
+      <div class="alert alert-warn"><?= $ownerPlan['expired_code'] ? 'Срок доступа к кабинету закончился' : 'Доступ к кабинету действует до ' . date_ru($ownerPlan['expires_at'], false) ?>.
+        Для продления напишите владельцу кабинета<?= $ownerContacts !== '' ? ': ' . $ownerContacts : '' ?>.</div>
+    <?php endif; endif; ?>
     <?php if (!empty($plan['expired_code']) && !$isMember): ?>
       <div class="alert alert-warn">Срок тарифа «<?= e(App\Services\Plans::get($plan['expired_code'])['name']) ?>» закончился — действуют ограничения бесплатного тарифа. <a href="/app/billing">Продлить</a></div>
     <?php endif; ?>

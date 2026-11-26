@@ -174,12 +174,12 @@ $countryNames = ['RU' => 'Россия', 'KG' => 'Кыргызстан', 'KZ' =>
       <div class="card-title"><?= icon('chart', 18) ?> Параметры расчёта</div>
       <form method="post" action="/app/products/settings">
         <?= csrf_field() ?>
-        <div class="hint" style="margin-bottom:12px">Налог и фиксированные расходы задаются у каждого магазина — в разделе <a href="/app/stores">«Магазины»</a>.</div>
-        <div class="field"><label>Прочие расходы на единицу, <?= currency_sign() ?></label><input type="text" inputmode="decimal" name="other" value="<?= e($fmt($settings['other'])) ?>" <?= $canEdit ? '' : 'disabled' ?>><div class="hint">Упаковка, хранение, реклама, фулфилмент.</div></div>
-        <div class="field"><label>Коэффициент склада, если неизвестен, %</label><input type="text" inputmode="decimal" name="coef" value="<?= e($fmt($settings['coef'])) ?>" <?= $canEdit ? '' : 'disabled' ?>><div class="hint">С 15 августа для складов РФ единый — 170%. Для складов СНГ — свои.</div></div>
-        <div class="field"><label>Комиссия, если категория не найдена, %</label><input type="text" inputmode="decimal" name="commission" value="<?= e($fmt($settings['commission'])) ?>" <?= $canEdit ? '' : 'disabled' ?>></div>
-        <div class="field"><label>Логистика, если объём неизвестен, <?= currency_sign() ?></label><input type="text" inputmode="decimal" name="logistics" value="<?= e($fmt($settings['logistics'])) ?>" <?= $canEdit ? '' : 'disabled' ?>></div>
-        <?php if ($canEdit): ?><button class="btn btn-sm">Сохранить параметры</button><?php endif; ?>
+        <div class="hint" style="margin-bottom:12px">Налог и фиксированные расходы задаются у каждого магазина — <?= \App\Core\Auth::isMember() ? 'в разделе <a href="/app/finance">«Финансы»</a>' : 'в разделе <a href="/app/stores">«Магазины»</a>' ?>.</div>
+        <div class="field"><label>Прочие расходы на единицу, <?= currency_sign() ?></label><input type="text" inputmode="decimal" name="other" value="<?= e($fmt($settings['other'])) ?>" <?= $canSettings ? '' : 'disabled' ?>><div class="hint">Упаковка, хранение, реклама, фулфилмент.</div></div>
+        <div class="field"><label>Коэффициент склада, если неизвестен, %</label><input type="text" inputmode="decimal" name="coef" value="<?= e($fmt($settings['coef'])) ?>" <?= $canSettings ? '' : 'disabled' ?>><div class="hint">С 15 августа для складов РФ единый — 170%. Для складов СНГ — свои.</div></div>
+        <div class="field"><label>Комиссия, если категория не найдена, %</label><input type="text" inputmode="decimal" name="commission" value="<?= e($fmt($settings['commission'])) ?>" <?= $canSettings ? '' : 'disabled' ?>></div>
+        <div class="field"><label>Логистика, если объём неизвестен, <?= currency_sign() ?></label><input type="text" inputmode="decimal" name="logistics" value="<?= e($fmt($settings['logistics'])) ?>" <?= $canSettings ? '' : 'disabled' ?>></div>
+        <?php if ($canSettings): ?><button class="btn btn-sm">Сохранить параметры</button><?php endif; ?>
       </form>
       <p class="small muted" style="margin-top:14px">Это оценка. Точные удержания WB — в еженедельном отчёте реализации.</p>
     </div>

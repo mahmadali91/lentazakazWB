@@ -42,7 +42,7 @@ $total = array_sum(array_map(static fn($i) => (float) $i['amount'], $items));
         <label>Сумма, <?= currency_sign() ?> <input type="text" inputmode="decimal" name="amount" required placeholder="0"></label>
         <label>Артикул WB <span class="muted small">(необязательно — расход ляжет на товар)</span><input type="text" inputmode="numeric" name="nm_id" placeholder="Например, 186452311"></label>
         <?php if (count($activeIds) > 1): ?>
-          <label>Магазин <select name="store_id"><option value="0">Все магазины</option><?php foreach ($stores as $s): ?><option value="<?= (int) $s['id'] ?>"><?= e($s['name']) ?></option><?php endforeach; ?></select></label>
+          <label>Магазин <select name="store_id"><?php if (\App\Services\Finance::$commonExpenses): ?><option value="0">Все магазины</option><?php endif; ?><?php foreach ($stores as $s): ?><option value="<?= (int) $s['id'] ?>"><?= e($s['name']) ?></option><?php endforeach; ?></select></label>
         <?php endif; ?>
         <label>Комментарий <input type="text" name="note" maxlength="255"></label>
         <button class="btn btn-sm">Добавить</button>
