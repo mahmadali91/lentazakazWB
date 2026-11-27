@@ -94,7 +94,7 @@ $canAdd = count($stores) < (int) $plan['stores'];
             <input type="email" name="email" required placeholder="email клиента" autocapitalize="none" aria-label="Email клиента">
             <button class="btn btn-sm"><?= icon('plus', 14) ?> Открыть доступ</button>
           </form>
-          <div class="hint small muted">Новому клиенту придёт письмо со ссылкой: он задаст пароль и сразу увидит магазин. Если аккаунт с этим email уже есть — придёт письмо для подтверждения доступа.</div>
+          <div class="hint small muted">Новому клиенту придёт письмо со ссылкой: он задаст пароль и сразу увидит магазин. Если аккаунт с этим email уже есть — придёт письмо для подтверждения, а в его аккаунте появится кнопка «Принять».</div>
         </div>
       <?php endif; ?>
       <details class="inline">

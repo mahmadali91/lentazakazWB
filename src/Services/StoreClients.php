@@ -65,11 +65,11 @@ final class StoreClients
         $sent = Mailer::send($email, 'Подтвердите доступ к магазину «' . $store['name'] . '» — ' . config('app.name'),
             "Здравствуйте!\n\n$agency открывает вашему аккаунту $email доступ к магазину «{$store['name']}» в сервисе «" . config('app.name') . "».\n\n"
             . "Чтобы принять доступ, перейдите по ссылке (действует " . self::TTL_DAYS . " дней):\n" . url('/access/confirm?token=' . $token)
-            . "\n\nПосле подтверждения магазин появится в переключателе «Кабинет WB» в вашем аккаунте.\nЕсли вы не ждали это письмо — просто проигнорируйте его.\n");
+            . "\n\nИли войдите в свой аккаунт ($email) — там будет кнопка «Принять».\nПосле подтверждения магазин появится в переключателе «Кабинет WB».\nЕсли вы не ждали это письмо — просто проигнорируйте его.\n");
         if (!$sent) {
             throw new \InvalidArgumentException('Аккаунт ' . $email . ' уже есть — ID ' . client_code((int) $user['id']) . ', но письмо для подтверждения не отправилось. Попробуйте ещё раз позже («отправить ещё раз»).');
         }
-        return 'Аккаунт ' . $email . ' уже есть — ID ' . client_code((int) $user['id']) . '. Мы отправили ему письмо: доступ к магазину откроется после подтверждения.';
+        return 'Аккаунт ' . $email . ' уже есть — ID ' . client_code((int) $user['id']) . '. Мы отправили ему письмо: доступ откроется после подтверждения по ссылке или кнопкой «Принять» в его аккаунте.';
     }
 
     /** Ссылка активации для нового клиента: токен восстановления пароля на 7 дней. */
@@ -92,6 +92,14 @@ final class StoreClients
         }
         DB::exec('UPDATE store_clients SET confirmed_at = NOW(), token_hash = NULL WHERE id = ?', [$row['id']]);
         return $row;
+    }
+
+    /** Приглашения, ждущие подтверждения, — показываем в аккаунте клиента (если письмо не дошло). */
+    public static function pendingFor(int $userId): array
+    {
+        return DB::all('SELECT sc.id, s.name store_name, u.name owner_name, u.email owner_email, u.contacts FROM store_clients sc
+            JOIN stores s ON s.id = sc.store_id JOIN users u ON u.id = sc.owner_id
+            WHERE sc.user_id = ? AND sc.confirmed_at IS NULL AND sc.created_at > NOW() - INTERVAL ' . self::TTL_DAYS . ' DAY ORDER BY sc.id', [$userId]);
     }
 
     /** Клиенты магазинов кабинета: store_id => [строки]. */

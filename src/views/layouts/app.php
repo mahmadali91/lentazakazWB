@@ -76,6 +76,16 @@ if (($user['role'] ?? '') === 'admin') {
     <?php endif; ?>
     <?= App\Core\View::partial('partials/switcher', ['nav' => $nav, 'mobile' => true]) ?>
     <?= App\Core\View::partial('partials/flash') ?>
+    <?php if (!empty($user['id']) && empty($user['owner_id'])): foreach (App\Services\StoreClients::pendingFor((int) $user['id']) as $inv):
+        $from = App\Services\Contacts::of(['contacts' => $inv['contacts']])['name'] ?? ($inv['owner_name'] ?: $inv['owner_email']); ?>
+      <div class="alert alert-info row invite-alert" style="justify-content:space-between">
+        <span><b><?= e($from) ?></b> открывает вам доступ к магазину <b>«<?= e($inv['store_name']) ?>»</b>: лента, товары и финансы.</span>
+        <span class="row" style="gap:8px">
+          <form method="post" action="/access/<?= (int) $inv['id'] ?>/accept"><?= csrf_field() ?><button class="btn btn-sm">Принять</button></form>
+          <form method="post" action="/access/<?= (int) $inv['id'] ?>/decline"><?= csrf_field() ?><button class="btn btn-sm btn-ghost">Отклонить</button></form>
+        </span>
+      </div>
+    <?php endforeach; endif; ?>
     <?php if ($isMember && (!$actingAcc || App\Core\Auth::actingKind() === 'client') && ($ownerAcc = App\Core\Auth::account())):
       // Клиенту агентства: срок доступа подходит к концу — продление через владельца кабинета, его контакты
       $ownerPlan = App\Services\Plans::forUser($ownerAcc);

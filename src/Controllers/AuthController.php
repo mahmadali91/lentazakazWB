@@ -186,13 +186,45 @@ final class AuthController
             flash('error', 'Ссылка недействительна или устарела. Попросите владельца кабинета отправить приглашение ещё раз.');
             redirect(Auth::user() ? '/app' : '/login');
         }
+        self::enterAccess($row);
+    }
+
+    /** После подтверждения: открыть магазин клиенту; если в браузере вошёл другой аккаунт — выйти и предложить вход под нужным email. */
+    private static function enterAccess(array $row): never
+    {
+        $client = DB::one('SELECT id, email FROM users WHERE id = ?', [(int) $row['user_id']]);
         $user = Auth::user();
         if ($user && (int) $user['id'] === (int) $row['user_id'] && Auth::switchAccount((int) $row['owner_id'])) {
             $_SESSION['store'] = (int) $row['store_id'];
             flash('success', 'Доступ к магазину открыт. Переключаться между кабинетами — в меню «Кабинет WB».');
             redirect('/app');
         }
-        flash('success', 'Доступ к магазину открыт. Войдите — магазин будет в меню «Кабинет WB».');
-        redirect(Auth::user() ? '/app' : '/login');
+        if ($user) {
+            Auth::logout();
+        }
+        remember_input(['email' => (string) ($client['email'] ?? '')]);
+        flash('success', 'Доступ к магазину для ' . ($client['email'] ?? '') . ' открыт. Войдите под этим email — магазин будет в меню «Кабинет WB».'
+            . ($user ? ' (Вы были в другом аккаунте — мы вышли из него.)' : ''));
+        redirect('/login');
+    }
+
+    /** Приглашение можно принять и без письма — в своём аккаунте, по кнопке в уведомлении. */
+    public function accessAccept(string $id): never
+    {
+        $user = Auth::require();
+        $row = DB::one('SELECT * FROM store_clients WHERE id = ? AND user_id = ? AND confirmed_at IS NULL', [(int) $id, $user['id']]);
+        if (!$row) {
+            redirect('/app');
+        }
+        DB::exec('UPDATE store_clients SET confirmed_at = NOW(), token_hash = NULL WHERE id = ?', [$row['id']]);
+        self::enterAccess($row);
+    }
+
+    public function accessDecline(string $id): never
+    {
+        $user = Auth::require();
+        DB::exec('DELETE FROM store_clients WHERE id = ? AND user_id = ? AND confirmed_at IS NULL', [(int) $id, $user['id']]);
+        flash('success', 'Приглашение отклонено.');
+        redirect('/app');
     }
 }

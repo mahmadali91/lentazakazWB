@@ -138,6 +138,8 @@ $r->post('/app/settings/contacts', [SettingsController::class, 'contacts']);
 $r->post('/app/stores/{id}/clients', [StoreController::class, 'clientAdd']);
 $r->post('/app/stores/{id}/clients/{uid}/delete', [StoreController::class, 'clientDelete']);
 $r->get('/access/confirm', [AuthController::class, 'accessConfirm']);
+$r->post('/access/{id}/accept', [AuthController::class, 'accessAccept']);
+$r->post('/access/{id}/decline', [AuthController::class, 'accessDecline']);
 $r->post('/app/settings/request', [SettingsController::class, 'memberRequest']);
 $r->post('/app/requests/{id}/done', [SettingsController::class, 'requestDone']);
 $r->post('/app/team/{id}/transfer', [AccountController::class, 'transfer']);
