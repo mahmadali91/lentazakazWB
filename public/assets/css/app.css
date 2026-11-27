@@ -699,3 +699,10 @@ span.p-thumb img { width: 100%; height: 100%; object-fit: cover; display: block;
 .stores-stepper input { width: 64px; text-align: center; padding: 7px 6px; -moz-appearance: textfield; }
 .stores-stepper input::-webkit-outer-spin-button, .stores-stepper input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
 .plan-breakdown { margin-bottom: 10px; min-height: 1.3em; }
+.contact-name { margin-bottom: 8px; }
+.contact-btns { display: flex; flex-wrap: wrap; gap: 8px; }
+.contact-btn { gap: 6px; }
+.contact-btn.contact-telegram { background: #229ed9; border-color: #229ed9; color: #fff; }
+.contact-btn.contact-whatsapp { background: #25d366; border-color: #25d366; color: #fff; }
+.contact-btn.contact-phone, .contact-btn.contact-email, .contact-btn.contact-max { background: var(--surface); color: var(--text); border-color: var(--border); }
+#contacts textarea { font-family: inherit; font-size: 15px; }

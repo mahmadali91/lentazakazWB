@@ -9,25 +9,6 @@ $canAdd = count($stores) < (int) $plan['stores'];
 </div>
 
 <div class="stack page-narrow">
-  <?php if ($requests): ?>
-  <div class="card" id="requests">
-    <div class="card-title"><?= icon('users', 18) ?> Запросы клиентов</div>
-    <?php foreach ($requests as $q): ?>
-      <div class="req-item<?= $q['done_at'] ? ' done' : '' ?>">
-        <div class="grow">
-          <b><?= $q['kind'] === 'renew' ? 'Продлить доступ' : 'Подключить ещё магазин' ?></b> — <?= e($q['name'] ?: $q['email']) ?> <span class="muted small">(<?= e($q['email']) ?>, <?= date_ru($q['created_at']) ?>)</span>
-          <?php if ($q['message']): ?><div class="small">«<?= e($q['message']) ?>»</div><?php endif; ?>
-        </div>
-        <?php if ($q['done_at']): ?>
-          <span class="badge badge-buyout">выполнен</span>
-        <?php else: ?>
-          <form method="post" action="/app/requests/<?= (int) $q['id'] ?>/done"><?= csrf_field() ?><button class="btn btn-sm">Готово</button></form>
-        <?php endif; ?>
-      </div>
-    <?php endforeach; ?>
-    <p class="small muted" style="margin:0">Подключите магазин клиента ниже и откройте ему доступ по email в карточке магазина — блок «Доступ клиенту».</p>
-  </div>
-  <?php endif; ?>
   <?php foreach ($stores as $s):
       $scopes = json_decode((string) $s['scopes'], true) ?: [];
       $paused = !in_array((int) $s['id'], $activeIds, true);
@@ -94,7 +75,7 @@ $canAdd = count($stores) < (int) $plan['stores'];
             <input type="email" name="email" required placeholder="email клиента" autocapitalize="none" aria-label="Email клиента">
             <button class="btn btn-sm"><?= icon('plus', 14) ?> Открыть доступ</button>
           </form>
-          <div class="hint small muted">Если аккаунта с этим email нет — он создастся, и клиенту придёт письмо с логином и паролем. Если аккаунт уже есть — придёт ссылка для подтверждения, а в его аккаунте появится кнопка «Принять». Сам клиент магазины не подключает и тариф не оплачивает — пишет вам запрос.</div>
+          <div class="hint small muted">Если аккаунта с этим email нет — он создастся, и клиенту придёт письмо с логином и паролем. Если аккаунт уже есть — придёт ссылка для подтверждения, а в его аккаунте появится кнопка «Принять». Сам клиент магазины не подключает и тариф не оплачивает — связывается с вами по контактам из ваших «Настроек».</div>
         </div>
       <?php endif; ?>
       <details class="inline">

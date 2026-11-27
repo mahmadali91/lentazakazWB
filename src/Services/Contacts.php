@@ -11,7 +11,7 @@ use App\Core\DB;
  */
 final class Contacts
 {
-    public const FIELDS = ['name' => 'Имя или название', 'phone' => 'Телефон', 'telegram' => 'Telegram', 'max' => 'MAX', 'email' => 'Email', 'note' => 'Комментарий'];
+    public const FIELDS = ['name' => 'Имя или название', 'phone' => 'Телефон', 'telegram' => 'Telegram', 'whatsapp' => 'WhatsApp', 'max' => 'MAX', 'email' => 'Email', 'note' => 'Комментарий'];
 
     public static function of(?array $owner): array
     {
@@ -27,6 +27,13 @@ final class Contacts
             $v = trim((string) ($in[$k] ?? ''));
             if ($k === 'telegram') {
                 $v = ltrim(preg_replace('#^(https?://)?(t\.me|telegram\.me)/#i', '', $v), '@');
+            }
+            if ($k === 'whatsapp') {
+                // Номер WhatsApp: из ссылки wa.me или номера — только цифры (8XXXXXXXXXX → 7XXXXXXXXXX)
+                $v = preg_replace('/\D/', '', preg_replace('#^(https?://)?(wa\.me|api\.whatsapp\.com/send\?phone=)/?#i', '', $v));
+                if (strlen($v) === 11 && $v[0] === '8') {
+                    $v = '7' . substr($v, 1);
+                }
             }
             $v = mb_substr($v, 0, $k === 'note' ? 300 : 120);
             if ($v !== '') {
@@ -59,6 +66,9 @@ final class Contacts
                 : 'Telegram ' . e($c['telegram']);
             $parts[] = $tg;
         }
+        if (!empty($c['whatsapp']) && preg_match('/^\d{10,15}$/', $c['whatsapp'])) {
+            $parts[] = '<a href="https://wa.me/' . e($c['whatsapp']) . '" target="_blank" rel="noopener">WhatsApp</a>';
+        }
         if (!empty($c['max'])) {
             $parts[] = preg_match('#^https://max\.ru/[\w./?=-]+$#', $c['max'])
                 ? '<a href="' . e($c['max']) . '" target="_blank" rel="noopener">MAX</a>' : 'MAX ' . e($c['max']);
@@ -79,12 +89,51 @@ final class Contacts
         return $h;
     }
 
+    /** Ссылки для связи: телефон, Telegram, WhatsApp, MAX, email. @return array<int, array{0:string,1:string,2:string}> [тип, подпись, ссылка] */
+    public static function links(array $owner): array
+    {
+        $c = self::of($owner);
+        $out = [];
+        if (!empty($c['phone'])) {
+            $out[] = ['phone', $c['phone'], 'tel:' . preg_replace('/[^\d+]/', '', $c['phone'])];
+        }
+        if (!empty($c['telegram']) && preg_match('/^[A-Za-z0-9_]{4,64}$/', $c['telegram'])) {
+            $out[] = ['telegram', 'Telegram', 'https://t.me/' . $c['telegram']];
+        }
+        if (!empty($c['whatsapp']) && preg_match('/^\d{10,15}$/', $c['whatsapp'])) {
+            $out[] = ['whatsapp', 'WhatsApp', 'https://wa.me/' . $c['whatsapp']];
+        }
+        if (!empty($c['max']) && preg_match('#^https://max\.ru/[\w./?=-]+$#', $c['max'])) {
+            $out[] = ['max', 'MAX', $c['max']];
+        }
+        $email = $c['email'] ?? (filter_var($owner['email'] ?? '', FILTER_VALIDATE_EMAIL) ? $owner['email'] : '');
+        if ($email !== '' && filter_var($email, FILTER_VALIDATE_EMAIL)) {
+            $out[] = ['email', $email, 'mailto:' . $email];
+        }
+        return $out;
+    }
+
+    /** Кнопки связи с владельцем кабинета (агентством). */
+    public static function buttons(array $owner): string
+    {
+        $h = '';
+        foreach (self::links($owner) as [$type, $label, $href]) {
+            $ext = str_starts_with($href, 'https://') ? ' target="_blank" rel="noopener"' : '';
+            $h .= '<a class="btn btn-sm contact-btn contact-' . $type . '" href="' . e($href) . '"' . $ext . '>' . e($label) . '</a>';
+        }
+        $c = self::of($owner);
+        $name = $c['name'] ?? ($owner['name'] ?? '');
+        return ($name !== '' ? '<div class="contact-name"><b>' . e($name) . '</b></div>' : '')
+            . ($h !== '' ? '<div class="contact-btns">' . $h . '</div>' : '<div class="muted small">Владелец кабинета ещё не указал контакты.</div>')
+            . (!empty($c['note']) ? '<div class="small muted" style="margin-top:8px">' . nl2br(e($c['note'])) . '</div>' : '');
+    }
+
     /** Контакты одной строкой без разметки (для сообщений на странице входа). */
     public static function text(array $owner): string
     {
         $c = self::of($owner);
         $parts = array_filter([
-            $c['phone'] ?? '', !empty($c['telegram']) ? 'Telegram @' . $c['telegram'] : '', !empty($c['max']) ? 'MAX ' . $c['max'] : '',
+            $c['phone'] ?? '', !empty($c['telegram']) ? 'Telegram @' . $c['telegram'] : '', !empty($c['whatsapp']) ? 'WhatsApp +' . $c['whatsapp'] : '', !empty($c['max']) ? 'MAX ' . $c['max'] : '',
             $c['email'] ?? (filter_var($owner['email'] ?? '', FILTER_VALIDATE_EMAIL) ? $owner['email'] : ''),
         ]);
         $name = $c['name'] ?? ($owner['name'] ?? '');

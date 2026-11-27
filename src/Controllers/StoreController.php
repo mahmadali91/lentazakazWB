@@ -26,11 +26,9 @@ final class StoreController
             'stores'    => $stores,
             'counts'    => $counts,
             'activeIds' => StoreService::activeIds((int) $user['id'], $plan),
-            // Клиенты агентства: доступ к отдельным магазинам по email и их запросы
+            // Клиенты агентства: доступ к отдельным магазинам по email
             'clients'   => \App\Services\StoreClients::forOwner((int) $user['id']),
             'canClients'=> (int) ($plan['team'] ?? 0) > 0,
-            'requests'  => DB::all('SELECT r.*, u.email, u.name FROM member_requests r JOIN users u ON u.id = r.member_id
-                WHERE r.owner_id = ? AND (r.done_at IS NULL OR r.done_at > NOW() - INTERVAL 14 DAY) ORDER BY r.done_at IS NULL DESC, r.id DESC LIMIT 30', [$user['id']]),
             'nav'       => 'stores',
         ], 'app');
     }

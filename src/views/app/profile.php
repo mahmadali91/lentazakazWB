@@ -30,8 +30,8 @@ $initial = mb_strtoupper(mb_substr($display, 0, 1));
   <?php if ($isMember && (!App\Core\Auth::acting() || App\Core\Auth::actingKind() === 'client')): ?>
     <div class="card">
       <div class="card-title">Ваш менеджер</div>
-      <div class="contact-box"><?= App\Services\Contacts::html($account) ?></div>
-      <a class="btn btn-ghost btn-sm" style="margin-top:12px" href="/app/settings#request"><?= icon('plus', 14) ?> Подключить ещё магазин</a>
+      <p class="small muted" style="margin:0 0 10px">Подключить ещё магазин или продлить доступ — напишите или позвоните:</p>
+      <div class="contact-box"><?= App\Services\Contacts::buttons($account) ?></div>
     </div>
   <?php endif; ?>
   <div class="card menu-list">

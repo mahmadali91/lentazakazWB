@@ -235,9 +235,9 @@ final class Auth
         }
         if (self::acting() !== null) {
             flash('error', self::actingKind() === 'client'
-                ? 'Подключение магазинов и тариф — через ваше агентство: «Настройки» → «Подключить ещё магазин».'
+                ? 'Подключение магазинов и тариф — через ваше агентство. Его контакты — в «Настройках».'
                 : 'Вы работаете в кабинете клиента. Чтобы открыть этот раздел, переключитесь в свой кабинет.');
-            redirect(self::actingKind() === 'client' ? '/app/settings#request' : '/app');
+            redirect(self::actingKind() === 'client' ? '/app/settings#manager' : '/app');
         }
         return $user;
     }

@@ -192,8 +192,8 @@ $contacts = App\Services\Contacts::of($user);
   <?php if ($teamLimit > 0 || $members): ?>
   <div class="card" id="contacts">
     <div class="card-title"><?= icon('send', 18) ?> Ваши контакты для клиентов</div>
-    <p class="muted small">Сотрудники и клиенты вашего кабинета видят эти контакты в настройках и профиле, в запросе «Подключить ещё магазин»
-      и в напоминании, когда подходит срок продления. Пишут вам — подключение и продление идут через вас, а не через оплату в сервисе.</p>
+    <p class="muted small">Клиенты и сотрудники вашего кабинета видят эти контакты кнопками — позвонить, написать в Telegram или WhatsApp — в своих настройках и профиле
+      и в напоминании, когда подходит срок продления. Подключение новых магазинов и продление идут через вас, а не через оплату в сервисе.</p>
     <form method="post" action="/app/settings/contacts">
       <?= csrf_field() ?>
       <div class="row" style="align-items:flex-start">
@@ -201,7 +201,10 @@ $contacts = App\Services\Contacts::of($user);
         <div class="field grow" style="min-width:180px"><label for="cphone">Телефон</label><input id="cphone" type="tel" name="phone" maxlength="120" value="<?= e($contacts['phone'] ?? '') ?>" placeholder="+7 900 123-45-67"></div>
       </div>
       <div class="row" style="align-items:flex-start">
-        <div class="field grow" style="min-width:160px"><label for="ctg">Telegram</label><input id="ctg" type="text" name="telegram" maxlength="120" value="<?= e($contacts['telegram'] ?? '') ?>" placeholder="@username" autocapitalize="none"></div>
+        <div class="field grow" style="min-width:160px"><label for="ctg">Telegram</label><input id="ctg" type="text" name="telegram" maxlength="120" value="<?= e($contacts['telegram'] ?? '') ?>" placeholder="@username или t.me/…" autocapitalize="none"></div>
+        <div class="field grow" style="min-width:160px"><label for="cwa">WhatsApp <span class="muted small">(номер)</span></label><input id="cwa" type="tel" name="whatsapp" maxlength="120" value="<?= !empty($contacts['whatsapp']) ? '+' . e($contacts['whatsapp']) : '' ?>" placeholder="+7 900 123-45-67"></div>
+      </div>
+      <div class="row" style="align-items:flex-start">
         <div class="field grow" style="min-width:160px"><label for="cmax">MAX <span class="muted small">(ссылка или номер)</span></label><input id="cmax" type="text" name="max" maxlength="120" value="<?= e($contacts['max'] ?? '') ?>" placeholder="https://max.ru/…" autocapitalize="none"></div>
         <div class="field grow" style="min-width:180px"><label for="cemail">Email</label><input id="cemail" type="email" name="email" maxlength="120" value="<?= e($contacts['email'] ?? '') ?>" placeholder="manager@example.ru"></div>
       </div>
@@ -239,23 +242,12 @@ $contacts = App\Services\Contacts::of($user);
   <?php elseif (App\Core\Auth::acting() && App\Core\Auth::actingKind() !== 'client'): ?>
   <div class="alert alert-info">Вы работаете в кабинете клиента <b><?= e($account['name'] ?: $account['email']) ?></b>.</div>
   <?php else: $isClient = ($user['member_role'] ?? '') === 'client' || App\Core\Auth::actingKind() === 'client'; ?>
-  <div class="card" id="request">
+  <div class="card" id="manager">
     <div class="card-title"><?= icon('users', 18) ?> Ваш кабинет ведёт <?= e(App\Services\Contacts::of($owner)['name'] ?? ($account['name'] ?: $account['email'])) ?></div>
     <p class="muted small">Вы вошли по доступу от владельца кабинета. Ваш уровень доступа: <b><?= $isClient ? 'клиент' : 'только просмотр' ?></b><?= $isClient
       ? ' — вы сами ведёте себестоимость, налог и расходы своих магазинов.' : ' — изменения вносит владелец кабинета.' ?>
-      Подключение магазинов и продление — через владельца кабинета, напишите ему:</p>
-    <div class="contact-box"><?= $owner ? App\Services\Contacts::html($owner) : '' ?></div>
-    <?php if ($myRequest): ?>
-      <div class="alert alert-success" style="margin-top:12px">Запрос «<?= $myRequest['kind'] === 'renew' ? 'Продлить доступ' : 'Подключить ещё магазин' ?>» отправлен <?= date_ru($myRequest['created_at']) ?>. Владелец кабинета свяжется с вами.</div>
-    <?php else: ?>
-      <form method="post" action="/app/settings/request" style="margin-top:12px">
-        <?= csrf_field() ?><input type="hidden" name="kind" value="store">
-        <div class="field"><label for="rmsg">Какой магазин подключить <span class="muted small">(необязательно)</span></label>
-          <input id="rmsg" type="text" name="message" maxlength="500" placeholder="Например: ИП Иванов, второй кабинет WB"></div>
-        <button class="btn btn-sm"><?= icon('plus', 14) ?> Подключить ещё магазин</button>
-        <div class="hint small muted" style="margin-top:6px">Запрос придёт владельцу кабинета. Токен WB не пишите в комментарии — передайте его владельцу лично.</div>
-      </form>
-    <?php endif; ?>
+      Подключить ещё магазин или продлить доступ — напишите или позвоните:</p>
+    <div class="contact-box"><?= $owner ? App\Services\Contacts::buttons($owner) : '' ?></div>
     <?php if (App\Core\Auth::actingKind() === 'client'): ?>
       <form method="post" action="/access/leave" style="margin-top:14px;padding-top:12px;border-top:1px solid var(--border)"
         data-confirm="Выйти из кабинета? Доступ к магазинам этого кабинета закроется — открыть его снова сможет только владелец кабинета.">
