@@ -220,6 +220,19 @@ final class AuthController
         self::enterAccess($row);
     }
 
+    /** Клиент выходит из кабинета агентства (закрывает себе доступ к его магазинам). */
+    public function accessLeave(): never
+    {
+        $user = Auth::require();
+        $ownerId = Auth::actingKind() === 'client' ? (int) Auth::acting() : 0;
+        if ($ownerId && \App\Services\StoreClients::leave($user, $ownerId)) {
+            Auth::switchAccount(0);
+            unset($_SESSION['store']);
+            flash('success', 'Вы вышли из кабинета — доступ к его магазинам закрыт.');
+        }
+        redirect('/app');
+    }
+
     public function accessDecline(string $id): never
     {
         $user = Auth::require();

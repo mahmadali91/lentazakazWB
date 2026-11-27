@@ -256,6 +256,13 @@ $contacts = App\Services\Contacts::of($user);
         <div class="hint small muted" style="margin-top:6px">Запрос придёт владельцу кабинета. Токен WB не пишите в комментарии — передайте его владельцу лично.</div>
       </form>
     <?php endif; ?>
+    <?php if (App\Core\Auth::actingKind() === 'client'): ?>
+      <form method="post" action="/access/leave" style="margin-top:14px;padding-top:12px;border-top:1px solid var(--border)"
+        data-confirm="Выйти из кабинета? Доступ к магазинам этого кабинета закроется — открыть его снова сможет только владелец кабинета.">
+        <?= csrf_field() ?><button class="btn btn-danger btn-sm">Выйти из кабинета</button>
+        <span class="small muted">— закрыть себе доступ к магазинам этого кабинета</span>
+      </form>
+    <?php endif; ?>
   </div>
   <?php endif; ?>
 

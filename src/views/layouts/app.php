@@ -71,7 +71,7 @@ if (($user['role'] ?? '') === 'admin') {
         <?php else: ?>
           <span>Кабинет клиента <b><?= e($actingAcc['name'] ?: $actingAcc['email']) ?></b> (ID <?= e(client_code((int) $actingAcc['id'])) ?>) — доступ агентства, только просмотр.</span>
         <?php endif; ?>
-        <button class="btn btn-sm btn-ghost">В свой кабинет</button>
+        <?php if (!App\Core\Auth::clientOnly()): ?><button class="btn btn-sm btn-ghost">В свой кабинет</button><?php endif; ?>
       </form>
     <?php endif; ?>
     <?= App\Core\View::partial('partials/switcher', ['nav' => $nav, 'mobile' => true]) ?>

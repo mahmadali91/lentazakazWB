@@ -254,7 +254,9 @@ final class StoreService
                 : ($g['name'] ?: $g['email']) . ' · ID ' . client_code($oid);
             $groups[] = ['owner' => $oid, 'label' => $label, 'stores' => $names($ids)];
         }
-        $groups = array_values(array_filter($groups, static fn($gr) => $gr['stores'] || $gr['owner'] === 0));
+        // Клиент агентства без своего кабинета — только магазины агентства
+        $clientOnly = \App\Core\Auth::clientOnly();
+        $groups = array_values(array_filter($groups, static fn($gr) => $gr['owner'] === 0 ? !$clientOnly : (bool) $gr['stores']));
         $current = self::current(self::visibleIds((int) $account['id'], Plans::forUser($account)));
         $count = array_sum(array_map(static fn($gr) => count($gr['stores']), $groups));
         return ['groups' => $groups, 'value' => $acting . ':' . (count($current) === 1 ? $current[0] : 0), 'count' => $count];

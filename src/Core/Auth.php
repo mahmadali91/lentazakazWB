@@ -234,8 +234,10 @@ final class Auth
             redirect('/app');
         }
         if (self::acting() !== null) {
-            flash('error', 'Вы работаете в кабинете клиента. Чтобы открыть этот раздел, переключитесь в свой кабинет.');
-            redirect('/app');
+            flash('error', self::actingKind() === 'client'
+                ? 'Подключение магазинов и тариф — через ваше агентство: «Настройки» → «Подключить ещё магазин».'
+                : 'Вы работаете в кабинете клиента. Чтобы открыть этот раздел, переключитесь в свой кабинет.');
+            redirect(self::actingKind() === 'client' ? '/app/settings#request' : '/app');
         }
         return $user;
     }
@@ -291,6 +293,19 @@ final class Auth
                 $user = null;
             }
         }
+        // Клиент агентства (приглашён по email, своих магазинов нет) работает только в кабинете агентства
+        if ($user && empty($user['owner_id']) && self::clientOnly($user)) {
+            $client = array_values(array_filter(self::grants($user), static fn($g) => $g['kind'] === 'client'));
+            if (!$client) {
+                $owner = DB::one('SELECT u.* FROM store_clients sc JOIN users u ON u.id = sc.owner_id WHERE sc.user_id = ? AND sc.confirmed_at IS NOT NULL ORDER BY sc.id LIMIT 1', [$user['id']]);
+                $contact = $owner ? \App\Services\Contacts::text($owner) : '';
+                self::logout();
+                flash('error', 'Доступ к магазинам приостановлен: тариф агентства его не включает. Обратитесь к агентству' . ($contact !== '' ? ' — ' . $contact : '') . '.');
+                $user = null;
+            } elseif (self::actingKind() !== 'client') {
+                self::switchAccount((int) $client[0]['owner_id']);
+            }
+        }
         if (!$user) {
             if (self::wantsJson()) {
                 json_response(['error' => 'unauthorized'], 401);
@@ -298,6 +313,22 @@ final class Auth
             redirect('/login');
         }
         return $user;
+    }
+
+    /**
+     * Клиент агентства без своего кабинета: открыт доступ к магазинам агентства, а своих магазинов нет
+     * (или аккаунт создан приглашением). Магазины не подключает и тариф не оплачивает — только через агентство.
+     */
+    public static function clientOnly(?array $user = null): bool
+    {
+        static $cache = [];
+        $user ??= self::user();
+        if (!$user || !empty($user['owner_id']) || ($user['role'] ?? '') === 'admin' || !empty($user['is_super'])) {
+            return false;
+        }
+        $uid = (int) $user['id'];
+        return $cache[$uid] ??= (bool) DB::value('SELECT 1 FROM store_clients WHERE user_id = ? AND confirmed_at IS NOT NULL LIMIT 1', [$uid])
+            && (!empty($user['invited_by']) || !DB::value('SELECT 1 FROM stores WHERE user_id = ? LIMIT 1', [$uid]));
     }
 
     public static function requireAdmin(): array

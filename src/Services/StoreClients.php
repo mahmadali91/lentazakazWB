@@ -35,21 +35,21 @@ final class StoreClients
         }
         $agency = Contacts::of($owner)['name'] ?? ($owner['name'] ?: $owner['email']);
         if (!$user) {
-            // Новый клиент: аккаунт без пароля, доступ к магазину открыт сразу — пароль он задаёт по ссылке из письма
+            // Новый клиент: создаём аккаунт с паролем, доступ к магазину открыт сразу — логин и пароль приходят письмом
+            $password = self::password();
             $userId = DB::insert('users', [
-                'email' => $email, 'password_hash' => password_hash(bin2hex(random_bytes(24)), PASSWORD_DEFAULT),
+                'email' => $email, 'password_hash' => password_hash($password, PASSWORD_DEFAULT),
                 'name' => '', 'invited_by' => (int) $owner['id'], 'plan_code' => 'free', 'created_at' => now(),
             ]);
             DB::insert('store_clients', ['store_id' => (int) $store['id'], 'owner_id' => (int) $owner['id'], 'user_id' => $userId,
                 'created_at' => now(), 'confirmed_at' => now()]);
-            $token = self::resetToken($userId);
             $sent = Mailer::send($email, 'Доступ к магазину «' . $store['name'] . '» — ' . config('app.name'),
                 "Здравствуйте!\n\n$agency открывает вам доступ к магазину «{$store['name']}» в сервисе «" . config('app.name') . "»: лента заказов, товары и финансы.\n\n"
-                . "Чтобы активировать кабинет, перейдите по ссылке и придумайте пароль (ссылка действует " . self::TTL_DAYS . " дней):\n" . url('/reset?token=' . $token . '&welcome=1')
-                . "\n\nЛогин для входа — ваш email: $email\nЕсли ссылка устарела, восстановите пароль: " . url('/forgot') . "\n");
+                . "Вход: " . url('/login') . "\nЛогин: $email\nПароль: $password\n\n"
+                . "Пароль можно сменить в «Настройках» после входа. Забыли пароль — восстановите его на странице входа: " . url('/forgot') . "\n");
             return 'Создан аккаунт ' . $email . ' (ID ' . client_code((int) $userId) . '). ' . ($sent
-                ? 'Мы отправили клиенту письмо — по ссылке он задаст пароль и сразу увидит магазин.'
-                : 'Письмо не отправилось — передайте клиенту ссылку активации сами (действует ' . self::TTL_DAYS . ' дней): ' . url('/reset?token=' . $token . '&welcome=1'));
+                ? 'Мы отправили клиенту письмо с логином и паролем — после входа он сразу увидит магазин.'
+                : 'Письмо не отправилось — передайте клиенту сами: вход ' . url('/login') . ', логин ' . $email . ', пароль ' . $password . '.');
         }
         $row = DB::one('SELECT * FROM store_clients WHERE store_id = ? AND user_id = ?', [$store['id'], $user['id']]);
         if ($row && $row['confirmed_at']) {
@@ -72,14 +72,31 @@ final class StoreClients
         return 'Аккаунт ' . $email . ' уже есть — ID ' . client_code((int) $user['id']) . '. Мы отправили ему письмо: доступ откроется после подтверждения по ссылке или кнопкой «Принять» в его аккаунте.';
     }
 
-    /** Ссылка активации для нового клиента: токен восстановления пароля на 7 дней. */
-    public static function resetToken(int $userId): string
+    /** Пароль для нового клиента: 10 символов без похожих букв и цифр. */
+    private static function password(): string
     {
-        $token = bin2hex(random_bytes(32));
-        DB::exec('DELETE FROM password_resets WHERE user_id = ?', [$userId]);
-        DB::insert('password_resets', ['token_hash' => hash('sha256', $token), 'user_id' => $userId,
-            'expires_at' => date('Y-m-d H:i:s', time() + self::TTL_DAYS * 86400)]);
-        return $token;
+        $abc = 'abcdefghjkmnpqrstuvwxyzABCDEFGHJKMNPQRSTUVWXYZ23456789';
+        $p = '';
+        for ($i = 0; $i < 10; $i++) {
+            $p .= $abc[random_int(0, strlen($abc) - 1)];
+        }
+        return $p;
+    }
+
+    /** Клиент сам выходит из кабинета агентства: доступ ко всем его магазинам закрывается, агентству — уведомление. */
+    public static function leave(array $user, int $ownerId): bool
+    {
+        $stores = DB::all('SELECT s.name FROM store_clients sc JOIN stores s ON s.id = sc.store_id WHERE sc.user_id = ? AND sc.owner_id = ?', [$user['id'], $ownerId]);
+        if (!$stores) {
+            return false;
+        }
+        DB::exec('DELETE FROM store_clients WHERE user_id = ? AND owner_id = ?', [$user['id'], $ownerId]);
+        $owner = DB::one('SELECT * FROM users WHERE id = ?', [$ownerId]);
+        if ($owner) {
+            Contacts::notify($owner, '🚪 Клиент <b>' . e($user['email']) . '</b> вышел из вашего кабинета — доступ к '
+                . (count($stores) > 1 ? 'магазинам' : 'магазину') . ' «' . e(implode('», «', array_column($stores, 'name'))) . '» закрыт.');
+        }
+        return true;
     }
 
     /** Подтверждение по ссылке из письма. @return array|null строка доступа */
