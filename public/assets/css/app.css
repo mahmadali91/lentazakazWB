@@ -685,3 +685,17 @@ span.p-thumb img { width: 100%; height: 100%; object-fit: cover; display: block;
 .client-add { gap: 8px; flex-wrap: nowrap; }
 .client-add input { flex: 1; min-width: 0; }
 .client-add .btn { flex: none; }
+.usage-big { font-size: 15px; margin-bottom: 8px; }
+.usage-big b { font-size: 28px; font-weight: 800; margin-right: 4px; }
+.usage-bar { height: 8px; border-radius: 99px; background: var(--surface-2); overflow: hidden; margin-bottom: 14px; }
+.usage-bar span { display: block; height: 100%; background: var(--accent); border-radius: 99px; }
+.usage-bar span.over { background: var(--bad); }
+.usage-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; }
+.usage-grid > div { padding: 10px 12px; border-radius: var(--radius-sm); background: var(--surface-2); display: flex; flex-direction: column; gap: 2px; }
+.usage-grid b { font-size: 20px; }
+.plan-stores-note { margin-bottom: 8px; }
+.stores-stepper { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; }
+.stores-stepper .btn { width: 36px; padding: 6px 0; justify-content: center; font-size: 18px; line-height: 1; }
+.stores-stepper input { width: 64px; text-align: center; padding: 7px 6px; -moz-appearance: textfield; }
+.stores-stepper input::-webkit-outer-spin-button, .stores-stepper input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+.plan-breakdown { margin-bottom: 10px; min-height: 1.3em; }

@@ -6,6 +6,7 @@ namespace App\Controllers;
 use App\Core\Auth;
 use App\Core\DB;
 use App\Core\Mailer;
+use App\Services\Plans;
 
 final class AuthController
 {
@@ -87,6 +88,9 @@ final class AuthController
             redirect('/register');
         }
         $trialPlan = (string) config('app.trial_plan', 'pro');
+        if ((Plans::get($trialPlan)['trial'] ?? true) === false) {
+            $trialPlan = 'pro'; // тариф без пробного периода (Агентство) на пробный период не выдаётся
+        }
         $trialDays = (int) config('app.trial_days', 7);
         $id = DB::insert('users', [
             'email'           => $email,

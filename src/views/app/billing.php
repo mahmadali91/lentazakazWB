@@ -31,6 +31,27 @@ $off = !$payEnabled || $preview ? 'disabled' : '';
 </div>
 
 <?php if (!empty($plan['super'])) { return; } ?>
+<?php if (isset($usage) && ($plan['expires_at'] || $usage['stores'] > 0)):
+  $paidStores = (int) $plan['stores']; $connected = $usage['stores']; $free = max(0, $paidStores - $connected);
+  $over = max(0, $connected - $paidStores); $pct = $paidStores > 0 ? min(100, (int) round($connected / $paidStores * 100)) : 100; ?>
+  <div class="card usage-card" style="margin-bottom:20px">
+    <div class="card-title"><?= icon('store', 18) ?> Магазины в тарифе</div>
+    <div class="usage-big"><b><?= $connected ?></b> <span class="muted">из <?= $paidStores ?> <?= plural($paidStores, 'оплаченного', 'оплаченных', 'оплаченных') ?> подключено</span></div>
+    <div class="usage-bar"><span style="width:<?= $pct ?>%" class="<?= $over ? 'over' : '' ?>"></span></div>
+    <div class="usage-grid">
+      <div><span class="muted small">Можно подключить ещё</span><b><?= $free ?></b></div>
+      <?php if ($over): ?><div><span class="muted small">Сверх тарифа (на паузе)</span><b style="color:var(--bad)"><?= $over ?></b></div><?php endif; ?>
+      <?php if ((int) ($plan['team'] ?? 0) > 0 || $usage['clients'] || $usage['employees']): ?>
+        <div><span class="muted small">Клиентов с доступом</span><b><?= $usage['clients'] ?></b><?= $usage['pending'] ? '<span class="muted small"> + ' . $usage['pending'] . ' ждут</span>' : '' ?></div>
+        <div><span class="muted small">Сотрудников</span><b><?= $usage['employees'] ?></b></div>
+      <?php endif; ?>
+    </div>
+    <p class="small muted" style="margin:10px 0 0">
+      <?php if ($free > 0): ?>Свободные места — <a href="/app/stores#add">подключите магазин</a>.<?php elseif (!empty($plan['store_price']) && $plan['expires_at']): ?>Все места заняты — <a href="#add-store">добавьте магазин к тарифу</a> (<?= rub($plan['store_price']) ?> в месяц).<?php endif; ?>
+      <?php if (!empty($plan['store_price'])): ?>При продлении выберите, за сколько магазинов платить — в карточке тарифа ниже.<?php endif; ?>
+    </p>
+  </div>
+<?php endif; ?>
 <?php if (!$payEnabled && !$preview): ?>
   <div class="alert alert-info">Онлайн-оплата скоро появится. Чтобы подключить тариф сейчас, свяжитесь с нами: <?php if (support_telegram() !== ''): ?><a href="https://t.me/<?= e(support_telegram()) ?>" target="_blank" rel="noopener">Telegram @<?= e(support_telegram()) ?></a> · <?php endif; ?><a href="mailto:<?= e(config('app.support_email')) ?>"><?= e(config('app.support_email')) ?></a></div>
 <?php endif; ?>
@@ -74,7 +95,11 @@ if ($canAddon): $left = Plans::maxExtra($plan) - $plan['extra_stores']; $days = 
 <div class="plans" style="margin-bottom:28px">
   <?php foreach ($plans as $code => $p): $current = $plan['code'] === $code; $maxExtra = Plans::maxExtra($p + ['code' => $code]);
     // Для тарифа с докупкой по умолчанию — столько магазинов, сколько у клиента сейчас
-    $selStores = $current ? (int) $plan['stores'] : (int) $p['stores']; ?>
+    // и не меньше подключённых — чтобы при продлении ни один магазин не встал на паузу
+    $selStores = $current ? (int) $plan['stores'] : (int) $p['stores'];
+    if ($maxExtra && isset($usage)) {
+        $selStores = min((int) $p['stores'] + $maxExtra, max($selStores, (int) $usage['stores']));
+    } ?>
     <div class="card plan <?= !empty($p['popular']) ? 'popular' : '' ?>" <?= $maxExtra ? 'data-base="' . (int) $p['price'] . '" data-store="' . (int) $p['store_price'] . '" data-incl="' . (int) $p['stores'] . '"' : '' ?>>
       <?php if (!empty($p['popular'])): ?><span class="badge badge-accent tag">Популярный</span><?php endif; ?>
       <div class="plan-name"><?= e($p['name']) ?></div>
@@ -89,18 +114,18 @@ if ($canAddon): $left = Plans::maxExtra($plan) - $plan['extra_stores']; $days = 
         <?= csrf_field() ?>
         <input type="hidden" name="plan" value="<?= e($code) ?>">
         <input type="hidden" name="months" value="1" class="months-input">
-        <?php if ($maxExtra > 10): ?>
-          <label class="small muted" style="display:block;margin-bottom:10px">Магазинов:
-            <input type="number" name="stores" class="plan-stores" min="<?= (int) $p['stores'] ?>" max="<?= (int) $p['stores'] + $maxExtra ?>" value="<?= $selStores ?>" style="width:90px;margin-left:6px">
-          </label>
-        <?php elseif ($maxExtra): ?>
-          <label class="small muted" style="display:block;margin-bottom:10px">Магазинов:
-            <select name="stores" class="plan-stores" style="width:auto;margin-left:6px">
-              <?php for ($n = (int) $p['stores']; $n <= (int) $p['stores'] + $maxExtra; $n++): ?>
-                <option value="<?= $n ?>" <?= $n === $selStores ? 'selected' : '' ?>><?= $n ?><?= $n > (int) $p['stores'] ? ' (+' . number_format(($n - (int) $p['stores']) * (float) $p['store_price'], 0, ',', ' ') . ' ₽/мес)' : '' ?></option>
-              <?php endfor; ?>
-            </select>
-          </label>
+        <?php if ($maxExtra && isset($usage)): ?>
+          <div class="small muted plan-stores-note" data-connected="<?= (int) $usage['stores'] ?>">Подключено сейчас: <b><?= (int) $usage['stores'] ?></b>. Выберите, за сколько магазинов платить<?= (int) $p['stores'] > 1 ? ' (в тарифе — ' . (int) $p['stores'] . ')' : '' ?>.
+            <span class="plan-stores-warn hidden" style="color:var(--bad);display:block">Меньше подключённых — лишние магазины встанут на паузу.</span></div>
+        <?php endif; ?>
+        <?php if ($maxExtra): ?>
+          <div class="stores-stepper">
+            <span class="small muted">Магазинов:</span>
+            <button type="button" class="btn btn-ghost btn-sm" data-step="-1" aria-label="Меньше">−</button>
+            <input type="number" name="stores" class="plan-stores" min="<?= (int) $p['stores'] ?>" max="<?= (int) $p['stores'] + $maxExtra ?>" value="<?= $selStores ?>" inputmode="numeric" aria-label="Сколько магазинов оплатить">
+            <button type="button" class="btn btn-ghost btn-sm" data-step="1" aria-label="Больше">+</button>
+          </div>
+          <div class="small muted plan-breakdown" data-base="<?= e(number_format((float) $p['price'], 0, ',', ' ')) ?>" data-each="<?= e(number_format((float) $p['store_price'], 0, ',', ' ')) ?>"></div>
         <?php endif; ?>
         <?php if ($current): ?><div class="plan-current"><span class="badge badge-buyout">Ваш тариф</span></div><?php endif; ?>
         <button class="btn btn-block <?= !empty($p['popular']) ? '' : 'btn-ghost' ?>" <?= $off ?>><?= $current ? 'Продлить' : 'Оплатить' ?></button>
@@ -168,8 +193,25 @@ if ($canAddon): $left = Plans::maxExtra($plan) - $plan['extra_stores']; $days = 
       var m = +el.dataset.months, d = +el.dataset.discount;
       el.querySelector('.pv').textContent = Math.round(month * m * (100 - d) / 100).toLocaleString('ru-RU');
     });
+    var br = card.querySelector('.plan-breakdown');
+    if (br) br.textContent = extra ? 'В месяц: ' + br.dataset.base + ' ₽ (' + card.dataset.incl + ' в тарифе) + ' + extra + ' × ' + br.dataset.each + ' ₽' : 'В месяц: ' + br.dataset.base + ' ₽ — ' + card.dataset.incl + ' в тарифе';
   }
+  // Кнопки «−» и «+» у количества магазинов
+  document.querySelectorAll('.stores-stepper [data-step]').forEach(function (b) {
+    b.addEventListener('click', function () {
+      var inp = b.parentNode.querySelector('.plan-stores');
+      inp.value = Math.max(+inp.min, Math.min(+inp.max, (+inp.value || 0) + +b.dataset.step));
+      inp.dispatchEvent(new Event('input'));
+    });
+  });
+  document.querySelectorAll('.plan').forEach(function (c) { planPrice(c); });
   document.querySelectorAll('.plan-stores').forEach(function (s) { s.addEventListener('input', function () { planPrice(s.closest('.plan')); }); });
+  // Меньше магазинов, чем подключено, — предупреждаем, что лишние встанут на паузу
+  function storesWarn(s) {
+    var note = s.closest('.plan').querySelector('.plan-stores-note'); if (!note) return;
+    note.querySelector('.plan-stores-warn').classList.toggle('hidden', +s.value >= +note.getAttribute('data-connected'));
+  }
+  document.querySelectorAll('.plan-stores').forEach(function (s) { storesWarn(s); s.addEventListener('input', function () { storesWarn(s); }); s.addEventListener('change', function () { storesWarn(s); }); });
   var aq = document.getElementById('addonQty');
   if (aq) aq.addEventListener('input', function () {
     // Как на сервере: цена магазина × дни / 30 × количество, с округлением вверх

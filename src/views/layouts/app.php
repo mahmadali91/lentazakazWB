@@ -94,6 +94,9 @@ if (($user['role'] ?? '') === 'admin') {
       <div class="alert alert-warn"><?= $ownerPlan['expired_code'] ? 'Срок доступа к кабинету закончился' : 'Доступ к кабинету действует до ' . date_ru($ownerPlan['expires_at'], false) ?>.
         Для продления напишите владельцу кабинета<?= $ownerContacts !== '' ? ': ' . $ownerContacts : '' ?>.</div>
     <?php endif; endif; ?>
+    <?php if (!empty($plan['unpaid_code']) && !$isMember): ?>
+      <div class="alert alert-warn">Тариф «<?= e(App\Services\Plans::get($plan['unpaid_code'])['name']) ?>» работает только после оплаты — пробного периода у него нет. <a href="/app/billing">Оплатить</a></div>
+    <?php endif; ?>
     <?php if (!empty($plan['expired_code']) && !$isMember): ?>
       <div class="alert alert-warn">Срок тарифа «<?= e(App\Services\Plans::get($plan['expired_code'])['name']) ?>» закончился — действуют ограничения бесплатного тарифа. <a href="/app/billing">Продлить</a></div>
     <?php endif; ?>

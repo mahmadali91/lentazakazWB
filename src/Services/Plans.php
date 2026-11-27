@@ -47,12 +47,19 @@ final class Plans
         $code = (string) $user['plan_code'];
         $expires = $user['plan_expires_at'] ?? null;
         $active = $code !== 'free' && $expires !== null && strtotime((string) $expires) > time();
+        // Тариф без пробного периода (Агентство) работает только после оплаты этого тарифа (картой или выдачей администратором)
+        $unpaid = null;
+        if ($active && (self::get($code)['trial'] ?? true) === false && !empty($user['id']) && !self::hasPaid((int) $user['id'], $code)) {
+            $active = false;
+            $unpaid = $code;
+        }
         $plan = self::get($active ? $code : 'free');
         // Докупленные магазины действуют, пока действует тариф
         $plan['extra_stores'] = $active && !empty($plan['store_price']) ? min((int) ($user['extra_stores'] ?? 0), self::maxExtra($plan)) : 0;
         $plan['stores'] = (int) $plan['stores'] + $plan['extra_stores'];
         $plan['expires_at'] = $active ? $expires : null;
-        $plan['expired_code'] = (!$active && $code !== 'free') ? $code : null;
+        $plan['expired_code'] = (!$active && $code !== 'free' && $unpaid === null) ? $code : null;
+        $plan['unpaid_code'] = $unpaid;
         // Пробный период — тариф действует, но оплат не было: в «Финансах» только последние отчёты WB
         $plan['trial'] = $active && !empty($user['id']) && !self::hasPaid((int) $user['id']);
         $plan['reports_limit'] = $plan['trial'] ? max(0, (int) config('app.trial_reports', 3)) : 0;
@@ -60,11 +67,13 @@ final class Plans
     }
 
     /** Были ли у аккаунта оплаты (картой или выданные администратором). */
-    public static function hasPaid(int $userId): bool
+    public static function hasPaid(int $userId, ?string $planCode = null): bool
     {
         static $cache = [];
-        return $cache[$userId] ??= (bool) \App\Core\DB::value(
-            "SELECT 1 FROM payments WHERE user_id = ? AND status IN ('succeeded','manual') LIMIT 1", [$userId]);
+        $key = $userId . ':' . ($planCode ?? '*');
+        return $cache[$key] ??= (bool) \App\Core\DB::value(
+            "SELECT 1 FROM payments WHERE user_id = ? AND status IN ('succeeded','manual')" . ($planCode !== null ? ' AND plan_code = ?' : '') . ' LIMIT 1',
+            $planCode !== null ? [$userId, $planCode] : [$userId]);
     }
 
     /** Названия публичных тарифов, где есть возможность: «A» и «B» — для подсказок «доступно на тарифах…». */
@@ -142,7 +151,11 @@ final class Plans
             return null;
         }
         $from = time();
-        if ($user['plan_code'] === $code && $user['plan_expires_at'] && strtotime($user['plan_expires_at']) > time()) {
+        // Продление — от конца текущего срока; тариф без пробного периода, ещё не оплаченный, — с сегодняшнего дня
+        // (оплата, которую сейчас проводим, уже отмечена успешной — первая оплата, если других нет)
+        $unpaidNoTrial = (self::get($code)['trial'] ?? true) === false && (int) DB::value(
+            "SELECT COUNT(*) FROM payments WHERE user_id = ? AND plan_code = ? AND status IN ('succeeded','manual')", [$userId, $code]) <= 1;
+        if ($user['plan_code'] === $code && $user['plan_expires_at'] && strtotime($user['plan_expires_at']) > time() && !$unpaidNoTrial) {
             $from = strtotime($user['plan_expires_at']);
         }
         $expires = date('Y-m-d H:i:s', strtotime("+$months month", $from));

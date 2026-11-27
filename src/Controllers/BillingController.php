@@ -23,6 +23,13 @@ final class BillingController
             'plans'    => Plans::paid(),
             'payments' => DB::all('SELECT * FROM payments WHERE user_id = ? ORDER BY id DESC LIMIT 20', [$user['id']]),
             'payEnabled' => YooKassa::enabled(),
+            // Использование тарифа: подключённые магазины, клиенты с доступом, сотрудники
+            'usage'    => [
+                'stores'    => (int) DB::value('SELECT COUNT(*) FROM stores WHERE user_id = ?', [$user['id']]),
+                'clients'   => (int) DB::value('SELECT COUNT(DISTINCT user_id) FROM store_clients WHERE owner_id = ? AND confirmed_at IS NOT NULL', [$user['id']]),
+                'pending'   => (int) DB::value('SELECT COUNT(DISTINCT user_id) FROM store_clients WHERE owner_id = ? AND confirmed_at IS NULL', [$user['id']]),
+                'employees' => (int) DB::value('SELECT COUNT(*) FROM users WHERE owner_id = ?', [$user['id']]),
+            ],
             'nav'      => 'billing',
         ], 'app');
     }
