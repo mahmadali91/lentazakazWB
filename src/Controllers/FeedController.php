@@ -19,8 +19,9 @@ final class FeedController
     public static function filters(array $account, array $plan): array
     {
         $activeIds = StoreService::visibleIds((int) $account['id'], $plan);
-        $storeId = (int) input('store', 0);
-        $storeIds = $storeId && in_array($storeId, $activeIds, true) ? [$storeId] : $activeIds;
+        // Текущий магазин из переключателя кабинетов (?store= тоже переключает)
+        $storeIds = StoreService::pick($activeIds);
+        $storeId = count($storeIds) === 1 && count($activeIds) > 1 ? $storeIds[0] : 0;
 
         $period = (string) input('period', 'today');
         $minFrom = strtotime('today') - ((int) $plan['history_days'] - 1) * 86400;
@@ -56,7 +57,7 @@ final class FeedController
             'q'      => mb_substr((string) input('q', ''), 0, 100),
             // Фильтр «Выкупы / Отмены / Возвраты» — по дате события, а не по дате заказа
             'date_by' => in_array((string) input('status', ''), ['buyout', 'cancel', 'return'], true) ? 'status' : '',
-            'store'  => count($storeIds) === 1 && $storeId ? $storeId : 0,
+            'store'  => $storeId,
         ];
         return [$storeIds, $f];
     }

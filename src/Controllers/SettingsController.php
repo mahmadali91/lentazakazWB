@@ -50,12 +50,13 @@ final class SettingsController
             'requests' => Auth::isMember() ? [] : DB::all('SELECT r.*, u.email, u.name FROM member_requests r JOIN users u ON u.id = r.member_id
                 WHERE r.owner_id = ? AND (r.done_at IS NULL OR r.done_at > NOW() - INTERVAL 14 DAY) ORDER BY r.done_at IS NULL DESC, r.id DESC LIMIT 30', [$user['id']]),
             // Для сотрудника/клиента — владелец кабинета с контактами и его открытый запрос
-            'owner'    => Contacts::ownerOf($user),
-            'myRequest'=> !empty($user['owner_id']) ? DB::one('SELECT * FROM member_requests WHERE member_id = ? AND done_at IS NULL ORDER BY id DESC LIMIT 1', [$user['id']]) : null,
+            'owner'    => Auth::actingKind() === 'client' ? $account : Contacts::ownerOf($user),
+            'myRequest'=> !empty($user['owner_id']) || Auth::actingKind() === 'client'
+                ? DB::one('SELECT * FROM member_requests WHERE member_id = ? AND owner_id = ? AND done_at IS NULL ORDER BY id DESC LIMIT 1', [$user['id'], $account['id']]) : null,
             // Доступы агентств: выданные владельцем и полученные агентством
             'grantsGiven' => Auth::isMember() ? [] : DB::all('SELECT g.agency_id, g.expires_at, g.created_at, u.email, u.name FROM account_grants g
                 JOIN users u ON u.id = g.agency_id WHERE g.owner_id = ? ORDER BY g.created_at DESC', [$user['id']]),
-            'grantsReceived' => Auth::grants(),
+            'grantsReceived' => array_values(array_filter(Auth::grants(), static fn($g) => $g['kind'] === 'agency')),
             'transferPrice' => AccountTransfer::price($account),
             'tgEnabled'=> Telegram::enabled(),
             'maxEnabled'=> Max::enabled(),
@@ -178,11 +179,13 @@ final class SettingsController
     public function memberRequest(): never
     {
         $user = Auth::require();
-        if (empty($user['owner_id'])) {
+        // Сотрудник кабинета или клиент агентства в его кабинете
+        $ownerId = !empty($user['owner_id']) ? (int) $user['owner_id'] : (Auth::actingKind() === 'client' ? (int) Auth::acting() : 0);
+        if (!$ownerId) {
             redirect('/app/stores');
         }
         $kind = ($_POST['kind'] ?? '') === 'renew' ? 'renew' : 'store';
-        $open = DB::value('SELECT id FROM member_requests WHERE member_id = ? AND kind = ? AND done_at IS NULL', [$user['id'], $kind]);
+        $open = DB::value('SELECT id FROM member_requests WHERE member_id = ? AND owner_id = ? AND kind = ? AND done_at IS NULL', [$user['id'], $ownerId, $kind]);
         $message = mb_substr(trim((string) input('message', '')), 0, 500);
         if ($open) {
             if ($message !== '') {
@@ -192,14 +195,14 @@ final class SettingsController
             redirect('/app/settings#request');
         }
         DB::insert('member_requests', [
-            'owner_id' => (int) $user['owner_id'], 'member_id' => (int) $user['id'], 'kind' => $kind,
+            'owner_id' => $ownerId, 'member_id' => (int) $user['id'], 'kind' => $kind,
             'message' => $message !== '' ? $message : null, 'created_at' => now(),
         ]);
-        $owner = Contacts::ownerOf($user);
+        $owner = DB::one('SELECT * FROM users WHERE id = ?', [$ownerId]);
         if ($owner) {
             Contacts::notify($owner, ($kind === 'renew' ? '🔁 Клиент просит продлить доступ' : '➕ Клиент просит подключить ещё магазин') . ': <b>'
                 . e($user['name'] ?: $user['email']) . '</b> (логин ' . e($user['email']) . ')'
-                . ($message !== '' ? "\n«" . e($message) . '»' : '') . "\nЗапросы — в «Настройках» → «Сотрудники и клиенты»: " . e(url('/app/settings#requests')));
+                . ($message !== '' ? "\n«" . e($message) . '»' : '') . "\nЗапросы — в разделе «Магазины»: " . e(url('/app/stores#requests')));
         }
         flash('success', 'Запрос отправлен владельцу кабинета. Он свяжется с вами — контакты ниже.');
         redirect('/app/settings#request');
@@ -210,7 +213,7 @@ final class SettingsController
         $owner = Auth::requireOwner();
         DB::exec('UPDATE member_requests SET done_at = NOW() WHERE id = ? AND owner_id = ? AND done_at IS NULL', [(int) $id, $owner['id']]);
         flash('success', 'Запрос отмечен выполненным.');
-        redirect('/app/settings#requests');
+        redirect('/app/stores#requests');
     }
 
     public function teamDelete(string $id): never

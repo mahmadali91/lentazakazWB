@@ -86,7 +86,7 @@ final class Auth
     /** Владелец кабинета без телефона (сотрудникам и администратору телефон не обязателен). */
     public static function needsPhone(?array $user): bool
     {
-        return $user !== null && empty($user['owner_id']) && ($user['role'] ?? '') !== 'admin' && empty($user['phone']);
+        return $user !== null && empty($user['owner_id']) && empty($user['invited_by']) && ($user['role'] ?? '') !== 'admin' && empty($user['phone']);
     }
 
     /** Сотрудник кабинета или агентство в кабинете клиента — без прав владельца (магазины, тариф, себестоимость). */
@@ -101,16 +101,65 @@ final class Auth
      */
     public static function grants(?array $user = null): array
     {
+        static $cache = [];
         $user ??= self::user();
         if (!$user || !empty($user['owner_id'])) {
             return [];
         }
-        $plan = \App\Services\Plans::forUser($user);
-        if (!in_array($plan['code'], ['business', 'super'], true)) {
-            return [];
+        $uid = (int) $user['id'];
+        if (isset($cache[$uid])) {
+            return $cache[$uid];
         }
-        return DB::all('SELECT g.owner_id, g.expires_at, u.email, u.name FROM account_grants g JOIN users u ON u.id = g.owner_id
-            WHERE g.agency_id = ? AND (g.expires_at IS NULL OR g.expires_at > NOW()) AND u.is_blocked = 0 ORDER BY u.name, u.email', [(int) $user['id']]);
+        $rows = [];
+        $plan = \App\Services\Plans::forUser($user);
+        if (in_array($plan['code'], ['business', 'super'], true)) {
+            foreach (DB::all('SELECT g.owner_id, g.expires_at, u.email, u.name FROM account_grants g JOIN users u ON u.id = g.owner_id
+                WHERE g.agency_id = ? AND (g.expires_at IS NULL OR g.expires_at > NOW()) AND u.is_blocked = 0 ORDER BY u.name, u.email', [$uid]) as $g) {
+                $rows[(int) $g['owner_id']] = $g + ['kind' => 'agency', 'store_ids' => null];
+            }
+        }
+        // Клиент агентства: доступ к отдельным магазинам кабинета по email (действует, пока тариф владельца включает клиентов)
+        foreach (DB::all('SELECT sc.owner_id, NULL expires_at, u.email, u.name, u.plan_code, u.plan_expires_at, u.is_super, u.extra_stores,
+                GROUP_CONCAT(sc.store_id ORDER BY sc.store_id) store_ids
+            FROM store_clients sc JOIN users u ON u.id = sc.owner_id
+            WHERE sc.user_id = ? AND sc.confirmed_at IS NOT NULL AND u.is_blocked = 0
+            GROUP BY sc.owner_id, u.email, u.name, u.plan_code, u.plan_expires_at, u.is_super, u.extra_stores ORDER BY u.name, u.email', [$uid]) as $g) {
+            $oid = (int) $g['owner_id'];
+            if (isset($rows[$oid]) || (int) (\App\Services\Plans::forUser($g)['team'] ?? 0) <= 0) {
+                continue;
+            }
+            $rows[$oid] = ['owner_id' => $oid, 'expires_at' => null, 'email' => $g['email'], 'name' => $g['name'], 'kind' => 'client',
+                'store_ids' => array_map('intval', explode(',', (string) $g['store_ids']))];
+        }
+        return $cache[$uid] = array_values($rows);
+    }
+
+    /** Как пользователь работает в чужом кабинете: agency — доступ агентства (просмотр), client — клиент по своим магазинам. */
+    public static function actingKind(): ?string
+    {
+        $grant = self::actingGrant();
+        return $grant['kind'] ?? null;
+    }
+
+    /** Магазины кабинета, открытые клиенту (null — не клиент или доступ ко всему кабинету). */
+    public static function clientStoreIds(): ?array
+    {
+        $grant = self::actingGrant();
+        return ($grant['kind'] ?? '') === 'client' ? $grant['store_ids'] : null;
+    }
+
+    private static function actingGrant(): ?array
+    {
+        $id = self::acting();
+        if ($id === null) {
+            return null;
+        }
+        foreach (self::grants() as $g) {
+            if ((int) $g['owner_id'] === $id) {
+                return $g;
+            }
+        }
+        return null;
     }
 
     /** id кабинета клиента, в котором сейчас работает агентство (null — в своём кабинете). */
@@ -156,8 +205,11 @@ final class Auth
     public static function canEdit(): bool
     {
         $user = self::user();
-        if (!$user || self::acting() !== null) {
+        if (!$user) {
             return false;
+        }
+        if (self::acting() !== null) {
+            return self::actingKind() === 'client';
         }
         return empty($user['owner_id']) || ($user['member_role'] ?? 'viewer') === 'client';
     }

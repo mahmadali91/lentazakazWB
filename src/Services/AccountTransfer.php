@@ -57,6 +57,7 @@ final class AccountTransfer
         $pdo->beginTransaction();
         try {
             DB::exec("UPDATE stores SET user_id = ? WHERE id IN ($in)", [$memberId]);
+            DB::exec("UPDATE store_clients SET owner_id = ? WHERE store_id IN ($in)", [$memberId]);
             DB::exec("UPDATE fin_expenses SET user_id = ? WHERE user_id = ? AND store_id IN ($in)", [$memberId, $ownerId]);
             $extra = count($stores) - (int) Plans::get(self::PLAN)['stores'];
             DB::exec("UPDATE users SET owner_id = NULL, store_access = NULL, tg_stores = NULL, plan_code = ?, plan_expires_at = ?, extra_stores = ? WHERE id = ?",

@@ -14,15 +14,25 @@ use App\Services\YooKassa;
 /** Доступ агентства к кабинетам клиентов (как WB Partners) и передача аккаунта сотруднику. */
 final class AccountController
 {
-    /** Агентство: переключение между своим кабинетом и кабинетами клиентов. */
+    /**
+     * Переключатель кабинетов (как в WB Partners): «владелец:магазин» — 0 свой кабинет, магазин 0 — все магазины вместе.
+     * Старый формат — просто id кабинета.
+     */
     public function switch(): never
     {
         Auth::require();
-        $id = (int) input('account', 0);
+        [$id, $store] = array_map('intval', explode(':', (string) input('account', '0')) + [1 => -1]);
         if (!Auth::switchAccount($id)) {
             flash('error', 'Доступ к этому кабинету закрыт или истёк.');
+            redirect('/app');
         }
-        redirect('/app');
+        if ($store >= 0) {
+            $_SESSION['store'] = $store ?: 'all';
+        } else {
+            unset($_SESSION['store']);
+        }
+        $back = (string) input('back', '');
+        redirect(preg_match('#^/app(/(products|finance(/[a-z]+)?))?$#', $back) ? $back : '/app');
     }
 
     /** Владелец выдаёт агентству доступ к своему кабинету по ID агентства (необязательно — до даты). */

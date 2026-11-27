@@ -9,11 +9,30 @@ $canAdd = count($stores) < (int) $plan['stores'];
 </div>
 
 <div class="stack page-narrow">
+  <?php if ($requests): ?>
+  <div class="card" id="requests">
+    <div class="card-title"><?= icon('users', 18) ?> Запросы клиентов</div>
+    <?php foreach ($requests as $q): ?>
+      <div class="req-item<?= $q['done_at'] ? ' done' : '' ?>">
+        <div class="grow">
+          <b><?= $q['kind'] === 'renew' ? 'Продлить доступ' : 'Подключить ещё магазин' ?></b> — <?= e($q['name'] ?: $q['email']) ?> <span class="muted small">(<?= e($q['email']) ?>, <?= date_ru($q['created_at']) ?>)</span>
+          <?php if ($q['message']): ?><div class="small">«<?= e($q['message']) ?>»</div><?php endif; ?>
+        </div>
+        <?php if ($q['done_at']): ?>
+          <span class="badge badge-buyout">выполнен</span>
+        <?php else: ?>
+          <form method="post" action="/app/requests/<?= (int) $q['id'] ?>/done"><?= csrf_field() ?><button class="btn btn-sm">Готово</button></form>
+        <?php endif; ?>
+      </div>
+    <?php endforeach; ?>
+    <p class="small muted" style="margin:0">Подключите магазин клиента ниже и откройте ему доступ по email в карточке магазина — блок «Доступ клиенту».</p>
+  </div>
+  <?php endif; ?>
   <?php foreach ($stores as $s):
       $scopes = json_decode((string) $s['scopes'], true) ?: [];
       $paused = !in_array((int) $s['id'], $activeIds, true);
   ?>
-    <div class="card store">
+    <div class="card store" id="store-<?= (int) $s['id'] ?>">
       <div class="store-head">
         <div class="logo-mark" style="width:40px;height:40px"><?= icon('store', 20) ?></div>
         <div class="grow" style="min-width:0">
@@ -54,6 +73,30 @@ $canAdd = count($stores) < (int) $plan['stores'];
       </div>
 
       <div class="row small muted" style="margin-top:6px">Налог <?= e(num_ru((float) $s['tax_rate'], 1)) ?>%<?= (float) $s['vat_rate'] > 0 ? ' + НДС ' . e(num_ru((float) $s['vat_rate'], 0)) . '%' : '' ?><?= (float) $s['weekly_expense'] > 0 ? ' · фиксированные расходы ' . e(money((float) $s['weekly_expense'])) . ' в неделю' : ' · фиксированные расходы не указаны' ?></div>
+      <?php if ($canClients): $cl = $clients[(int) $s['id']] ?? []; ?>
+        <div class="store-clients">
+          <div class="store-clients-head"><?= icon('users', 16) ?> <b>Доступ клиенту</b>
+            <span class="muted small">— клиент видит только этот магазин: ленту, товары и финансы, сам ведёт себестоимость, налог и расходы</span></div>
+          <?php foreach ($cl as $c): ?>
+            <div class="client-row">
+              <span class="grow"><b><?= e($c['email']) ?></b> <span class="muted small">ID <?= e(client_code((int) $c['user_id'])) ?></span>
+                <?php if (!$c['confirmed_at']): ?><span class="badge badge-created">ждёт подтверждения</span>
+                <?php elseif (!$c['last_login_at']): ?><span class="badge badge-created">ещё не входил</span>
+                <?php else: ?><span class="muted small">вход <?= date_ru($c['last_login_at']) ?></span><?php endif; ?></span>
+              <?php if (!$c['confirmed_at']): ?>
+                <form method="post" action="/app/stores/<?= (int) $s['id'] ?>/clients"><?= csrf_field() ?><input type="hidden" name="email" value="<?= e($c['email']) ?>"><button class="link-btn">отправить ещё раз</button></form>
+              <?php endif; ?>
+              <form method="post" action="/app/stores/<?= (int) $s['id'] ?>/clients/<?= (int) $c['user_id'] ?>/delete" data-confirm="Закрыть доступ <?= e($c['email']) ?> к магазину «<?= e($s['name']) ?>»?"><?= csrf_field() ?><button class="link-btn" style="color:var(--bad)">закрыть доступ</button></form>
+            </div>
+          <?php endforeach; ?>
+          <form method="post" action="/app/stores/<?= (int) $s['id'] ?>/clients" class="row client-add">
+            <?= csrf_field() ?>
+            <input type="email" name="email" required placeholder="email клиента" autocapitalize="none" aria-label="Email клиента">
+            <button class="btn btn-sm"><?= icon('plus', 14) ?> Открыть доступ</button>
+          </form>
+          <div class="hint small muted">Новому клиенту придёт письмо со ссылкой: он задаст пароль и сразу увидит магазин. Если аккаунт с этим email уже есть — придёт письмо для подтверждения доступа.</div>
+        </div>
+      <?php endif; ?>
       <details class="inline">
         <summary>Управление магазином</summary>
         <div class="stack">

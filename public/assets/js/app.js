@@ -368,7 +368,7 @@
     if (f.period === 'custom') { p.set('from', $('dateFrom').value); p.set('to', $('dateTo').value); }
     if (f.status) p.set('status', f.status);
     if (f.scheme) p.set('scheme', f.scheme);
-    if (f.store) p.set('store', f.store);
+    if (multiStore) p.set('store', f.store || 0);
     if (f.q) p.set('q', f.q);
     if (extra) Object.keys(extra).forEach(function (k) { p.set(k, extra[k]); });
     return p.toString();

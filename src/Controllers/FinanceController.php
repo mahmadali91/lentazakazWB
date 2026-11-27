@@ -41,9 +41,9 @@ final class FinanceController
         $plan = Plans::forUser($account);
         $active = StoreService::visibleIds((int) $account['id'], $plan);
         // Клиенту менеджера с доступом к отдельным магазинам не показываем общие расходы кабинета
-        Finance::$commonExpenses = StoreService::memberAccess($user) === null;
-        $storeId = (int) input('store', 0);
-        $ids = $storeId && in_array($storeId, $active, true) ? [$storeId] : $active;
+        Finance::$commonExpenses = StoreService::memberAccess($user) === null && Auth::clientStoreIds() === null;
+        $ids = StoreService::pick($active);
+        $storeId = count($ids) === 1 && count($active) > 1 ? $ids[0] : 0;
         // Валюта: отчёты WB приходят в валюте продавца; при разных валютах считаем по одной (выбор ?cur=)
         $currencies = $ids ? array_column(DB::all('SELECT currency, COUNT(*) c FROM wb_reports WHERE store_id IN (' . implode(',', $ids) . ")
             AND currency <> '' GROUP BY currency ORDER BY c DESC"), 'currency') : [];

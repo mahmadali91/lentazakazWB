@@ -41,6 +41,7 @@ final class AuthController
         }
         forget_input();
         Auth::login($user);
+        \App\Services\StoreClients::enterDefault($user);
         redirect('/app');
     }
 
@@ -146,7 +147,8 @@ final class AuthController
 
     public function resetForm(): string
     {
-        return view('auth/reset', ['title' => 'Новый пароль', 'token' => (string) input('token', '')], 'auth');
+        $welcome = (string) input('welcome', '') === '1';
+        return view('auth/reset', ['title' => $welcome ? 'Активация кабинета' : 'Новый пароль', 'token' => (string) input('token', ''), 'welcome' => $welcome], 'auth');
     }
 
     public function reset(): never
@@ -164,7 +166,33 @@ final class AuthController
         }
         DB::exec('UPDATE users SET password_hash = ? WHERE id = ?', [password_hash($password, PASSWORD_DEFAULT), $row['user_id']]);
         DB::exec('DELETE FROM password_resets WHERE user_id = ?', [$row['user_id']]);
+        // Ссылка пришла на почту — сразу входим; клиент агентства без своих магазинов попадает в его кабинет
+        $user = DB::one('SELECT * FROM users WHERE id = ? AND is_blocked = 0', [$row['user_id']]);
+        if ($user) {
+            Auth::login($user);
+            \App\Services\StoreClients::enterDefault($user);
+            flash('success', 'Пароль сохранён. Логин для входа — ' . $user['email'] . '.');
+            redirect('/app');
+        }
         flash('success', 'Пароль изменён. Войдите с новым паролем.');
         redirect('/login');
+    }
+
+    /** Подтверждение доступа к магазину агентства по ссылке из письма. */
+    public function accessConfirm(): never
+    {
+        $row = \App\Services\StoreClients::confirm((string) input('token', ''));
+        if (!$row) {
+            flash('error', 'Ссылка недействительна или устарела. Попросите владельца кабинета отправить приглашение ещё раз.');
+            redirect(Auth::user() ? '/app' : '/login');
+        }
+        $user = Auth::user();
+        if ($user && (int) $user['id'] === (int) $row['user_id'] && Auth::switchAccount((int) $row['owner_id'])) {
+            $_SESSION['store'] = (int) $row['store_id'];
+            flash('success', 'Доступ к магазину открыт. Переключаться между кабинетами — в меню «Кабинет WB».');
+            redirect('/app');
+        }
+        flash('success', 'Доступ к магазину открыт. Войдите — магазин будет в меню «Кабинет WB».');
+        redirect(Auth::user() ? '/app' : '/login');
     }
 }

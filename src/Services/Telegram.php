@@ -145,6 +145,15 @@ final class Telegram
                     }
                 }
             }
+            // Клиенты агентства — только по открытым им магазинам
+            if (($tgOn || $maxOn) && !empty($plan['telegram']) && (int) ($plan['team'] ?? 0) > 0) {
+                foreach (DB::all('SELECT u.id, u.tg_chat_id, u.max_user_id, u.tg_events, GROUP_CONCAT(sc.store_id) sids FROM store_clients sc JOIN users u ON u.id = sc.user_id
+                        WHERE sc.owner_id = ? AND sc.confirmed_at IS NOT NULL AND u.is_blocked = 0 AND (u.tg_chat_id IS NOT NULL OR u.max_user_id IS NOT NULL)
+                        GROUP BY u.id, u.tg_chat_id, u.max_user_id, u.tg_events', [$ownerId]) as $cl) {
+                    $recipients[] = ['id' => $cl['id'], 'tg_chat_id' => $cl['tg_chat_id'], 'max_user_id' => $cl['max_user_id'], 'tg_events' => $cl['tg_events'],
+                        'stores' => array_map('intval', explode(',', (string) $cl['sids']))];
+                }
+            }
             $messages = array_fill(0, count($recipients), []);
             foreach ($list as $o) {
                 $event = $o['status'] === 'returnDefective' ? 'return' : $o['status'];

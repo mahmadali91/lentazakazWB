@@ -17,7 +17,7 @@ $accessFields = static function (?array $access, array $stores, string $uid): st
     return $h . '</div></div>';
 };
 // Уровень доступа сотрудника / клиента
-$roles = ['viewer' => 'Только просмотр', 'client' => 'Клиент — ведёт себестоимость, налог и расходы своих магазинов'];
+$roles = ['viewer' => 'Только просмотр', 'client' => 'Ведёт учёт — себестоимость, налог и расходы'];
 $roleField = static function (string $role) use ($roles): string {
     $h = '<div class="field" style="margin:10px 0 0"><label>Уровень доступа</label><select name="member_role">';
     foreach ($roles as $k => $label) {
@@ -120,35 +120,15 @@ $contacts = App\Services\Contacts::of($user);
 
   <?php if (!App\Core\Auth::isMember()): $teamLimit = (int) ($plan['team'] ?? 0); ?>
   <div class="card" id="team">
-    <div class="card-title"><?= icon('users', 18) ?> Сотрудники и клиенты — доступ к кабинету по логину и паролю</div>
-    <p class="muted small">Сотрудник видит ленту заказов, товары и финансы. Уровень <b>«Только просмотр»</b> ничего не меняет;
-      уровень <b>«Клиент»</b> сам ведёт себестоимость, налог, НДС, фиксированные и прочие расходы — только по открытым ему магазинам.
+    <div class="card-title"><?= icon('users', 18) ?> Сотрудники — доступ ко всему кабинету по логину и паролю</div>
+    <p class="muted small">Сотрудник получает доступ ко всем магазинам кабинета: видит ленту заказов, товары и финансы.
+      Уровень <b>«Только просмотр»</b> ничего не меняет; <b>«Ведёт учёт»</b> — себестоимость, налог, НДС и расходы.
       Магазины, токены, тариф, загрузку истории и общие параметры расчёта меняете только вы.
-      Клиенту можно открыть только его магазины — он не увидит остальные кабинеты, а уведомления будет получать только по своим магазинам.
-      Подключить ещё магазин клиент просит у вас кнопкой в своих настройках — запрос придёт сюда и в MAX/Telegram.
+      <b>Клиенту</b> доступ к его магазину открывается в разделе <a href="/app/stores">«Магазины»</a> — по email, в карточке магазина.
       <?php if ($teamLimit >= 100): ?>На вашем тарифе — без ограничений.<?php elseif ($teamLimit > 0): ?>Доступно на тарифе: <b><?= $teamLimit ?></b> <?= plural($teamLimit, 'сотрудник', 'сотрудника', 'сотрудников') ?>.<?php endif; ?></p>
-    <?php if ($requests): ?>
-      <div id="requests" class="req-list">
-        <div class="card-subtitle">Запросы клиентов</div>
-        <?php foreach ($requests as $q): ?>
-          <div class="req-item<?= $q['done_at'] ? ' done' : '' ?>">
-            <div class="grow">
-              <b><?= $q['kind'] === 'renew' ? 'Продлить доступ' : 'Подключить ещё магазин' ?></b> — <?= e($q['name'] ?: $q['email']) ?> <span class="muted small">(<?= e($q['email']) ?>, <?= date_ru($q['created_at']) ?>)</span>
-              <?php if ($q['message']): ?><div class="small">«<?= e($q['message']) ?>»</div><?php endif; ?>
-            </div>
-            <?php if ($q['done_at']): ?>
-              <span class="badge badge-buyout">выполнен</span>
-            <?php else: ?>
-              <form method="post" action="/app/requests/<?= (int) $q['id'] ?>/done"><?= csrf_field() ?><button class="btn btn-sm">Готово</button></form>
-            <?php endif; ?>
-          </div>
-        <?php endforeach; ?>
-        <p class="small muted">Подключите магазин клиента в разделе <a href="/app/stores">«Магазины»</a> и откройте ему доступ ниже — в колонке «Магазины и доступ».</p>
-      </div>
-    <?php endif; ?>
     <?php if ($members): ?>
       <div class="table-wrap" style="margin-bottom:16px"><table class="table">
-        <thead><tr><th>Логин</th><th>Имя</th><th>Магазины и доступ</th><th>Последний вход</th><th></th></tr></thead>
+        <thead><tr><th>Логин</th><th>Имя</th><th>Доступ</th><th>Последний вход</th><th></th></tr></thead>
         <tbody>
         <?php foreach ($members as $m): $acc = App\Services\StoreService::memberAccess($m + ['owner_id' => 1]);
           $accNames = $acc === null ? 'все' : implode(', ', array_column(array_filter($allStores, static fn($s) => in_array((int) $s['id'], $acc, true)), 'name')); ?>
@@ -157,10 +137,12 @@ $contacts = App\Services\Contacts::of($user);
             <td><?= e($m['name']) ?></td>
             <td class="small">
               <details class="access-edit">
-                <summary><?= e($accNames !== '' ? $accNames : 'нет доступа') ?> · <span class="<?= ($m['member_role'] ?? '') === 'client' ? '' : 'muted' ?>"><?= ($m['member_role'] ?? '') === 'client' ? 'клиент' : 'просмотр' ?></span></summary>
+                <summary><?= e($accNames !== '' ? $accNames : 'нет доступа') ?> · <span class="<?= ($m['member_role'] ?? '') === 'client' ? '' : 'muted' ?>"><?= ($m['member_role'] ?? '') === 'client' ? 'ведёт учёт' : 'просмотр' ?></span></summary>
                 <form method="post" action="/app/team/<?= (int) $m['id'] ?>/access">
                   <?= csrf_field() ?>
-                  <?= $accessFields($acc, $allStores, (string) $m['id']) ?>
+                  <?php if ($acc !== null): // доступ к отдельным магазинам — выдан раньше; новым клиентам доступ открывается в карточке магазина ?>
+                    <?= $accessFields($acc, $allStores, (string) $m['id']) ?>
+                  <?php else: ?><input type="hidden" name="access" value="all"><?php endif; ?>
                   <?= $roleField((string) ($m['member_role'] ?? 'viewer')) ?>
                   <button class="btn btn-sm" style="margin-top:8px">Сохранить доступ</button>
                 </form>
@@ -196,11 +178,8 @@ $contacts = App\Services\Contacts::of($user);
           <div class="field grow" style="min-width:160px"><label for="tname">Имя</label><input id="tname" type="text" name="name" placeholder="Анна, менеджер"></div>
           <div class="field grow" style="min-width:160px"><label for="tpass">Пароль</label><input id="tpass" type="text" name="password" minlength="8" required autocomplete="new-password"></div>
         </div>
-        <?php if (count($allStores) > 1): ?>
-          <div class="field"><label>Доступ к магазинам</label><?= $accessFields(null, $allStores, 'new') ?></div>
-        <?php endif; ?>
         <div style="max-width:520px;margin-bottom:14px"><?= $roleField('viewer') ?></div>
-        <button class="btn btn-sm"><?= icon('plus', 14) ?> Добавить сотрудника или клиента</button>
+        <button class="btn btn-sm"><?= icon('plus', 14) ?> Добавить сотрудника</button>
         <div class="hint small muted" style="margin-top:8px">Вход: <?= e(url('/login')) ?> — логин и пароль, которые вы задали.</div>
       </form>
     <?php elseif ($teamLimit === 0): ?>
@@ -257,9 +236,9 @@ $contacts = App\Services\Contacts::of($user);
       <button class="btn btn-sm">Открыть доступ</button>
     </form>
   </div>
-  <?php elseif (App\Core\Auth::acting()): ?>
+  <?php elseif (App\Core\Auth::acting() && App\Core\Auth::actingKind() !== 'client'): ?>
   <div class="alert alert-info">Вы работаете в кабинете клиента <b><?= e($account['name'] ?: $account['email']) ?></b>.</div>
-  <?php else: $isClient = ($user['member_role'] ?? '') === 'client'; ?>
+  <?php else: $isClient = ($user['member_role'] ?? '') === 'client' || App\Core\Auth::actingKind() === 'client'; ?>
   <div class="card" id="request">
     <div class="card-title"><?= icon('users', 18) ?> Ваш кабинет ведёт <?= e(App\Services\Contacts::of($owner)['name'] ?? ($account['name'] ?: $account['email'])) ?></div>
     <p class="muted small">Вы вошли по доступу от владельца кабинета. Ваш уровень доступа: <b><?= $isClient ? 'клиент' : 'только просмотр' ?></b><?= $isClient

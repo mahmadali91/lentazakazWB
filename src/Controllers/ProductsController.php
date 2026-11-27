@@ -18,7 +18,7 @@ final class ProductsController
         Auth::require();
         $account = Auth::account();
         $plan = Plans::forUser($account);
-        return [$account, $plan, StoreService::visibleIds((int) $account['id'], $plan)];
+        return [$account, $plan, StoreService::pick(StoreService::visibleIds((int) $account['id'], $plan))];
     }
 
     private function storeIn(array $ids, string $alias = 'p'): string
@@ -103,7 +103,8 @@ final class ProductsController
     private function requireEdit(): array
     {
         Auth::requireEditor();
-        [$account, $plan, $storeIds] = $this->context();
+        [$account, $plan] = $this->context();
+        $storeIds = StoreService::visibleIds((int) $account['id'], $plan);
         if (empty($plan['profit'])) {
             flash('error', 'Себестоимость и расчёт прибыли доступны на платных тарифах.');
             redirect('/app/billing');

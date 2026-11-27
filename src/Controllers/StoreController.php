@@ -26,6 +26,11 @@ final class StoreController
             'stores'    => $stores,
             'counts'    => $counts,
             'activeIds' => StoreService::activeIds((int) $user['id'], $plan),
+            // Клиенты агентства: доступ к отдельным магазинам по email и их запросы
+            'clients'   => \App\Services\StoreClients::forOwner((int) $user['id']),
+            'canClients'=> (int) ($plan['team'] ?? 0) > 0,
+            'requests'  => DB::all('SELECT r.*, u.email, u.name FROM member_requests r JOIN users u ON u.id = r.member_id
+                WHERE r.owner_id = ? AND (r.done_at IS NULL OR r.done_at > NOW() - INTERVAL 14 DAY) ORDER BY r.done_at IS NULL DESC, r.id DESC LIMIT 30', [$user['id']]),
             'nav'       => 'stores',
         ], 'app');
     }
@@ -91,8 +96,8 @@ final class StoreController
     /** Налог, НДС и фиксированные расходы магазина: владелец или его клиент с уровнем «Клиент» (по своим магазинам). */
     public function finance(string $id): never
     {
-        $user = Auth::requireEditor();
-        if (empty($user['owner_id'])) {
+        Auth::requireEditor();
+        if (!Auth::isMember()) {
             $store = $this->own($id);
         } else {
             $account = Auth::account();
@@ -105,6 +110,32 @@ final class StoreController
         flash('success', 'Налог и расходы магазина сохранены — прибыль пересчитана.');
         $back = (string) input('back', '');
         redirect(preg_match('#^/app/[a-z/]*(\?[\w=&%.\-]*)?$#', $back) ? $back : '/app/stores');
+    }
+
+    /** Открыть клиенту доступ к магазину по email (новый — аккаунт и письмо активации, существующий — письмо подтверждения). */
+    public function clientAdd(string $id): never
+    {
+        $owner = Auth::requireOwner();
+        $store = $this->own($id);
+        if ((int) (Plans::forUser($owner)['team'] ?? 0) <= 0) {
+            flash('error', 'Доступ клиентам к магазинам — на тарифе ' . Plans::namesWith('team') . '.');
+            redirect('/app/stores');
+        }
+        try {
+            flash('success', \App\Services\StoreClients::invite($owner, $store, (string) input('email', '')));
+        } catch (\InvalidArgumentException $e) {
+            flash('error', $e->getMessage());
+        }
+        redirect('/app/stores#store-' . (int) $store['id']);
+    }
+
+    public function clientDelete(string $id, string $userId): never
+    {
+        Auth::requireOwner();
+        $store = $this->own($id);
+        DB::exec('DELETE FROM store_clients WHERE store_id = ? AND user_id = ?', [$store['id'], (int) $userId]);
+        flash('success', 'Доступ клиента к магазину «' . $store['name'] . '» закрыт.');
+        redirect('/app/stores#store-' . (int) $store['id']);
     }
 
     public function toggle(string $id): never

@@ -23,6 +23,7 @@ CREATE TABLE IF NOT EXISTS users (
   tg_events       VARCHAR(64) NOT NULL DEFAULT 'created',
   tg_stores       TEXT NULL,                  -- JSON: id магазинов для уведомлений Telegram (NULL — все доступные)
   owner_id        INT UNSIGNED NULL,          -- сотрудник: id владельца кабинета
+  invited_by      INT UNSIGNED NULL,          -- аккаунт создан по приглашению владельца кабинета (клиент агентства)
   store_access    TEXT NULL,                  -- сотрудник: JSON id магазинов, к которым есть доступ (NULL — все магазины кабинета)
   member_role     VARCHAR(16) NOT NULL DEFAULT 'viewer', -- сотрудник: viewer — просмотр, client — ведёт себестоимость, налог и расходы своих магазинов
   note            VARCHAR(500) NULL,          -- заметка администратора о клиенте
@@ -489,4 +490,22 @@ CREATE TABLE IF NOT EXISTS member_requests (
   KEY idx_req_owner (owner_id, done_at),
   CONSTRAINT fk_req_owner FOREIGN KEY (owner_id) REFERENCES users (id) ON DELETE CASCADE,
   CONSTRAINT fk_req_member FOREIGN KEY (member_id) REFERENCES users (id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Доступ клиента к отдельному магазину кабинета по email (агентство → клиент), подтверждается письмом
+CREATE TABLE IF NOT EXISTS store_clients (
+  id           INT UNSIGNED NOT NULL AUTO_INCREMENT,
+  store_id     INT UNSIGNED NOT NULL,
+  owner_id     INT UNSIGNED NOT NULL,
+  user_id      INT UNSIGNED NOT NULL,
+  token_hash   CHAR(64) NULL,
+  created_at   DATETIME NOT NULL,
+  confirmed_at DATETIME NULL,
+  PRIMARY KEY (id),
+  UNIQUE KEY uq_store_client (store_id, user_id),
+  KEY idx_sc_user (user_id, confirmed_at),
+  KEY idx_sc_owner (owner_id),
+  CONSTRAINT fk_sc_store FOREIGN KEY (store_id) REFERENCES stores (id) ON DELETE CASCADE,
+  CONSTRAINT fk_sc_owner FOREIGN KEY (owner_id) REFERENCES users (id) ON DELETE CASCADE,
+  CONSTRAINT fk_sc_user FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

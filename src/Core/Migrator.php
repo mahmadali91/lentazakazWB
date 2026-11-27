@@ -9,7 +9,7 @@ namespace App\Core;
  */
 final class Migrator
 {
-    public const VERSION = 21;
+    public const VERSION = 22;
 
     private const AD_PAYMENTS_DDL = "CREATE TABLE IF NOT EXISTS wb_ad_payments (
         store_id    INT UNSIGNED NOT NULL,
@@ -23,6 +23,23 @@ final class Migrator
         PRIMARY KEY (store_id, payment_id),
         KEY idx_adpay_day (store_id, day),
         CONSTRAINT fk_adpay_store FOREIGN KEY (store_id) REFERENCES stores (id) ON DELETE CASCADE
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci";
+
+    private const STORE_CLIENTS_DDL = "CREATE TABLE IF NOT EXISTS store_clients (
+        id           INT UNSIGNED NOT NULL AUTO_INCREMENT,
+        store_id     INT UNSIGNED NOT NULL,
+        owner_id     INT UNSIGNED NOT NULL,
+        user_id      INT UNSIGNED NOT NULL,
+        token_hash   CHAR(64) NULL,
+        created_at   DATETIME NOT NULL,
+        confirmed_at DATETIME NULL,
+        PRIMARY KEY (id),
+        UNIQUE KEY uq_store_client (store_id, user_id),
+        KEY idx_sc_user (user_id, confirmed_at),
+        KEY idx_sc_owner (owner_id),
+        CONSTRAINT fk_sc_store FOREIGN KEY (store_id) REFERENCES stores (id) ON DELETE CASCADE,
+        CONSTRAINT fk_sc_owner FOREIGN KEY (owner_id) REFERENCES users (id) ON DELETE CASCADE,
+        CONSTRAINT fk_sc_user FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci";
 
     private const REQUESTS_DDL = "CREATE TABLE IF NOT EXISTS member_requests (
@@ -94,6 +111,11 @@ final class Migrator
                 // Пересчёт сумм в рубли по курсу ЦБ: настройка кабинета и кэш курсов
                 self::addColumn('users', 'show_rub', 'TINYINT(1) NOT NULL DEFAULT 0');
                 self::run(self::FX_DDL);
+            }
+            if ($version < 22) {
+                // Доступ клиента к отдельному магазину кабинета (агентства) по email: приглашение, подтверждение письмом
+                self::addColumn('users', 'invited_by', 'INT UNSIGNED NULL AFTER owner_id');
+                self::run(self::STORE_CLIENTS_DDL);
             }
             if ($version < 21) {
                 // Клиенты агентства: уровень доступа (просмотр / ведёт себестоимость и расходы своих магазинов),

@@ -1,6 +1,7 @@
 <div class="card auth-card">
   <?= App\Core\View::partial('partials/logo') ?>
-  <h1>Новый пароль</h1>
+  <h1><?= !empty($welcome) ? 'Активация кабинета' : 'Новый пароль' ?></h1>
+  <?php if (!empty($welcome)): ?><p class="muted">Придумайте пароль — дальше входите по своему email и этому паролю.</p><?php endif; ?>
   <?= App\Core\View::partial('partials/flash') ?>
   <form method="post" action="/reset">
     <?= csrf_field() ?>

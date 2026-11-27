@@ -28,18 +28,7 @@ if (($user['role'] ?? '') === 'admin') {
 <div class="app">
   <aside class="sidebar">
     <?= App\Core\View::partial('partials/logo', ['href' => '/app']) ?>
-    <?php if ($grants): ?>
-      <form method="post" action="/app/switch" class="acc-switch">
-        <?= csrf_field() ?>
-        <label class="muted small" for="accSw">Кабинет</label>
-        <select id="accSw" name="account" onchange="this.form.submit()">
-          <option value="0">Мой кабинет</option>
-          <?php foreach ($grants as $g): ?>
-            <option value="<?= (int) $g['owner_id'] ?>" <?= $actingId === (int) $g['owner_id'] ? 'selected' : '' ?>><?= e(($g['name'] ?: $g['email']) . ' · ID ' . client_code((int) $g['owner_id'])) ?></option>
-          <?php endforeach; ?>
-        </select>
-      </form>
-    <?php endif; ?>
+    <?= App\Core\View::partial('partials/switcher', ['nav' => $nav]) ?>
     <nav class="side-nav">
       <?php foreach ($items as [$key, $href, $label, , $ico]): ?>
         <a href="<?= $href ?>" class="<?= $nav === $key ? 'active' : '' ?>"><?= icon($ico) ?> <?= e($label) ?></a>
@@ -52,7 +41,7 @@ if (($user['role'] ?? '') === 'admin') {
         <?php if (!empty($plan['super'])): ?>
           всё бесплатно, без ограничений
         <?php elseif ($isMember): ?>
-          доступ сотрудника
+          <?= App\Core\Auth::actingKind() === 'client' ? 'доступ клиента' : (App\Core\Auth::acting() ? 'доступ агентства' : 'доступ сотрудника') ?>
         <?php elseif (!empty($plan['expires_at'])): ?>
           до <?= date_ru($plan['expires_at'], false) ?>
         <?php else: ?>
@@ -77,12 +66,17 @@ if (($user['role'] ?? '') === 'admin') {
     <?php if ($actingAcc): ?>
       <form method="post" action="/app/switch" class="alert alert-info row" style="justify-content:space-between">
         <?= csrf_field() ?><input type="hidden" name="account" value="0">
-        <span>Кабинет клиента <b><?= e($actingAcc['name'] ?: $actingAcc['email']) ?></b> (ID <?= e(client_code((int) $actingAcc['id'])) ?>) — доступ агентства, только просмотр.</span>
+        <?php if (App\Core\Auth::actingKind() === 'client'): ?>
+          <span>Кабинет <b><?= e(App\Services\Contacts::of($actingAcc)['name'] ?? ($actingAcc['name'] ?: $actingAcc['email'])) ?></b> — доступ к вашим магазинам: себестоимость, налог и расходы ведёте вы.</span>
+        <?php else: ?>
+          <span>Кабинет клиента <b><?= e($actingAcc['name'] ?: $actingAcc['email']) ?></b> (ID <?= e(client_code((int) $actingAcc['id'])) ?>) — доступ агентства, только просмотр.</span>
+        <?php endif; ?>
         <button class="btn btn-sm btn-ghost">В свой кабинет</button>
       </form>
     <?php endif; ?>
+    <?= App\Core\View::partial('partials/switcher', ['nav' => $nav, 'mobile' => true]) ?>
     <?= App\Core\View::partial('partials/flash') ?>
-    <?php if ($isMember && !$actingAcc && ($ownerAcc = App\Core\Auth::account())):
+    <?php if ($isMember && (!$actingAcc || App\Core\Auth::actingKind() === 'client') && ($ownerAcc = App\Core\Auth::account())):
       // Клиенту агентства: срок доступа подходит к концу — продление через владельца кабинета, его контакты
       $ownerPlan = App\Services\Plans::forUser($ownerAcc);
       $leftDays = $ownerPlan['expires_at'] ? (int) ceil((strtotime($ownerPlan['expires_at']) - time()) / 86400) : null;

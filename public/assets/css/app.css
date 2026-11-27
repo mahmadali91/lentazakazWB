@@ -672,3 +672,16 @@ span.p-thumb img { width: 100%; height: 100%; object-fit: cover; display: block;
 .store-fin-edit { margin-top: 10px; }
 .store-fin-edit summary { cursor: pointer; color: var(--accent); font-size: 14px; }
 @media (max-width: 640px) { .req-item { flex-direction: column; align-items: flex-start; } }
+.acc-switch-m { display: none; }
+@media (max-width: 900px) {
+  .acc-switch-m { display: flex; flex-direction: row; align-items: center; gap: 8px; margin: 0 0 12px; }
+  .acc-switch-m label { flex: none; margin: 0; }
+  .acc-switch-m select { flex: 1; min-width: 0; font-size: 14px; }
+}
+.store-clients { margin-top: 14px; padding: 12px 14px; border-radius: var(--radius-sm); background: var(--surface-2); display: flex; flex-direction: column; gap: 8px; }
+.store-clients-head { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.client-row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; padding: 6px 0; border-bottom: 1px solid var(--border); }
+.client-row .grow { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; min-width: 0; overflow-wrap: anywhere; }
+.client-add { gap: 8px; flex-wrap: nowrap; }
+.client-add input { flex: 1; min-width: 0; }
+.client-add .btn { flex: none; }

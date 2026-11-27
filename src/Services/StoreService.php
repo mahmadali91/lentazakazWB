@@ -175,6 +175,10 @@ final class StoreService
     public static function visibleIds(int $accountId, array $plan, ?array $user = null): array
     {
         $ids = self::activeIds($accountId, $plan);
+        // Клиент агентства в его кабинете — только открытые ему магазины
+        if (PHP_SAPI !== 'cli' && \App\Core\Auth::acting() === $accountId && ($client = \App\Core\Auth::clientStoreIds()) !== null) {
+            return array_values(array_intersect($ids, $client));
+        }
         $access = self::memberAccess($user ?? (PHP_SAPI === 'cli' ? null : \App\Core\Auth::user()));
         return $access === null ? $ids : array_values(array_intersect($ids, $access));
     }
@@ -184,5 +188,75 @@ final class StoreService
     {
         $ids = DB::all('SELECT id FROM stores WHERE user_id = ? AND is_active = 1 ORDER BY id LIMIT ' . (int) $plan['stores'], [$userId]);
         return array_map(static fn($r) => (int) $r['id'], $ids);
+    }
+
+    /**
+     * Текущий магазин (как в WB Partners): лента, товары и финансы показываются по одному кабинету WB.
+     * ?store=ID в запросе переключает выбор (0 — все магазины вместе); без выбора — первый магазин.
+     */
+    public static function pick(array $visible): array
+    {
+        if (PHP_SAPI === 'cli') {
+            return $visible;
+        }
+        $in = $_GET['store'] ?? null;
+        if ($in !== null && $in !== '' && is_scalar($in)) {
+            $id = (int) $in;
+            $_SESSION['store'] = $id && in_array($id, $visible, true) ? $id : 'all';
+        }
+        return self::current($visible);
+    }
+
+    public static function current(array $visible): array
+    {
+        $sel = $_SESSION['store'] ?? null;
+        if (count($visible) <= 1 || $sel === 'all') {
+            return $visible;
+        }
+        return in_array((int) $sel, $visible, true) ? [(int) $sel] : array_slice($visible, 0, 1);
+    }
+
+    /**
+     * Переключатель кабинетов: свои магазины и магазины кабинетов, к которым есть доступ (агентство, клиент).
+     * @return array{groups: array, value: string, count: int}
+     */
+    public static function switcher(): array
+    {
+        $user = \App\Core\Auth::user();
+        $account = \App\Core\Auth::account();
+        if (!$user || !$account) {
+            return ['groups' => [], 'value' => '', 'count' => 0];
+        }
+        $acting = \App\Core\Auth::acting() ?? 0;
+        $groups = [];
+        $names = static fn(array $ids) => $ids ? DB::all('SELECT id, name FROM stores WHERE id IN (' . implode(',', $ids) . ') ORDER BY id') : [];
+        // Свой кабинет (для сотрудника — кабинет владельца, по его доступу)
+        $homeId = !empty($user['owner_id']) ? (int) $user['owner_id'] : (int) $user['id'];
+        $home = $acting ? DB::one('SELECT * FROM users WHERE id = ?', [$homeId]) : $account;
+        if ($home) {
+            $homeIds = $acting ? self::activeIds($homeId, Plans::forUser($home)) : self::visibleIds((int) $account['id'], Plans::forUser($account));
+            $groups[] = ['owner' => 0, 'label' => !empty($user['owner_id']) ? ($home['name'] ?: $home['email']) : 'Мои магазины', 'stores' => $names($homeIds)];
+        }
+        foreach (\App\Core\Auth::grants() as $g) {
+            $oid = (int) $g['owner_id'];
+            if ($oid === $acting) {
+                $owner = $account;
+                $ids = self::visibleIds($oid, Plans::forUser($account));
+            } else {
+                $owner = DB::one('SELECT * FROM users WHERE id = ?', [$oid]);
+                $ids = $owner ? self::activeIds($oid, Plans::forUser($owner)) : [];
+                if ($g['kind'] === 'client') {
+                    $ids = array_values(array_intersect($ids, $g['store_ids']));
+                }
+            }
+            $label = $g['kind'] === 'client'
+                ? (Contacts::of($owner)['name'] ?? ($g['name'] ?: $g['email']))
+                : ($g['name'] ?: $g['email']) . ' · ID ' . client_code($oid);
+            $groups[] = ['owner' => $oid, 'label' => $label, 'stores' => $names($ids)];
+        }
+        $groups = array_values(array_filter($groups, static fn($gr) => $gr['stores'] || $gr['owner'] === 0));
+        $current = self::current(self::visibleIds((int) $account['id'], Plans::forUser($account)));
+        $count = array_sum(array_map(static fn($gr) => count($gr['stores']), $groups));
+        return ['groups' => $groups, 'value' => $acting . ':' . (count($current) === 1 ? $current[0] : 0), 'count' => $count];
     }
 }

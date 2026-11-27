@@ -135,6 +135,9 @@ $r->post('/app/team/{id}/password', [SettingsController::class, 'teamPassword'])
 $r->post('/app/team/{id}/delete', [SettingsController::class, 'teamDelete']);
 $r->post('/app/team/{id}/access', [SettingsController::class, 'teamAccess']);
 $r->post('/app/settings/contacts', [SettingsController::class, 'contacts']);
+$r->post('/app/stores/{id}/clients', [StoreController::class, 'clientAdd']);
+$r->post('/app/stores/{id}/clients/{uid}/delete', [StoreController::class, 'clientDelete']);
+$r->get('/access/confirm', [AuthController::class, 'accessConfirm']);
 $r->post('/app/settings/request', [SettingsController::class, 'memberRequest']);
 $r->post('/app/requests/{id}/done', [SettingsController::class, 'requestDone']);
 $r->post('/app/team/{id}/transfer', [AccountController::class, 'transfer']);
