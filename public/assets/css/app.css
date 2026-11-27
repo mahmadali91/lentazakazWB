@@ -706,3 +706,16 @@ span.p-thumb img { width: 100%; height: 100%; object-fit: cover; display: block;
 .contact-btn.contact-whatsapp { background: #25d366; border-color: #25d366; color: #fff; }
 .contact-btn.contact-phone, .contact-btn.contact-email, .contact-btn.contact-max { background: var(--surface); color: var(--text); border-color: var(--border); }
 #contacts textarea { font-family: inherit; font-size: 15px; }
+/* Нижний блок меню: тариф, пользователь, версия */
+.side-foot { display: flex; flex-direction: column; gap: 10px; padding: 14px; }
+.sf-plan { display: flex; flex-direction: column; gap: 2px; }
+.sf-plan-name { font-weight: 700; font-size: 14px; }
+.sf-note { color: var(--muted); font-size: 12px; }
+.sf-note.sf-warn { color: var(--warn); font-weight: 600; }
+.sf-user { display: flex; align-items: center; gap: 10px; padding-top: 10px; border-top: 1px solid var(--border); min-width: 0; }
+.sf-avatar { flex: none; width: 32px; height: 32px; border-radius: 50%; display: grid; place-items: center; font-weight: 700; font-size: 14px; color: #fff; background: linear-gradient(135deg, var(--accent), #db2777); }
+.sf-who { display: flex; flex-direction: column; min-width: 0; flex: 1; line-height: 1.25; }
+.sf-email { font-weight: 600; font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sf-id { font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.sf-user .icon-btn { flex: none; width: 32px; height: 32px; }
+.sf-ver { font-size: 10.5px; color: var(--muted); opacity: .75; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }

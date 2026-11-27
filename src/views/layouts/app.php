@@ -35,24 +35,33 @@ if (($user['role'] ?? '') === 'admin') {
       <?php endforeach; ?>
     </nav>
     <a class="side-help" href="/help" target="_blank" rel="noopener"><?= icon('help') ?> Инструкция</a>
+    <?php
+      $isAdmin = ($user['role'] ?? '') === 'admin' || !empty($user['is_super']);
+      $exp = !empty($plan['expires_at']) ? (int) ceil((strtotime($plan['expires_at']) - time()) / 86400) : null;
+      $who = (string) ($user['name'] ?? '') !== '' ? $user['name'] : ($user['email'] ?? '');
+    ?>
     <div class="side-foot">
-      <div class="plan-line">Тариф «<?= e($plan['name'] ?? '') ?>»</div>
-      <div class="muted">
+      <div class="sf-plan">
+        <span class="sf-plan-name">«<?= e($plan['name'] ?? '') ?>»</span>
         <?php if (!empty($plan['super'])): ?>
-          всё бесплатно, без ограничений
+          <span class="sf-note">всё бесплатно, без ограничений</span>
         <?php elseif ($isMember): ?>
-          <?= App\Core\Auth::actingKind() === 'client' ? 'доступ клиента' : (App\Core\Auth::acting() ? 'доступ агентства' : 'доступ сотрудника') ?>
-        <?php elseif (!empty($plan['expires_at'])): ?>
-          до <?= date_ru($plan['expires_at'], false) ?>
+          <span class="sf-note"><?= App\Core\Auth::actingKind() === 'client' ? 'доступ клиента' : (App\Core\Auth::acting() ? 'доступ агентства' : 'доступ сотрудника') ?></span>
+        <?php elseif ($exp !== null): ?>
+          <span class="sf-note <?= $exp <= 7 ? 'sf-warn' : '' ?>">до <?= date('d.m.Y', strtotime($plan['expires_at'])) ?> · <?= $exp ?> <?= plural($exp, 'день', 'дня', 'дней') ?></span>
         <?php else: ?>
-          <a href="/app/billing">Улучшить тариф</a>
+          <a class="sf-note" href="/app/billing">Улучшить тариф</a>
         <?php endif; ?>
       </div>
-      <div class="app-version" title="Версия сервиса">v<?= e(app_version()) ?><?= !empty($user['id']) ? ' · ID ' . e(client_code((int) $user['id'])) : '' ?></div>
-      <div class="row" style="margin-top:10px;justify-content:space-between">
-        <span class="muted small" title="<?= e($user['email'] ?? '') ?>" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:140px"><?= e($user['email'] ?? '') ?></span>
-        <form method="post" action="/logout"><?= csrf_field() ?><button class="icon-btn" title="Выйти" style="width:32px;height:32px"><?= icon('logout', 16) ?></button></form>
+      <div class="sf-user">
+        <span class="sf-avatar"><?= e(mb_strtoupper(mb_substr($who, 0, 1))) ?></span>
+        <span class="sf-who">
+          <span class="sf-email" title="<?= e($user['email'] ?? '') ?>"><?= e($who) ?></span>
+          <?php if (!empty($user['id'])): ?><span class="sf-id">ID <?= e(client_code((int) $user['id'])) ?></span><?php endif; ?>
+        </span>
+        <form method="post" action="/logout"><?= csrf_field() ?><button class="icon-btn" title="Выйти" aria-label="Выйти"><?= icon('logout', 16) ?></button></form>
       </div>
+      <div class="sf-ver" title="Версия сервиса"><?= $isAdmin ? 'v' . e(app_version()) : 'v' . e(APP_VERSION) ?></div>
     </div>
   </aside>
   <main class="main">
