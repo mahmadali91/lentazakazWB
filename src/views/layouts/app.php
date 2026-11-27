@@ -23,18 +23,22 @@ if (($user['role'] ?? '') === 'admin') {
 <meta name="robots" content="noindex">
 <meta name="csrf" content="<?= e(App\Core\Csrf::token()) ?>">
 <meta name="currency" content="<?= e(currency_sign()) ?>">
+<script>try { if (localStorage.getItem('side') === 'min') document.documentElement.classList.add('side-min'); } catch (e) {}</script>
 </head>
 <body>
 <div class="app">
   <aside class="sidebar">
-    <?= App\Core\View::partial('partials/logo', ['href' => '/app']) ?>
+    <div class="side-head">
+      <?= App\Core\View::partial('partials/logo', ['href' => '/app']) ?>
+      <button type="button" class="side-toggle" id="sideToggle" title="Свернуть меню" aria-label="Свернуть или развернуть меню"><?= icon('sidebar', 18) ?></button>
+    </div>
     <?= App\Core\View::partial('partials/switcher', ['nav' => $nav]) ?>
     <nav class="side-nav">
       <?php foreach ($items as [$key, $href, $label, , $ico]): ?>
-        <a href="<?= $href ?>" class="<?= $nav === $key ? 'active' : '' ?>"><?= icon($ico) ?> <?= e($label) ?></a>
+        <a href="<?= $href ?>" class="<?= $nav === $key ? 'active' : '' ?>" title="<?= e($label) ?>"><?= icon($ico) ?> <span class="sn-label"><?= e($label) ?></span></a>
       <?php endforeach; ?>
     </nav>
-    <a class="side-help" href="/help" target="_blank" rel="noopener"><?= icon('help') ?> Инструкция</a>
+    <a class="side-help" href="/help" target="_blank" rel="noopener" title="Инструкция"><?= icon('help') ?> <span class="sn-label">Инструкция</span></a>
     <?php
       $isAdmin = ($user['role'] ?? '') === 'admin' || !empty($user['is_super']);
       $exp = !empty($plan['expires_at']) ? (int) ceil((strtotime($plan['expires_at']) - time()) / 86400) : null;
@@ -54,7 +58,7 @@ if (($user['role'] ?? '') === 'admin') {
         <?php endif; ?>
       </div>
       <div class="sf-user">
-        <span class="sf-avatar"><?= e(mb_strtoupper(mb_substr($who, 0, 1))) ?></span>
+        <span class="sf-avatar" title="<?= e($who . (!empty($user['id']) ? ' · ID ' . client_code((int) $user['id']) : '')) ?>"><?= e(mb_strtoupper(mb_substr($who, 0, 1))) ?></span>
         <span class="sf-who">
           <span class="sf-email" title="<?= e($user['email'] ?? '') ?>"><?= e($who) ?></span>
           <?php if (!empty($user['id'])): ?><span class="sf-id">ID <?= e(client_code((int) $user['id'])) ?></span><?php endif; ?>
@@ -126,5 +130,15 @@ $profileActive = in_array($nav, ['profile', 'settings', 'billing', 'admin', 'sto
 <div class="toast" id="toast"></div>
 <script src="<?= asset('js/app.js') ?>"></script>
 <script src="<?= asset('js/forms.js') ?>"></script>
+<script>
+  // Боковое меню: свернуть до иконок / развернуть (запоминаем выбор)
+  (function () {
+    var root = document.documentElement, btn = document.getElementById('sideToggle');
+    function sync() { var min = root.classList.contains('side-min'); btn.title = min ? 'Развернуть меню' : 'Свернуть меню'; btn.setAttribute('aria-expanded', min ? 'false' : 'true'); }
+    function set(min) { root.classList.toggle('side-min', min); try { localStorage.setItem('side', min ? 'min' : 'full'); } catch (e) {} sync(); }
+    if (btn) { sync(); btn.addEventListener('click', function () { set(!root.classList.contains('side-min')); }); }
+    document.querySelectorAll('[data-side-expand]').forEach(function (b) { b.addEventListener('click', function () { set(false); }); });
+  })();
+</script>
 </body>
 </html>

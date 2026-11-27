@@ -4,6 +4,7 @@ $sw = App\Services\StoreService::switcher();
 $back = in_array($nav ?? '', ['feed', 'products', 'finance'], true) ? strtok($_SERVER['REQUEST_URI'] ?? '/app', '?') : '/app';
 if ($sw['count'] > 1 || count($sw['groups']) > 1):
     $sid = 'cabSw' . ($mobile ?? false ? 'M' : ''); ?>
+  <?php if (!($mobile ?? false)): ?><button type="button" class="side-sw-mini" data-side-expand title="Кабинет WB — развернуть меню, чтобы переключить"><?= icon('switch', 20) ?></button><?php endif; ?>
   <form method="post" action="/app/switch" class="acc-switch<?= ($mobile ?? false) ? ' acc-switch-m' : '' ?>">
     <?= csrf_field() ?><input type="hidden" name="back" value="<?= e($back) ?>">
     <label class="muted small" for="<?= $sid ?>">Кабинет WB</label>

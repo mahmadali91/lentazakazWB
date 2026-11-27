@@ -719,3 +719,31 @@ span.p-thumb img { width: 100%; height: 100%; object-fit: cover; display: block;
 .sf-id { font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; }
 .sf-user .icon-btn { flex: none; width: 32px; height: 32px; }
 .sf-ver { font-size: 10.5px; color: var(--muted); opacity: .75; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+
+/* Боковое меню: свернуть до иконок */
+.side-head { display: flex; align-items: flex-start; gap: 6px; }
+.side-head .logo { flex: 1; min-width: 0; }
+.side-toggle { flex: none; width: 32px; height: 32px; margin-top: 2px; display: grid; place-items: center; border: 0; border-radius: var(--radius-sm); background: transparent; color: var(--muted); cursor: pointer; }
+.side-toggle:hover { background: var(--surface-2); color: var(--text); }
+.side-sw-mini { display: none; }
+.sidebar { transition: width .18s ease, padding .18s ease; }
+html.side-min .sidebar { width: 76px; padding: 18px 12px; }
+html.side-min .side-head { flex-direction: column; align-items: center; gap: 8px; }
+html.side-min .sidebar .logo { padding: 4px 0 0; flex: none; }
+html.side-min .logo-text, html.side-min .sn-label, html.side-min .sidebar .acc-switch,
+html.side-min .sf-plan, html.side-min .sf-who, html.side-min .sf-ver { display: none; }
+html.side-min .side-sw-mini { display: grid; place-items: center; width: 44px; height: 40px; margin: 0 auto 10px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface); color: var(--muted); cursor: pointer; }
+html.side-min .side-sw-mini:hover { color: var(--accent); border-color: var(--accent); }
+html.side-min .side-nav a, html.side-min .side-help { justify-content: center; padding: 10px 0; gap: 0; }
+html.side-min .side-foot { padding: 10px 6px; align-items: center; }
+html.side-min .sf-user { flex-direction: column; gap: 8px; padding-top: 0; border-top: 0; }
+.side-head .logo { white-space: nowrap; font-size: 14px; gap: 9px; }
+.side-head .logo-text { overflow: hidden; text-overflow: ellipsis; }
+/* Кнопка свернуть/развернуть — круглая, на границе меню */
+.side-head { display: block; }
+.side-head .logo { white-space: normal; font-size: 15px; }
+.side-head .logo-text { overflow: visible; }
+.side-toggle { position: absolute; top: 26px; right: -14px; z-index: 5; width: 28px; height: 28px; margin: 0; border-radius: 50%; border: 1px solid var(--border); background: var(--surface); box-shadow: 0 2px 6px rgba(20, 16, 40, .08); }
+.side-toggle svg { width: 15px; height: 15px; }
+html.side-min .side-head { display: flex; justify-content: center; }
+html.side-min .sidebar .logo { padding: 4px 0 18px; }
