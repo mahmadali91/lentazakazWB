@@ -1,7 +1,7 @@
 <div class="card auth-card">
   <?= App\Core\View::partial('partials/logo') ?>
   <h1>Регистрация</h1>
-  <p class="muted"><?= (int) config('app.trial_days', 7) ?> дней полного доступа бесплатно.</p>
+  <p class="muted"><?= (int) config('app.trial_days', 7) ?> дней полного доступа бесплатно (в «Финансах» — <?= (int) config('app.trial_reports', 3) ?> последних отчёта WB).</p>
   <?= App\Core\View::partial('partials/flash') ?>
   <form method="post" action="/register">
     <?= csrf_field() ?>

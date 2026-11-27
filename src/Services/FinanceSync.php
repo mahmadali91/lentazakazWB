@@ -88,11 +88,22 @@ final class FinanceSync
         $state = $this->state('fin_state');
         $storeId = (int) $this->store['id'];
 
+        // Пробный период: только последние N недель отчётов; после оплаты — догружаем всю историю
+        $owner = DB::one('SELECT * FROM users WHERE id = ?', [(int) $this->store['user_id']]);
+        $limit = $owner ? (int) (Plans::forUser($owner)['reports_limit'] ?? 0) : 0;
+        if (!$limit && !empty($state['trial_limited'])) {
+            unset($state['trial_limited'], $state['listed'], $state['history_done'], $state['list_offset']);
+        }
+
         // 1. Список отчётов: при подключении — за всю историю, дальше раз в 6 часов за последние 5 недель
         if (empty($state['listed']) || (int) $state['listed'] < time() - $this->listEvery($storeId)) {
             $from = empty($state['history_done']) ? $this->historyFrom($state) : date('Y-m-d', time() - 35 * 86400);
             $offset = (int) ($state['list_offset'] ?? 0);
             $list = $this->wb->salesReports($from, date('Y-m-d'), $offset);
+            if ($limit) {
+                $list = $this->trialList($storeId, $list, $limit);
+                $state['trial_limited'] = true;
+            }
             $count = 0;
             foreach ($list as $r) {
                 if (!empty($r['reportId'])) {
@@ -168,6 +179,29 @@ final class FinanceSync
             [$n, $last, $done ? 1 : 0, $done ? 1 : 0, $storeId, $rep['report_id']]);
         $this->save('fin_state', $state, 'fin_next_at', 61, 'fin_ok_at');
         return $n;
+    }
+
+    /**
+     * Пробный период: оставляем только последние $limit недель отчётов (из уже сохранённых и нового списка WB),
+     * более старые не загружаем; если появилась новая неделя — самая старая из сохранённых удаляется.
+     */
+    private function trialList(int $storeId, array $list, int $limit): array
+    {
+        $weeks = array_column(DB::all('SELECT DISTINCT date_from FROM wb_reports WHERE store_id = ? AND report_id > 0', [$storeId]), 'date_from');
+        foreach ($list as $r) {
+            if (!empty($r['dateFrom'])) {
+                $weeks[] = substr((string) $r['dateFrom'], 0, 10);
+            }
+        }
+        $weeks = array_values(array_unique($weeks));
+        rsort($weeks);
+        $keep = array_slice($weeks, 0, $limit);
+        if ($keep && count($weeks) > count($keep)) {
+            $min = end($keep);
+            DB::exec('DELETE FROM wb_report_rows WHERE store_id = ? AND report_id > 0 AND date_from < ?', [$storeId, $min]);
+            DB::exec('DELETE FROM wb_reports WHERE store_id = ? AND report_id > 0 AND date_from < ?', [$storeId, $min]);
+        }
+        return array_values(array_filter($list, static fn($r) => in_array(substr((string) ($r['dateFrom'] ?? ''), 0, 10), $keep, true)));
     }
 
     /** Удаляет загруженные файлом отчёты за неделю (их заменил отчёт из WB по API). */

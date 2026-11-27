@@ -53,7 +53,18 @@ final class Plans
         $plan['stores'] = (int) $plan['stores'] + $plan['extra_stores'];
         $plan['expires_at'] = $active ? $expires : null;
         $plan['expired_code'] = (!$active && $code !== 'free') ? $code : null;
+        // Пробный период — тариф действует, но оплат не было: в «Финансах» только последние отчёты WB
+        $plan['trial'] = $active && !empty($user['id']) && !self::hasPaid((int) $user['id']);
+        $plan['reports_limit'] = $plan['trial'] ? max(0, (int) config('app.trial_reports', 3)) : 0;
         return $plan;
+    }
+
+    /** Были ли у аккаунта оплаты (картой или выданные администратором). */
+    public static function hasPaid(int $userId): bool
+    {
+        static $cache = [];
+        return $cache[$userId] ??= (bool) \App\Core\DB::value(
+            "SELECT 1 FROM payments WHERE user_id = ? AND status IN ('succeeded','manual') LIMIT 1", [$userId]);
     }
 
     /** Названия публичных тарифов, где есть возможность: «A» и «B» — для подсказок «доступно на тарифах…». */

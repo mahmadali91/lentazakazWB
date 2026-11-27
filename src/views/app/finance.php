@@ -42,6 +42,13 @@ $hasData = ($periods['max'] ?? null) !== null;
   </div>
 <?php return; endif; ?>
 
+<?php if (!empty($plan['reports_limit'])): $n = (int) $plan['reports_limit']; ?>
+  <div class="alert alert-info row" style="justify-content:space-between">
+    <span>Пробный период: в «Финансах» — <?= $n ?> <?= plural($n, 'последний отчёт', 'последних отчёта', 'последних отчётов') ?> WB по каждому магазину.
+      Оплатите подписку — сервис сам загрузит всю историю отчётов.</span>
+    <?php if (!App\Core\Auth::isMember()): ?><a class="btn btn-sm" href="/app/billing">Оплатить подписку</a><?php endif; ?>
+  </div>
+<?php endif; ?>
 <?php foreach ($status as $st): ?>
   <?php if ($st['finance'] === false): ?>
     <div class="alert alert-warn">

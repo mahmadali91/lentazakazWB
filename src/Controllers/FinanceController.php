@@ -131,6 +131,12 @@ final class FinanceController
         return $out;
     }
 
+    private function trialText(array $plan): string
+    {
+        $n = (int) ($plan['reports_limit'] ?? 0);
+        return $n . ' ' . plural($n, 'последний отчёт', 'последних отчёта', 'последних отчётов') . ' WB по магазину';
+    }
+
     private function locked(array $ctx, string $tab): ?string
     {
         return !Plans::finance($ctx['plan']) ? $this->render($tab, $ctx) : null;
@@ -399,6 +405,11 @@ final class FinanceController
         if (!in_array($storeId, $ctx['activeIds'], true)) {
             $storeId = $ctx['activeIds'][0] ?? 0;
         }
+        $limit = (int) ($ctx['plan']['reports_limit'] ?? 0);
+        if ($limit && (int) DB::value('SELECT COUNT(DISTINCT date_from) FROM wb_reports WHERE store_id = ?', [$storeId]) >= $limit) {
+            flash('error', 'На пробном периоде доступны ' . $this->trialText($ctx['plan']) . ' — они уже есть. Чтобы загрузить больше отчётов, оплатите подписку.');
+            redirect('/app/finance/reports');
+        }
         $file = $_FILES['file'] ?? null;
         if ($file && in_array($file['error'] ?? 0, [UPLOAD_ERR_INI_SIZE, UPLOAD_ERR_FORM_SIZE], true)) {
             error_log('[upload] store ' . $storeId . ': файл больше upload_max_filesize ' . ini_get('upload_max_filesize'));
@@ -440,6 +451,10 @@ final class FinanceController
     {
         Auth::requireOwner();
         $ctx = $this->requireEdit();
+        if (!empty($ctx['plan']['reports_limit'])) {
+            flash('error', 'На пробном периоде загружаются ' . $this->trialText($ctx['plan']) . '. Оплатите подписку — сервис загрузит всю историю отчётов.');
+            redirect('/app/billing');
+        }
         $months = max(1, min(36, (int) input('months', 6)));
         $from = max(FinanceSync::WB_DATA_START, date('Y-m-d', strtotime("-$months months")));
         foreach ($ctx['activeIds'] as $id) {
